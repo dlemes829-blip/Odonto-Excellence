@@ -819,6 +819,7 @@ function Landing() {
             </div>
           </div>
           <div className="hero-orbit">
+            <img className="hero-brand-art" src="/clinic/odonto-excellence-logo.png" alt="Marca Odonto Excellence" />
             <div className="orbit-copy">
               <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Odonto Excellence</div>
               <p className="display-title text-4xl md:text-5xl mt-3">Uma rede.<br />Um ritmo melhor.</p>
