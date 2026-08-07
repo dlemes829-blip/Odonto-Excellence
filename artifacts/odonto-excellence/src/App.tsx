@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Route, Router as WouterRouter, Switch, useLocation, useRoute } from 'wouter';
 import {
   AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Bell, CalendarDays, Check,
-  CheckCircle2, ChevronRight, CircleHelp, Clock3, ExternalLink, FileClock,
-  GraduationCap, Home, LayoutDashboard, MapPin, Menu, MessageCircle,
+  CheckCircle2, ChevronRight, CircleHelp, Clock3, FileClock,
+  GraduationCap, Home, LayoutDashboard, Menu, MessageCircle,
   MoreHorizontal, Pencil, Phone, Play, Plus, RotateCcw, Save, Settings2,
-  ShieldCheck, Sparkles, Stethoscope, Target, Trash2, TrendingUp, UserRound, UsersRound,
+  ShieldCheck, Sparkles, Target, Trash2, TrendingUp, UserRound, UsersRound,
   Video, Volume2, VolumeX, X, Zap
 } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
@@ -91,30 +91,18 @@ function playNotificationSound(kind: 'success' | 'alert' = 'success') {
 
 /* ─── SEED DATA ─── */
 const initialCollaborators: Collaborator[] = [
-  { id: 'daniel', name: 'Daniel', role: 'Gestor de relacionamento', gender: 'masculine', goal: 18, calls: 21, messages: 28, whatsapp: 34, conversions: 8, appointments: [
-    { id: 'a1', patient: 'Marina Silveira', date: today, time: '08:30', note: 'Avaliação inicial · retorno pelo WhatsApp', status: 'confirmed' },
-    { id: 'a2', patient: 'Otávio Mendes', date: today, time: '10:00', note: 'Limpeza e revisão semestral', status: 'confirmed' },
-    { id: 'a3', patient: 'Bianca Lopes', date: today, time: '14:30', note: 'Confirmar documentação do plano', status: 'pending' },
-  ] },
-  { id: 'will', name: 'Will', role: 'Consultor comercial', gender: 'masculine', goal: 15, calls: 16, messages: 22, whatsapp: 29, conversions: 6, appointments: [
-    { id: 'a4', patient: 'Catarina Alves', date: today, time: '09:00', note: 'Apresentar plano de tratamento', status: 'confirmed' },
-    { id: 'a5', patient: 'Pedro Nunes', date: today, time: '13:00', note: 'Lembrete de consulta', status: 'rescheduled' },
-  ] },
-  { id: 'chaline', name: 'Chaline', role: 'Experiência do paciente', gender: 'feminine', goal: 20, calls: 25, messages: 31, whatsapp: 41, conversions: 11, appointments: [
-    { id: 'a6', patient: 'Rafael Costa', date: today, time: '11:30', note: 'Paciente novo · primeira visita', status: 'confirmed' },
-    { id: 'a7', patient: 'Elisa Rocha', date: today, time: '15:30', note: 'Pós-operatório', status: 'confirmed' },
-  ] },
-  { id: 'queizy', name: 'Queizy', role: 'Relacionamento', gender: 'feminine', goal: 16, calls: 19, messages: 26, whatsapp: 30, conversions: 7, appointments: [
-    { id: 'a8', patient: 'Gustavo Freitas', date: today, time: '16:00', note: 'Retorno de orçamento', status: 'pending' },
-  ] },
-  { id: 'mayssa', name: 'Mayssa', role: 'Consultora comercial', gender: 'feminine', goal: 14, calls: 12, messages: 20, whatsapp: 24, conversions: 5, appointments: [
-    { id: 'a9', patient: 'Lívia Duarte', date: today, time: '08:00', note: 'Ortodontia · alinhadores', status: 'confirmed' },
-    { id: 'a10', patient: 'Caio Martins', date: today, time: '17:00', note: 'Confirmar forma de pagamento', status: 'pending' },
-  ] },
-  { id: 'sara', name: 'Sara', role: 'Secretária clínica', gender: 'feminine', goal: 17, calls: 18, messages: 24, whatsapp: 36, conversions: 9, appointments: [
-    { id: 'a11', patient: 'João Vicente', date: today, time: '09:30', note: 'Agendamento de retorno', status: 'confirmed' },
-    { id: 'a12', patient: 'Sofia Ramos', date: today, time: '12:00', note: 'Atualizar cadastro', status: 'confirmed' },
-  ] },
+  {
+    id: 'coordenacao',
+    name: 'Coordenacao',
+    role: 'Acesso administrativo',
+    gender: 'neutral',
+    goal: 0,
+    calls: 0,
+    messages: 0,
+    whatsapp: 0,
+    conversions: 0,
+    appointments: [],
+  },
 ];
 const initialTraining: Training[] = [
   { id: 't1', title: 'Acolhimento que gera confiança', duration: '08:42', watched: true, attempts: 1, area: 'Experiência' },
@@ -128,7 +116,7 @@ const initialTraining: Training[] = [
 /* ─── STORE ─── */
 function readStore(): Store {
   try {
-    const saved = localStorage.getItem('odonto-excellence-v2');
+    const saved = localStorage.getItem('odonto-excellence-v3');
     if (saved) {
       const parsed = JSON.parse(saved) as Partial<Store>;
       const colabs = parsed.collaborators ?? initialCollaborators;
@@ -146,15 +134,15 @@ function readStore(): Store {
           collaborators: colabs.map((p) => ({ ...p, calls: 0, messages: 0, whatsapp: 0, conversions: 0, appointments: [] })),
           archives: pruneArchives(hasData ? [rollover, ...archives] : archives),
           training: parsed.training ?? initialTraining,
-          activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel',
+          activeId: parsed.activeId ?? colabs[0]?.id ?? 'coordenacao',
           activeDate: today,
           soundEnabled: parsed.soundEnabled ?? true,
         };
       }
-      return { collaborators: colabs, archives: pruneArchives(archives), training: parsed.training ?? initialTraining, activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel', activeDate: today, soundEnabled: parsed.soundEnabled ?? true };
+      return { collaborators: colabs, archives: pruneArchives(archives), training: parsed.training ?? initialTraining, activeId: parsed.activeId ?? colabs[0]?.id ?? 'coordenacao', activeDate: today, soundEnabled: parsed.soundEnabled ?? true };
     }
   } catch { /* use seed */ }
-  return { collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true };
+  return { collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'coordenacao', activeDate: today, soundEnabled: true };
 }
 
 /* ─── BRAND LOGO ─── */
@@ -165,8 +153,8 @@ function Brand({ dark = false }: { dark?: boolean }) {
         <img src="/clinic/odonto-excellence-logo.png" alt="Odonto Excellence" className="brand-logo" />
       </span>
       <span className="brand-clinic-label">
-        <span>PALHOÇA · SC</span>
-        <small>GESTÃO CLÍNICA</small>
+        <span>ODONTO EXCELLENCE</span>
+        <small>PORTAL DO COLABORADOR</small>
       </span>
     </Link>
   );
@@ -287,16 +275,16 @@ function AppShell({ children, store, onToggleSound }: {
   return (
     <div className="app-shell shell-bg">
       <div className="hidden md:block">
-        <Sidebar activeId={active?.id ?? 'daniel'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => undefined} />
+        <Sidebar activeId={active?.id ?? 'coordenacao'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => undefined} />
       </div>
       <div className="main-area">
         <header className="topbar">
           <button className="button-ghost button-icon md:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu"><Menu size={20} /></button>
           <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="font-mono font-bold">PONTE DO IMARUIM</span>
+            <span className="font-mono font-bold">REDE NACIONAL</span>
             <span className="opacity-30 mx-1">/</span>
-            <span>Palhoça, SC</span>
+            <span>Odonto Excellence</span>
           </div>
           <div className="flex items-center gap-3 ml-auto">
             <button className="button-ghost button-icon relative" aria-label="Notificações" onClick={() => setLocation('/painel')}>
@@ -308,13 +296,13 @@ function AppShell({ children, store, onToggleSound }: {
             </Link>
           </div>
         </header>
-        <div className="md:hidden px-4 pt-1"><MobileNav activeId={active?.id ?? 'daniel'} /></div>
+        <div className="md:hidden px-4 pt-1"><MobileNav activeId={active?.id ?? 'coordenacao'} /></div>
         {children}
       </div>
       {mobileOpen && (
         <div className="fixed inset-0 z-30 md:hidden bg-[rgba(30,4,4,.42)]" onClick={() => setMobileOpen(false)}>
           <div className="w-[82%] max-w-[300px] h-full" onClick={(e) => e.stopPropagation()}>
-            <Sidebar activeId={active?.id ?? 'daniel'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => setMobileOpen(false)} />
+            <Sidebar activeId={active?.id ?? 'coordenacao'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => setMobileOpen(false)} />
           </div>
         </div>
       )}
@@ -733,76 +721,53 @@ function Landing() {
   const [, setLocation] = useLocation();
   return (
     <main className="min-h-dvh">
-      {/* NAV */}
       <nav className="landing-nav sticky top-0 z-20 bg-background/90 backdrop-blur-md border-b border-border">
         <Brand />
         <div className="flex items-center gap-4">
-          <a href="#ritmo" className="hidden sm:block text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">A clínica</a>
-          <a href="#fotos" className="hidden sm:block text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">Fotos</a>
+          <a href="#recursos" className="hidden sm:block text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">Recursos</a>
           <Link href="/acesso" className="button-primary">Entrar no sistema <ArrowRight size={14} /></Link>
         </div>
       </nav>
 
-      {/* HERO */}
       <section className="section-pad pt-14 md:pt-20">
         <div className="hero-grid max-w-[1320px] mx-auto">
           <div>
-            <div className="eyebrow flex items-center gap-2"><span className="w-8 h-px bg-primary" />Ponte do Imaruim · Palhoça, SC</div>
+            <div className="eyebrow flex items-center gap-2"><span className="w-8 h-px bg-primary" />Portal interno da rede</div>
             <h1 className="display-title text-[clamp(50px,7.5vw,104px)] leading-[.85] mt-6 max-w-[820px]">
-              Cuidar bem<br /><em className="text-primary">começa</em><br />na chegada.
+              Operacao clinica<br /><em className="text-primary">com clareza</em><br />todos os dias.
             </h1>
             <p className="max-w-[500px] mt-8 text-base md:text-lg leading-relaxed text-muted-foreground">
-              Uma clínica feita para receber você com calma, tecnologia e atenção — do primeiro sorriso na recepção ao último detalhe do seu tratamento.
+              Um ambiente privado para equipes Odonto Excellence organizarem agenda, acompanhamento, metas e aprendizado sem depender de dados de uma unidade especifica.
             </p>
             <div className="flex flex-wrap gap-3 mt-9">
               <button onClick={() => setLocation('/acesso')} className="button-primary px-6 py-3 text-sm">
-                Começar o dia <ArrowRight size={16} />
+                Acessar portal <ArrowRight size={16} />
               </button>
-              <a href="https://www.google.com/maps/dir/?api=1&destination=R.+Antônio+Viêira,+415,+Palhoça,+SC" target="_blank" rel="noreferrer" className="button-secondary px-5">
-                <MapPin size={15} /> Como chegar
-              </a>
-            </div>
-            <div className="flex items-center gap-4 mt-12 text-xs text-muted-foreground">
-              <div className="flex -space-x-2">
-                {initialCollaborators.slice(0, 4).map((p) => (
-                  <span key={p.id} className="avatar w-8 h-8 border-2 border-background" style={{ background: genderTone(p.gender) }}>{initials(p.name)}</span>
-                ))}
-              </div>
-              <span>Equipe conectada para fazer<br /><b className="text-foreground">o cuidado acontecer.</b></span>
             </div>
           </div>
-          {/* HERO VISUAL */}
           <div className="hero-orbit">
-            <img src="/clinic/palhoca-reception.png" alt="Recepção da Odonto Excellence Ponte do Imaruim" className="hero-clinic-photo" />
-            <div className="hero-photo-shade" />
-            <div className="absolute top-7 right-7 flex items-center gap-2 text-[10px] text-white/65 font-mono">
-              <span className="w-2 h-2 rounded-full bg-[hsl(var(--sidebar-primary))] animate-pulse" />SISTEMA ATIVO
-            </div>
-            <div className="absolute top-[22%] right-[16%] w-20 h-20 rounded-full border border-white/25 bg-white/12 backdrop-blur-sm grid place-items-center">
-              <Stethoscope size={26} className="text-white/80" />
-            </div>
             <div className="orbit-copy">
-              <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Clareza para o time</div>
-              <p className="display-title text-4xl md:text-5xl mt-3">Seu sorriso<br />está em boas mãos.</p>
-              <div className="flex gap-3 mt-7">
-                <span className="chip !bg-white/12 !text-white/85">Ponte do Imaruim</span>
-                <span className="chip !bg-white/12 !text-white/85">4.8 no Google</span>
+              <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Odonto Excellence</div>
+              <p className="display-title text-4xl md:text-5xl mt-3">Uma rede.<br />Um ritmo melhor.</p>
+              <div className="flex flex-wrap gap-3 mt-7">
+                <span className="chip !bg-white/12 !text-white/85">Agenda</span>
+                <span className="chip !bg-white/12 !text-white/85">Equipe</span>
+                <span className="chip !bg-white/12 !text-white/85">Treinamento</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* FEATURES */}
-      <section id="ritmo" className="section-pad bg-secondary/20 mt-4">
+      <section id="recursos" className="section-pad bg-secondary/20 mt-4">
         <div className="max-w-[1180px] mx-auto grid md:grid-cols-[.8fr_1.2fr] gap-10 items-start">
           <div>
-            <div className="eyebrow">O ritmo da clínica</div>
-            <h2 className="display-title text-5xl mt-4 leading-[.92]">Menos ruído.<br /><span className="text-primary">Mais presença.</span></h2>
-            <p className="mt-5 text-sm text-muted-foreground leading-relaxed max-w-sm">Uma experiência acolhedora, organizada e próxima para você cuidar do sorriso sem deixar a rotina de lado.</p>
+            <div className="eyebrow">Ferramentas da equipe</div>
+            <h2 className="display-title text-5xl mt-4 leading-[.92]">Menos atrito.<br /><span className="text-primary">Mais foco.</span></h2>
+            <p className="mt-5 text-sm text-muted-foreground leading-relaxed max-w-sm">O portal foi pensado para apoiar a rotina de cada colaborador, independentemente da cidade ou unidade onde trabalha.</p>
             <div className="trust-strip mt-7">
               <span className="trust-dot" />
-              <span><strong>Unidade Ponte do Imaruim</strong><br />Atendimento local em Palhoça</span>
+              <span><strong>Ambiente individual</strong><br />Cada equipe organiza os proprios dados.</span>
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -814,66 +779,20 @@ function Landing() {
         </div>
       </section>
 
-      {/* FOTOS REAIS */}
-      <section id="fotos" className="section-pad">
-        <div className="max-w-[1180px] mx-auto">
-          <div className="eyebrow text-center">Estrutura da clínica</div>
-          <h2 className="display-title text-4xl md:text-5xl text-center mt-3">
-              Um espaço que<br /><span className="text-primary">recebe você.</span>
-          </h2>
-           <p className="text-center text-sm text-muted-foreground mt-4 max-w-md mx-auto">Conheça a unidade Odonto Excellence Ponte do Imaruim antes de chegar.</p>
-          <div className="grid md:grid-cols-3 gap-4 mt-10">
-            {[
-               { url: '/clinic/palhoca-reception.png', caption: 'Recepção · Ponte do Imaruim', position: 'center' },
-               { url: '/clinic/palhoca-facade.png', caption: 'Identidade da unidade', position: 'center 58%' },
-               { url: '/clinic/palhoca-maps-gallery.png', caption: 'Odonto Excellence · Palhoça', position: 'center' },
-             ].map(({ url, caption, position }) => (
-              <div key={url} className="landing-card overflow-hidden" style={{ aspectRatio: '16/10', position: 'relative' }}>
-                 <img src={url} alt={caption} className="clinic-photo" style={{ objectPosition: position }} loading="lazy" />
-                <div className="photo-caption">{caption}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 text-center text-xs text-muted-foreground">
-             Imagens da unidade de Ponte do Imaruim · Palhoça, SC
-          </div>
-        </div>
-      </section>
-
-      {/* BRAND + MAP */}
-      <section className="section-pad pt-0">
-        <div className="max-w-[1180px] mx-auto landing-card overflow-hidden grid md:grid-cols-[.9fr_1.1fr] items-stretch">
-          <div className="p-7 md:p-10">
-            <div className="eyebrow">Imagem institucional</div>
-            <h2 className="display-title text-4xl mt-3">Uma marca forte.<br /><span className="text-primary">Um cuidado próximo.</span></h2>
-            <p className="text-sm text-muted-foreground mt-4 leading-relaxed">A unidade de Ponte do Imaruim combina a experiência da rede Odonto Excellence com uma equipe que conhece e cuida da comunidade de Palhoça.</p>
-            <a href="https://www.odontoexcellence.com.br/" target="_blank" rel="noreferrer" className="button-secondary mt-6 inline-flex">Conhecer a rede <ExternalLink size={14} /></a>
-          </div>
-          <div className="min-h-[250px] bg-[#3b0a0a] overflow-hidden">
-            <img src="/clinic/palhoca-maps-gallery.png" alt="Identidade visual da Odonto Excellence" className="w-full h-full object-cover opacity-90" />
-          </div>
-        </div>
-      </section>
-
-      {/* LOCATION */}
       <section className="section-pad pt-0">
         <div className="max-w-[1180px] mx-auto landing-card p-7 md:p-12 grid md:grid-cols-[1fr_auto] gap-8 items-center">
           <div>
-            <div className="eyebrow">Onde estamos</div>
-            <h2 className="display-title text-4xl md:text-5xl mt-3">Cuidado perto de casa.</h2>
-            <p className="text-sm text-muted-foreground mt-3">R. Antônio Viêira, 415 · Ponte do Imaruim<br />Palhoça · SC · 88130-470</p>
-            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary/60" />4.8★ no Google Maps</p>
+            <div className="eyebrow">Uso profissional</div>
+            <h2 className="display-title text-4xl md:text-5xl mt-3">Comece com um ambiente limpo.</h2>
+            <p className="text-sm text-muted-foreground mt-3">Configure os perfis, metas e agenda da sua equipe no primeiro acesso. Nenhum endereco, foto ou dado de unidade vem pre-carregado.</p>
           </div>
-          <a href="https://www.google.com/maps/dir/?api=1&destination=R.+Antônio+Viêira,+415,+Palhoça,+SC" target="_blank" rel="noreferrer" className="button-primary px-6">
-            Abrir no Maps <ExternalLink size={14} />
-          </a>
+          <button onClick={() => setLocation('/acesso')} className="button-primary px-6">Preparar equipe <ArrowRight size={14} /></button>
         </div>
       </section>
 
-      {/* FOOTER */}
       <footer className="px-[7vw] py-8 border-t border-border flex flex-col sm:flex-row justify-between gap-3 text-[11px] text-muted-foreground">
-        <span>© {new Date().getFullYear()} Odonto Excellence · Gestão Clínica · Ponte do Imaruim</span>
-        <span>Dados ficam somente neste dispositivo.</span>
+        <span>© {new Date().getFullYear()} Odonto Excellence · Portal do Colaborador</span>
+        <span>Dados da equipe ficam neste dispositivo.</span>
       </footer>
     </main>
   );
@@ -887,12 +806,12 @@ function Access({ store, setStore }: { store: Store; setStore: (s: Store) => voi
       <section className="bg-sidebar text-sidebar-foreground p-8 md:p-12 flex flex-col">
         <Brand dark />
         <div className="mt-auto max-w-md pb-8">
-          <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Acesso local</div>
+          <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Portal nacional</div>
           <h1 className="display-title text-6xl mt-4 leading-[.87]">Quem está<br />conduzindo<br /><span className="text-[hsl(var(--sidebar-primary))]">hoje?</span></h1>
-          <p className="text-sm text-white/55 mt-7 leading-relaxed">Escolha seu perfil para abrir sua fila de consultas, metas e prioridades. Não é um login — os dados ficam somente neste dispositivo.</p>
+          <p className="text-sm text-white/55 mt-7 leading-relaxed">Escolha um perfil para preparar a rotina da sua equipe. Os dados deste portal ficam somente neste dispositivo.</p>
           <div className="mt-8 flex gap-2 text-[10px] text-white/40"><ShieldCheck size={14} /> Privacidade por design · uso local</div>
         </div>
-        <div className="text-xs text-white/35">Ponte do Imaruim · Palhoça, SC</div>
+        <div className="text-xs text-white/35">Odonto Excellence · Brasil</div>
       </section>
       <section className="p-6 md:p-12 lg:p-20 bg-background">
         <div className="max-w-xl mx-auto">
@@ -1407,8 +1326,8 @@ function Settings({ store, setStore, notify }: {
   const [confirmReset, setConfirmReset] = useState(false);
 
   function clearData() {
-    localStorage.removeItem('odonto-excellence-v2');
-    setStore({ collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true });
+    localStorage.removeItem('odonto-excellence-v3');
+    setStore({ collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'coordenacao', activeDate: today, soundEnabled: true });
     setConfirmReset(false);
     notify('Dados restaurados para o exemplo inicial.');
   }
@@ -1565,7 +1484,7 @@ export default function App() {
 
   const setStore = useCallback((next: Store) => {
     setStoreState(next);
-    localStorage.setItem('odonto-excellence-v2', JSON.stringify(next));
+    localStorage.setItem('odonto-excellence-v3', JSON.stringify(next));
   }, []);
 
   const notify = useCallback((message: string, kind: ToastKind = 'success') => {
@@ -1579,7 +1498,7 @@ export default function App() {
   // Real-time: detect new appointments added by any tab (storage event)
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key !== 'odonto-excellence-v2' || !e.newValue) return;
+      if (e.key !== 'odonto-excellence-v3' || !e.newValue) return;
       try {
         const next = JSON.parse(e.newValue) as Store;
         const newCount = next.collaborators.reduce((s, p) => s + p.appointments.length, 0);
