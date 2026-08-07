@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "SL7orfsrV2JzaqmnHETys"
+uri = "file://exports/odonto-excellence-final.zip"
+type = "unspecified"
+title = "Odonto Excellence — pacote final"
+description = "Projeto completo da aplicação com edição de metas, virada diária da agenda, histórico local de dois dias, assets da clínica e configurações do artifact. O ZIP não inclui node_modules nem dist."

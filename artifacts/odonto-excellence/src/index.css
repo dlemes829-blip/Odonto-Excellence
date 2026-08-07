@@ -219,6 +219,20 @@
   border-color: hsl(var(--primary)); box-shadow: 0 0 0 3px hsl(var(--primary) / .12);
 }
 .label-text { display: block; font-size: 11px; color: hsl(var(--muted-foreground)); font-weight: 800; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; }
+.goal-input-wrap {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: hsl(var(--background)); border: 1.5px solid hsl(var(--input));
+  border-radius: 10px; padding: 0 13px; min-height: 48px;
+  transition: border .18s, box-shadow .18s;
+}
+.goal-input-wrap:focus-within {
+  border-color: hsl(var(--primary)); box-shadow: 0 0 0 3px hsl(var(--primary) / .12);
+}
+.goal-input {
+  width: 100%; min-width: 0; border: 0; outline: none; background: transparent;
+  color: hsl(var(--foreground)); font-family: var(--app-font-mono); font-size: 17px; font-weight: 800;
+}
+.goal-input::-webkit-outer-spin-button, .goal-input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 /* ─── CARDS / PANELS ─── */
 .panel { background: hsl(var(--card)); border: 1px solid hsl(var(--card-border)); border-radius: 18px; box-shadow: var(--shadow-soft); }
@@ -233,6 +247,11 @@
   background: hsl(var(--primary) / .12);
 }
 .next-step-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.retention-note {
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px;
+  border-radius: 10px; background: hsl(var(--accent) / .09); color: hsl(14 55% 38%);
+  font-size: 11px; line-height: 1.45;
+}
 .counter-control {
   display: inline-flex; align-items: center; height: 38px;
   border: 1px solid hsl(var(--input)); border-radius: 10px;

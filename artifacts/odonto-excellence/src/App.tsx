@@ -5,7 +5,7 @@ import {
   CheckCircle2, ChevronRight, CircleHelp, Clock3, ExternalLink, FileClock,
   GraduationCap, Home, LayoutDashboard, MapPin, Menu, MessageCircle,
   MoreHorizontal, Pencil, Phone, Play, Plus, RotateCcw, Save, Settings2,
-  ShieldCheck, Sparkles, Stethoscope, Trash2, TrendingUp, UserRound, UsersRound,
+  ShieldCheck, Sparkles, Stethoscope, Target, Trash2, TrendingUp, UserRound, UsersRound,
   Video, Volume2, VolumeX, X, Zap
 } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
@@ -27,11 +27,27 @@ function localDateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 const today = localDateKey();
+const ARCHIVE_RETENTION_DAYS = 2;
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 function initials(name: string) { return name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase(); }
 function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`)).replace('.', ''); }
 function formatWeekday(value: string) { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${value}T12:00:00`)); }
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; }
 function genderTone(g: Gender) { return g === 'feminine' ? 'hsl(340 60% 80%)' : g === 'masculine' ? 'hsl(210 55% 78%)' : 'hsl(38 70% 78%)'; }
+function localDayTimestamp(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day).getTime();
+}
+function pruneArchives(archives: DayArchive[], referenceDate = today) {
+  const reference = localDayTimestamp(referenceDate);
+  return archives
+    .filter((archive) => {
+      const timestamp = localDayTimestamp(archive.date);
+      const age = Math.floor((reference - timestamp) / DAY_IN_MS);
+      return Number.isFinite(timestamp) && age >= 0 && age <= ARCHIVE_RETENTION_DAYS;
+    })
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+}
 function statusLabel(status: AppStatus) {
   return status === 'confirmed' ? 'Confirmado' : status === 'rescheduled' ? 'Reagendar' : 'Aguardando';
 }
@@ -119,7 +135,7 @@ function readStore(): Store {
       const storedDate = parsed.activeDate ?? today;
       const archives = parsed.archives ?? [];
       if (storedDate !== today) {
-        const hasData = colabs.some((p) => p.appointments.length > 0 || p.calls > 0 || p.messages > 0 || p.conversions > 0);
+        const hasData = colabs.some((p) => p.appointments.length > 0 || p.calls > 0 || p.messages > 0 || p.whatsapp > 0 || p.conversions > 0);
         const rollover: DayArchive = {
           id: `archive-auto-${storedDate}`, date: storedDate, closedAt: 'virada automática',
           appointments: colabs.flatMap((p) => p.appointments.map((a) => ({ ...a }))),
@@ -128,14 +144,14 @@ function readStore(): Store {
         };
         return {
           collaborators: colabs.map((p) => ({ ...p, calls: 0, messages: 0, whatsapp: 0, conversions: 0, appointments: [] })),
-          archives: hasData ? [rollover, ...archives] : archives,
+          archives: pruneArchives(hasData ? [rollover, ...archives] : archives),
           training: parsed.training ?? initialTraining,
           activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel',
           activeDate: today,
           soundEnabled: parsed.soundEnabled ?? true,
         };
       }
-      return { collaborators: colabs, archives, training: parsed.training ?? initialTraining, activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel', activeDate: today, soundEnabled: parsed.soundEnabled ?? true };
+      return { collaborators: colabs, archives: pruneArchives(archives), training: parsed.training ?? initialTraining, activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel', activeDate: today, soundEnabled: parsed.soundEnabled ?? true };
     }
   } catch { /* use seed */ }
   return { collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true };
@@ -374,6 +390,57 @@ function CloseDayModal({ count, onCancel, onConfirm }: { count: number; onCancel
   );
 }
 
+/* ─── GOAL MODAL ─── */
+function GoalModal({ person, onCancel, onSave }: {
+  person: Collaborator; onCancel: () => void; onSave: (goal: number) => void;
+}) {
+  const [goal, setGoal] = useState(String(person.goal));
+  return (
+    <div className="modal-backdrop">
+      <form
+        className="modal-card p-7"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const nextGoal = Math.max(1, Math.round(Number(goal) || 0));
+          onSave(nextGoal);
+        }}
+      >
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="eyebrow">Meta de conversões</div>
+            <h2 className="display-title text-3xl mt-2">Ajustar meta.</h2>
+          </div>
+          <button type="button" onClick={onCancel} className="button-ghost button-icon" aria-label="Fechar"><X size={17} /></button>
+        </div>
+        <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
+          Defina quantas conversões <strong>{person.name}</strong> deve buscar no dia. A alteração fica salva somente neste dispositivo.
+        </p>
+        <label className="block mt-7">
+          <span className="label-text">Conversões esperadas por dia</span>
+          <div className="goal-input-wrap">
+            <Target size={17} className="text-primary" />
+            <input
+              type="number"
+              min="1"
+              max="999"
+              value={goal}
+              onChange={(event) => setGoal(event.target.value)}
+              className="goal-input"
+              autoFocus
+              aria-label="Meta de conversões"
+            />
+            <span className="text-xs text-muted-foreground">conversões</span>
+          </div>
+        </label>
+        <div className="flex justify-end gap-2 mt-7">
+          <button type="button" className="button-secondary" onClick={onCancel}>Cancelar</button>
+          <button type="submit" className="button-primary"><Save size={15} /> Salvar meta</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /* ─── APPOINTMENT MODAL ─── */
 function AppointmentModal({ appointment, onCancel, onSave }: {
   appointment: Appointment | null; onCancel: () => void; onSave: (a: Appointment) => void;
@@ -428,7 +495,9 @@ function AppointmentModal({ appointment, onCancel, onSave }: {
 }
 
 /* ─── TEAM PULSE ─── */
-function TeamPulse({ store, onOpen }: { store: Store; onOpen: (id: string) => void }) {
+function TeamPulse({ store, onOpen, onEditGoal }: {
+  store: Store; onOpen: (id: string) => void; onEditGoal: (person: Collaborator) => void;
+}) {
   return (
     <section className="panel p-5">
       <div className="eyebrow">Pulso do time</div>
@@ -438,17 +507,30 @@ function TeamPulse({ store, onOpen }: { store: Store; onOpen: (id: string) => vo
           const pct = Math.min(100, Math.round((p.conversions / p.goal) * 100));
           const fillClass = pct >= 80 ? '' : pct >= 50 ? 'progress-fill-gold' : 'progress-fill';
           return (
-            <button key={p.id} onClick={() => onOpen(p.id)} className="w-full text-left group">
-              <div className="flex items-center gap-3">
+            <div key={p.id} className="w-full text-left group">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => onOpen(p.id)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
                 <span className="avatar w-8 h-8" style={{ background: genderTone(p.gender) }}>{initials(p.name)}</span>
                 <span className="text-xs font-bold flex-1">{p.name}</span>
                 <span className="text-[10px] text-muted-foreground font-mono">{p.conversions}/{p.goal}</span>
                 <ChevronRight size={14} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                </button>
+                <button
+                  type="button"
+                  className="button-ghost button-icon !w-7 !h-7"
+                  onClick={(event) => { event.stopPropagation(); onEditGoal(p); }}
+                  aria-label={`Editar meta de ${p.name}`}
+                  title={`Editar meta de ${p.name}`}
+                >
+                  <Pencil size={12} />
+                </button>
               </div>
-              <div className="progress-track mt-2 ml-11">
+              <button type="button" onClick={() => onOpen(p.id)} className="w-full text-left">
+                <div className="progress-track mt-2 ml-11">
                 <div className={`progress-fill ${fillClass}`} style={{ width: `${pct}%` }} />
-              </div>
-            </button>
+                </div>
+              </button>
+            </div>
           );
         })}
       </div>
@@ -851,6 +933,7 @@ function Dashboard({ store, setStore, notify }: {
   store: Store; setStore: (s: Store) => void; notify: (m: string, k?: ToastKind) => void;
 }) {
   const [showClose, setShowClose] = useState(false);
+  const [goalPerson, setGoalPerson] = useState<Collaborator | null>(null);
   const [, setLocation] = useLocation();
   const allAppts: AgendaAppointment[] = store.collaborators
     .flatMap((p) => p.appointments.map((a) => ({ ...a, collaborator: p.name, collaboratorId: p.id, gender: p.gender })))
@@ -861,13 +944,14 @@ function Dashboard({ store, setStore, notify }: {
   const totalActivity = store.collaborators.reduce((s, p) => s + p.calls + p.messages + p.whatsapp, 0);
 
   function closeDay() {
+    const archivedAppointments = store.collaborators.flatMap((person) => person.appointments.map((appointment) => ({ ...appointment })));
     const archive: DayArchive = {
       id: `archive-${Date.now()}`, date: today, closedAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      appointments: allAppts, collaboratorName: 'Equipe Odonto Excellence',
+      appointments: archivedAppointments, collaboratorName: 'Equipe Odonto Excellence',
       collaborators: store.collaborators.map((p) => ({ ...p, appointments: [...p.appointments] })),
     };
     setStore({
-      ...store, activeDate: today, archives: [archive, ...store.archives],
+      ...store, activeDate: today, archives: pruneArchives([archive, ...store.archives]),
       collaborators: store.collaborators.map((p) => ({ ...p, appointments: [], calls: 0, messages: 0, whatsapp: 0, conversions: 0 })),
     });
     setShowClose(false);
@@ -885,6 +969,16 @@ function Dashboard({ store, setStore, notify }: {
         : p),
     });
     notify(`${appointment.patient} foi confirmado.`);
+  }
+
+  function saveGoal(goal: number) {
+    if (!goalPerson) return;
+    setStore({
+      ...store,
+      collaborators: store.collaborators.map((person) => person.id === goalPerson.id ? { ...person, goal } : person),
+    });
+    notify(`Meta de ${goalPerson.name} atualizada para ${goal} conversões.`);
+    setGoalPerson(null);
   }
 
   return (
@@ -977,7 +1071,11 @@ function Dashboard({ store, setStore, notify }: {
               <EmptyState icon={CalendarDays} title="Agenda em branco" copy="O fechamento de ontem limpou a fila. Adicione o primeiro encontro do dia." action="Abrir minha fila" onAction={() => setLocation(`/colaborador/${store.activeId}`)} />
             )}
           </section>
-          <TeamPulse store={store} onOpen={(id) => setLocation(`/colaborador/${id}`)} />
+           <TeamPulse
+             store={store}
+             onOpen={(id) => setLocation(`/colaborador/${id}`)}
+             onEditGoal={setGoalPerson}
+           />
         </div>
 
         {/* TRAINING + PRIORITIES */}
@@ -995,6 +1093,7 @@ function Dashboard({ store, setStore, notify }: {
         </div>
       </div>
       {showClose && <CloseDayModal count={allAppts.length} onCancel={() => setShowClose(false)} onConfirm={closeDay} />}
+      {goalPerson && <GoalModal person={goalPerson} onCancel={() => setGoalPerson(null)} onSave={saveGoal} />}
     </AppShell>
   );
 }
@@ -1007,6 +1106,7 @@ function CollaboratorWorkspace({ store, setStore, notify }: {
   const id = params?.id ?? store.activeId;
   const person = store.collaborators.find((p) => p.id === id) ?? store.collaborators[0];
   const [showForm, setShowForm] = useState(false);
+  const [showGoal, setShowGoal] = useState(false);
   const [editing, setEditing] = useState<Appointment | null>(null);
   const updatePerson = (updated: Collaborator) => setStore({ ...store, collaborators: store.collaborators.map((p) => p.id === updated.id ? updated : p) });
 
@@ -1029,6 +1129,9 @@ function CollaboratorWorkspace({ store, setStore, notify }: {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button className="button-secondary" onClick={() => setShowGoal(true)}>
+              <Target size={15} /> Editar meta
+            </button>
             <button className="button-primary" onClick={() => { setEditing(null); setShowForm(true); }}>
               <Plus size={15} /> Novo encontro
             </button>
@@ -1121,6 +1224,17 @@ function CollaboratorWorkspace({ store, setStore, notify }: {
           }}
         />
       )}
+      {showGoal && (
+        <GoalModal
+          person={person}
+          onCancel={() => setShowGoal(false)}
+          onSave={(goal) => {
+            updatePerson({ ...person, goal });
+            setShowGoal(false);
+            notify(`Meta de ${person.name} atualizada para ${goal} conversões.`);
+          }}
+        />
+      )}
     </AppShell>
   );
 }
@@ -1143,7 +1257,11 @@ function History({ store }: { store: Store }) {
           <section className="panel p-5">
             <div className="flex items-center justify-between">
               <h2 className="font-bold">Arquivo local</h2>
-              <span className="chip">{store.archives.length} dias</span>
+              <span className="chip">{store.archives.length} {store.archives.length === 1 ? 'dia' : 'dias'}</span>
+            </div>
+            <div className="retention-note mt-4">
+              <Clock3 size={14} />
+              <span>Agendamentos e reagendamentos ficam aqui por {ARCHIVE_RETENTION_DAYS} dias. Depois, a limpeza é automática.</span>
             </div>
             {store.archives.length ? (
               <div className="space-y-2 mt-5">
@@ -1285,6 +1403,7 @@ function Settings({ store, setStore, notify }: {
   store: Store; setStore: (s: Store) => void; notify: (m: string, k?: ToastKind) => void;
 }) {
   const [showProfile, setShowProfile] = useState(false);
+  const [goalPerson, setGoalPerson] = useState<Collaborator | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
 
   function clearData() {
@@ -1346,7 +1465,18 @@ function Settings({ store, setStore, notify }: {
                   <b className="text-sm block">{p.name}</b>
                   <span className="text-[10px] text-muted-foreground">{p.role}</span>
                 </div>
-                <span className="chip">{p.gender === 'feminine' ? 'feminino' : p.gender === 'masculine' ? 'masculino' : 'neutro'}</span>
+                <div className="flex items-center gap-2">
+                  <span className="chip"><Target size={11} /> {p.goal}/dia</span>
+                  <button
+                    type="button"
+                    className="button-ghost button-icon"
+                    onClick={() => setGoalPerson(p)}
+                    aria-label={`Editar meta de ${p.name}`}
+                    title={`Editar meta de ${p.name}`}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1378,6 +1508,17 @@ function Settings({ store, setStore, notify }: {
       </div>
       {showProfile && (
         <ProfileModal onCancel={() => setShowProfile(false)} onSave={(p) => { setStore({ ...store, collaborators: [...store.collaborators, p] }); setShowProfile(false); notify(`${p.name} entrou para a equipe.`); }} />
+      )}
+      {goalPerson && (
+        <GoalModal
+          person={goalPerson}
+          onCancel={() => setGoalPerson(null)}
+          onSave={(goal) => {
+            setStore({ ...store, collaborators: store.collaborators.map((person) => person.id === goalPerson.id ? { ...person, goal } : person) });
+            notify(`Meta de ${goalPerson.name} atualizada para ${goal} conversões.`);
+            setGoalPerson(null);
+          }}
+        />
       )}
       {confirmReset && (
         <div className="modal-backdrop">
