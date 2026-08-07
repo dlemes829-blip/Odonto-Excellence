@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Odonto Excellence"
+description = "Site institucional e sistema de gestão diária da Clínica Odonto Excellence em Palhoça, Santa Catarina."
+version = "1.0.0"
+id = "artifacts/odonto-excellence"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21633
+
+[services.development]
+run = "pnpm --filter @workspace/odonto-excellence run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/odonto-excellence", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/odonto-excellence/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21633"
+BASE_PATH = "/"
