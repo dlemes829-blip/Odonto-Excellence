@@ -34,6 +34,10 @@ function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { d
 function formatWeekday(value: string) { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${value}T12:00:00`)); }
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; }
 function genderTone(g: Gender) { return g === 'feminine' ? 'hsl(340 60% 80%)' : g === 'masculine' ? 'hsl(210 55% 78%)' : 'hsl(38 70% 78%)'; }
+function percentage(value: number, total: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(total) || total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((value / total) * 100)));
+}
 function localDayTimestamp(value: string) {
   const [year, month, day] = value.split('-').map(Number);
   return new Date(year, month - 1, day).getTime();
@@ -492,7 +496,7 @@ function TeamPulse({ store, onOpen, onEditGoal }: {
       <h2 className="font-bold text-lg mt-2">Cada pessoa, seu movimento.</h2>
       <div className="space-y-4 mt-5">
         {store.collaborators.map((p) => {
-          const pct = Math.min(100, Math.round((p.conversions / p.goal) * 100));
+          const pct = percentage(p.conversions, p.goal);
           const fillClass = pct >= 80 ? '' : pct >= 50 ? 'progress-fill-gold' : 'progress-fill';
           return (
             <div key={p.id} className="w-full text-left group">
@@ -604,10 +608,10 @@ function ActivityPanel({ person, updatePerson, notify }: {
       <div className="border-t border-border mt-6 pt-5">
         <div className="flex justify-between text-xs mb-2">
           <span className="text-muted-foreground">Meta do período</span>
-          <b className="text-primary">{Math.round((person.conversions / person.goal) * 100)}%</b>
+          <b className="text-primary">{percentage(person.conversions, person.goal)}%</b>
         </div>
         <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${Math.min(100, (person.conversions / person.goal) * 100)}%` }} />
+          <div className="progress-fill" style={{ width: `${percentage(person.conversions, person.goal)}%` }} />
         </div>
       </div>
     </section>
@@ -940,7 +944,7 @@ function Dashboard({ store, setStore, notify }: {
         {/* STATS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
           <StatCard label="Consultas hoje" value={allAppts.length.toString()} detail={`${allAppts.filter((a) => a.status === 'confirmed').length} confirmadas`} icon={CalendarDays} />
-          <StatCard label="Meta alcançada" value={`${Math.round((totalConv / totalGoal) * 100)}%`} detail={`${totalConv} de ${totalGoal} conversões`} icon={TrendingUp} accent />
+          <StatCard label="Meta alcançada" value={`${percentage(totalConv, totalGoal)}%`} detail={`${totalConv} de ${totalGoal} conversões`} icon={TrendingUp} accent />
           <StatCard label="Contatos feitos" value={totalActivity.toString()} detail="registrados pela equipe" icon={MessageCircle} />
           <StatCard label="Equipe ativa" value={store.collaborators.length.toString()} detail="pessoas com perfil" icon={UsersRound} />
         </div>
@@ -1060,7 +1064,7 @@ function CollaboratorWorkspace({ store, setStore, notify }: {
 
         {/* STATS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8">
-          <StatCard label="Meta do período" value={`${person.conversions}/${person.goal}`} detail={`${Math.round((person.conversions / person.goal) * 100)}% atingido`} icon={TrendingUp} accent />
+          <StatCard label="Meta do período" value={`${person.conversions}/${person.goal}`} detail={`${percentage(person.conversions, person.goal)}% atingido`} icon={TrendingUp} accent />
           <StatCard label="Na agenda" value={`${person.appointments.length}`} detail="encontros em aberto" icon={CalendarDays} />
           <StatCard label="Contatos" value={`${person.calls + person.messages + person.whatsapp}`} detail={`${person.calls} lig. · ${person.whatsapp} WhatsApp`} icon={Phone} />
           <StatCard label="Conversão" value={`${Math.round((person.conversions / Math.max(1, person.calls + person.messages + person.whatsapp)) * 100)}%`} detail="sobre atividades" icon={Zap} />
