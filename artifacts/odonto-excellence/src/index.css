@@ -129,7 +129,7 @@
 }
 .brand-logo {
   width: 100%; height: 100%; display: block;
-  object-fit: cover; object-position: center 18%; transform: scale(1.72);
+  object-fit: cover; object-position: center 10%; transform: scale(2.45);
 }
 .brand-clinic-label {
   display: flex; flex-direction: column; gap: 3px;
