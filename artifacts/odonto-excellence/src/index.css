@@ -350,11 +350,11 @@
   transform: rotate(36deg) scaleY(.7);
 }
 .hero-brand-art {
-  position: absolute; top: 10%; left: 10%; z-index: 1;
-  width: 112px; border-radius: 12px;
-  box-shadow: 0 12px 28px rgba(18, 0, 0, .24);
+  position: absolute; inset: 5%; z-index: 1;
+  width: 90%; height: 90%; object-fit: contain;
+  border-radius: 18px;
+  filter: drop-shadow(0 18px 32px rgba(18, 0, 0, .22));
 }
-.orbit-copy { position: absolute; left: 11%; bottom: 11%; width: 72%; color: #fdf0e8; z-index: 1; }
 .landing-card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 18px; box-shadow: var(--shadow-soft); }
 .section-pad { padding: 90px 7vw; }
 .landing-nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 7vw; }
@@ -395,7 +395,7 @@
   .topbar, .content-wrap { padding-left: 22px; padding-right: 22px; }
   .hero-grid { grid-template-columns: 1fr; }
   .hero-orbit { min-height: 380px; }
-  .hero-brand-art { width: 96px; }
+  .hero-brand-art { inset: 6%; width: 88%; height: 88%; }
 }
 @media (max-width: 720px) {
   .app-shell { display: block; }
