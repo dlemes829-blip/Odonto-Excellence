@@ -16,7 +16,7 @@ import NotFound from '@/pages/not-found';
 type Gender = 'feminine' | 'masculine' | 'neutral';
 type AppStatus = 'confirmed' | 'pending' | 'rescheduled';
 type Appointment = { id: string; patient: string; date: string; time: string; note: string; status: AppStatus };
-type Collaborator = { id: string; name: string; role: string; gender: Gender; goal: number; calls: number; messages: number; whatsapp: number; conversions: number; appointments: Appointment[] };
+type Collaborator = { id: string; name: string; role: string; city: string; priority: string; gender: Gender; goal: number; calls: number; messages: number; whatsapp: number; conversions: number; appointments: Appointment[] };
 type DayArchive = { id: string; date: string; closedAt: string; appointments: Appointment[]; collaboratorName: string; collaborators: Collaborator[] };
 type Training = { id: string; title: string; duration: string; watched: boolean; attempts: number; area: string };
 type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; activeId: string; activeDate: string; soundEnabled: boolean };
@@ -94,19 +94,30 @@ function playNotificationSound(kind: 'success' | 'alert' = 'success') {
 }
 
 /* ─── SEED DATA ─── */
-const initialCollaborators: Collaborator[] = [
-  {
-    id: 'coordenacao',
-    name: 'Coordenacao',
-    role: 'Acesso administrativo',
+function emptyCollaborator(id: string, name: string, goal = 15): Collaborator {
+  return {
+    id,
+    name,
+    role: 'Equipe comercial',
+    city: 'Cidade não informada',
+    priority: '',
     gender: 'neutral',
-    goal: 0,
+    goal,
     calls: 0,
     messages: 0,
     whatsapp: 0,
     conversions: 0,
     appointments: [],
-  },
+  };
+}
+
+const initialCollaborators: Collaborator[] = [
+  emptyCollaborator('daniel', 'Daniel'),
+  emptyCollaborator('will', 'Will'),
+  emptyCollaborator('chaline', 'Chaline'),
+  emptyCollaborator('queizy', 'Queizy', 10),
+  emptyCollaborator('mayssa', 'Mayssa', 20),
+  emptyCollaborator('sara', 'Sara'),
 ];
 const initialTraining: Training[] = [
   { id: 't1', title: 'Acolhimento que gera confiança', duration: '08:42', watched: true, attempts: 1, area: 'Experiência' },
@@ -117,13 +128,29 @@ const initialTraining: Training[] = [
   { id: 't6', title: 'Conversas que destravam decisões', duration: '14:20', watched: false, attempts: 5, area: 'Comercial' },
 ];
 
+function normalizeCollaborators(collaborators: Collaborator[]): Collaborator[] {
+  const isLegacyEmptyPortal = collaborators.length === 1 && collaborators[0]?.id === 'coordenacao';
+  if (isLegacyEmptyPortal) return initialCollaborators;
+  return collaborators.map((collaborator) => ({
+    ...collaborator,
+    city: collaborator.city?.trim() || 'Cidade não informada',
+    priority: collaborator.priority ?? '',
+    goal: Number.isFinite(collaborator.goal) ? collaborator.goal : 0,
+    calls: Number.isFinite(collaborator.calls) ? collaborator.calls : 0,
+    messages: Number.isFinite(collaborator.messages) ? collaborator.messages : 0,
+    whatsapp: Number.isFinite(collaborator.whatsapp) ? collaborator.whatsapp : 0,
+    conversions: Number.isFinite(collaborator.conversions) ? collaborator.conversions : 0,
+    appointments: Array.isArray(collaborator.appointments) ? collaborator.appointments : [],
+  }));
+}
+
 /* ─── STORE ─── */
 function readStore(): Store {
   try {
     const saved = localStorage.getItem('odonto-excellence-v3');
     if (saved) {
       const parsed = JSON.parse(saved) as Partial<Store>;
-      const colabs = parsed.collaborators ?? initialCollaborators;
+      const colabs = normalizeCollaborators(parsed.collaborators ?? initialCollaborators);
       const storedDate = parsed.activeDate ?? today;
       const archives = parsed.archives ?? [];
       if (storedDate !== today) {
@@ -138,15 +165,15 @@ function readStore(): Store {
           collaborators: colabs.map((p) => ({ ...p, calls: 0, messages: 0, whatsapp: 0, conversions: 0, appointments: [] })),
           archives: pruneArchives(hasData ? [rollover, ...archives] : archives),
           training: parsed.training ?? initialTraining,
-          activeId: parsed.activeId ?? colabs[0]?.id ?? 'coordenacao',
+          activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel',
           activeDate: today,
           soundEnabled: parsed.soundEnabled ?? true,
         };
       }
-      return { collaborators: colabs, archives: pruneArchives(archives), training: parsed.training ?? initialTraining, activeId: parsed.activeId ?? colabs[0]?.id ?? 'coordenacao', activeDate: today, soundEnabled: parsed.soundEnabled ?? true };
+      return { collaborators: colabs, archives: pruneArchives(archives), training: parsed.training ?? initialTraining, activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel', activeDate: today, soundEnabled: parsed.soundEnabled ?? true };
     }
   } catch { /* use seed */ }
-  return { collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'coordenacao', activeDate: today, soundEnabled: true };
+  return { collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true };
 }
 
 /* ─── BRAND LOGO ─── */
@@ -279,7 +306,7 @@ function AppShell({ children, store, onToggleSound }: {
   return (
     <div className="app-shell shell-bg">
       <div className="hidden md:block">
-        <Sidebar activeId={active?.id ?? 'coordenacao'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => undefined} />
+        <Sidebar activeId={active?.id ?? 'daniel'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => undefined} />
       </div>
       <div className="main-area">
         <header className="topbar">
@@ -300,13 +327,13 @@ function AppShell({ children, store, onToggleSound }: {
             </Link>
           </div>
         </header>
-        <div className="md:hidden px-4 pt-1"><MobileNav activeId={active?.id ?? 'coordenacao'} /></div>
+        <div className="md:hidden px-4 pt-1"><MobileNav activeId={active?.id ?? 'daniel'} /></div>
         {children}
       </div>
       {mobileOpen && (
         <div className="fixed inset-0 z-30 md:hidden bg-[rgba(30,4,4,.42)]" onClick={() => setMobileOpen(false)}>
           <div className="w-[82%] max-w-[300px] h-full" onClick={(e) => e.stopPropagation()}>
-            <Sidebar activeId={active?.id ?? 'coordenacao'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => setMobileOpen(false)} />
+            <Sidebar activeId={active?.id ?? 'daniel'} soundEnabled={store.soundEnabled} onToggleSound={onToggleSound} onClose={() => setMobileOpen(false)} />
           </div>
         </div>
       )}
@@ -521,6 +548,7 @@ function TeamPulse({ store, onOpen, onEditGoal }: {
                 <div className="progress-track mt-2 ml-11">
                 <div className={`progress-fill ${fillClass}`} style={{ width: `${pct}%` }} />
                 </div>
+                {p.priority && <p className="ml-11 mt-2 text-[10px] text-muted-foreground truncate">Foco: {p.priority}</p>}
               </button>
             </div>
           );
@@ -605,6 +633,17 @@ function ActivityPanel({ person, updatePerson, notify }: {
           </div>
         ))}
       </div>
+      <label className="block mt-5">
+        <span className="label-text">Prioridade do dia</span>
+        <textarea
+          value={person.priority}
+          onChange={(event) => updatePerson({ ...person, priority: event.target.value })}
+          onBlur={() => notify('Prioridade atualizada.')}
+          rows={2}
+          className="textarea-field resize-none mt-2"
+          placeholder="Ex.: confirmar retornos da tarde"
+        />
+      </label>
       <div className="border-t border-border mt-6 pt-5">
         <div className="flex justify-between text-xs mb-2">
           <span className="text-muted-foreground">Meta do período</span>
@@ -663,11 +702,17 @@ function NextStepCard({ appointment, pendingCount, onPrimary, onSecondary }: {
 function ProfileModal({ onCancel, onSave }: { onCancel: () => void; onSave: (p: Collaborator) => void }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
+  const [city, setCity] = useState('');
   const [gender, setGender] = useState<Gender>('neutral');
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave({ id: `${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`, name: name.trim(), role: role.trim() || 'Equipe clínica', gender, goal: 15, calls: 0, messages: 0, whatsapp: 0, conversions: 0, appointments: [] });
+    onSave({
+      ...emptyCollaborator(`${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`, name.trim()),
+      role: role.trim() || 'Equipe clínica',
+      city: city.trim() || 'Cidade não informada',
+      gender,
+    });
   };
   return (
     <div className="modal-backdrop">
@@ -683,6 +728,10 @@ function ProfileModal({ onCancel, onSave }: { onCancel: () => void; onSave: (p: 
         <label className="block mt-4">
           <span className="label-text">Função na clínica</span>
           <input value={role} onChange={(e) => setRole(e.target.value)} className="input-field" placeholder="Ex.: Recepção" />
+        </label>
+        <label className="block mt-4">
+          <span className="label-text">Cidade e UF</span>
+          <input value={city} onChange={(e) => setCity(e.target.value)} className="input-field" placeholder="Ex.: Curitiba, PR" />
         </label>
         <fieldset className="mt-5">
           <legend className="label-text">Apresentação do avatar</legend>
@@ -1331,7 +1380,7 @@ function Settings({ store, setStore, notify }: {
 
   function clearData() {
     localStorage.removeItem('odonto-excellence-v3');
-    setStore({ collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'coordenacao', activeDate: today, soundEnabled: true });
+    setStore({ collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true });
     setConfirmReset(false);
     notify('Dados restaurados para o exemplo inicial.');
   }
@@ -1386,7 +1435,7 @@ function Settings({ store, setStore, notify }: {
                 <span className="avatar w-10 h-10" style={{ background: genderTone(p.gender) }}>{initials(p.name)}</span>
                 <div className="min-w-0 flex-1">
                   <b className="text-sm block">{p.name}</b>
-                  <span className="text-[10px] text-muted-foreground">{p.role}</span>
+                  <span className="text-[10px] text-muted-foreground">{p.role} · {p.city}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="chip"><Target size={11} /> {p.goal}/dia</span>
