@@ -51,3 +51,4 @@ Thumbs.db
 .cache/
 .local/
 /.tmp-odonto-*
+/production-*.png
