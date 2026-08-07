@@ -20,6 +20,7 @@ type Collaborator = { id: string; name: string; role: string; gender: Gender; go
 type DayArchive = { id: string; date: string; closedAt: string; appointments: Appointment[]; collaboratorName: string; collaborators: Collaborator[] };
 type Training = { id: string; title: string; duration: string; watched: boolean; attempts: number; area: string };
 type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; activeId: string; activeDate: string; soundEnabled: boolean };
+type AgendaAppointment = Appointment & { collaborator: string; collaboratorId: string; gender: Gender };
 
 /* ─── HELPERS ─── */
 function localDateKey(date = new Date()) {
@@ -31,6 +32,12 @@ function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { d
 function formatWeekday(value: string) { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${value}T12:00:00`)); }
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; }
 function genderTone(g: Gender) { return g === 'feminine' ? 'hsl(340 60% 80%)' : g === 'masculine' ? 'hsl(210 55% 78%)' : 'hsl(38 70% 78%)'; }
+function statusLabel(status: AppStatus) {
+  return status === 'confirmed' ? 'Confirmado' : status === 'rescheduled' ? 'Reagendar' : 'Aguardando';
+}
+function statusClass(status: AppStatus) {
+  return status === 'confirmed' ? 'chip-red' : status === 'rescheduled' ? 'chip-coral' : '';
+}
 
 /* ─── WEB AUDIO NOTIFICATION ─── */
 let audioCtx: AudioContext | null = null;
@@ -165,10 +172,10 @@ function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
 }) {
   const [location] = useLocation();
   const navItems = [
-    { href: '/painel', label: 'Visão geral', icon: LayoutDashboard },
-    { href: `/colaborador/${activeId}`, label: 'Minha jornada', icon: UserRound },
-    { href: '/historico', label: 'Dias fechados', icon: FileClock },
-    { href: '/treinamento', label: 'Treinamento', icon: GraduationCap },
+    { href: '/painel', label: 'Início', icon: LayoutDashboard },
+    { href: `/colaborador/${activeId}`, label: 'Meu dia', icon: UserRound },
+    { href: '/historico', label: 'Histórico', icon: FileClock },
+    { href: '/treinamento', label: 'Aprender', icon: GraduationCap },
     { href: '/configuracoes', label: 'Configurações', icon: Settings2 },
   ];
   return (
@@ -178,7 +185,7 @@ function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
         <button onClick={onClose} className="button-ghost button-icon text-white/60 md:hidden" aria-label="Fechar menu"><X size={17} /></button>
       </div>
       <div className="nav-section">
-        <div className="nav-label">Operação</div>
+        <div className="nav-label">Hoje</div>
         <nav className="space-y-1">
           {navItems.slice(0, 3).map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} onClick={onClose}
@@ -189,7 +196,7 @@ function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
         </nav>
       </div>
       <div className="nav-section">
-        <div className="nav-label">Desenvolvimento</div>
+        <div className="nav-label">Apoio</div>
         <nav className="space-y-1">
           {navItems.slice(3).map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} onClick={onClose}
@@ -220,10 +227,10 @@ function MobileNav({ activeId }: { activeId: string }) {
   return (
     <div className="mobile-menu">
       {([
-        ['/painel', 'Painel', LayoutDashboard],
-        [`/colaborador/${activeId}`, 'Jornada', UserRound],
+        ['/painel', 'Início', LayoutDashboard],
+        [`/colaborador/${activeId}`, 'Meu dia', UserRound],
         ['/historico', 'Histórico', FileClock],
-        ['/treinamento', 'Treino', GraduationCap],
+        ['/treinamento', 'Aprender', GraduationCap],
       ] as [string, string, typeof Home][]).map(([href, label, Icon]) => (
         <Link key={href} href={href}
           className={`nav-item ${location === href || (href.includes('/colaborador') && location.startsWith('/colaborador')) ? 'active' : ''}`}>
@@ -354,13 +361,13 @@ function CloseDayModal({ count, onCancel, onConfirm }: { count: number; onCancel
           <span className="w-11 h-11 rounded-xl bg-primary/10 text-primary grid place-items-center"><CheckCircle2 size={21} /></span>
           <button onClick={onCancel} className="button-ghost button-icon" aria-label="Cancelar"><X size={17} /></button>
         </div>
-        <h2 className="display-title text-3xl mt-6">Fechar o dia com calma?</h2>
+        <h2 className="display-title text-3xl mt-6">Salvar e fechar o dia?</h2>
         <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
-          Vamos arquivar <strong>{count} {count === 1 ? 'encontro' : 'encontros'}</strong> de hoje e limpar as filas para o próximo dia. O histórico continua disponível em Dias fechados.
+          Vamos guardar <strong>{count} {count === 1 ? 'encontro' : 'encontros'}</strong> no histórico e preparar a clínica para amanhã. Nada é apagado.
         </p>
         <div className="flex justify-end gap-2 mt-8">
-          <button className="button-secondary" onClick={onCancel}>Ainda não</button>
-          <button className="button-primary" onClick={onConfirm}><Check size={15} /> Arquivar e limpar</button>
+          <button className="button-secondary" onClick={onCancel}>Voltar</button>
+          <button className="button-primary" onClick={onConfirm}><Check size={15} /> Salvar e fechar</button>
         </div>
       </div>
     </div>
@@ -401,9 +408,9 @@ function AppointmentModal({ appointment, onCancel, onSave }: {
           <label>
             <span className="label-text">Status</span>
             <select value={form.status} onChange={(e) => upd('status', e.target.value)} className="select-field">
-              <option value="pending">⏳ Aguardando</option>
-              <option value="confirmed">✅ Confirmado</option>
-              <option value="rescheduled">🔄 Reagendar</option>
+              <option value="pending">Aguardando confirmação</option>
+              <option value="confirmed">Confirmado</option>
+              <option value="rescheduled">Precisa reagendar</option>
             </select>
           </label>
           <label className="sm:col-span-1">
@@ -497,22 +504,30 @@ function ActivityPanel({ person, updatePerson, notify }: {
     { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
     { key: 'conversions', label: 'Conversões', icon: TrendingUp },
   ];
+  function adjust(key: 'calls' | 'messages' | 'whatsapp' | 'conversions', amount: number) {
+    updatePerson({ ...person, [key]: Math.max(0, person[key] + amount) });
+  }
   return (
     <section className="panel p-5">
-      <div className="eyebrow">Atividade comercial</div>
-      <h2 className="font-bold text-lg mt-2">O que você movimentou.</h2>
-      <p className="text-xs text-muted-foreground mt-2">Toque no número para ajustar.</p>
+      <div className="eyebrow">Registrar atividade</div>
+      <h2 className="font-bold text-lg mt-2">O que você já fez hoje</h2>
+      <p className="text-xs text-muted-foreground mt-2">Use + depois de cada contato. Você pode corrigir o número quando quiser.</p>
       <div className="space-y-3 mt-6">
         {fields.map(({ key, label, icon: Icon }) => (
           <div key={key} className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-lg bg-primary/10 text-primary grid place-items-center"><Icon size={14} /></span>
             <span className="text-xs font-bold flex-1">{label}</span>
-            <input
-              type="number" min="0" value={person[key]}
-              onChange={(e) => updatePerson({ ...person, [key]: Number(e.target.value) })}
-              onBlur={() => notify('Atividade salva.')}
-              className="input-field !w-16 !px-2 text-center font-mono text-xs"
-            />
+            <div className="counter-control">
+              <button type="button" onClick={() => adjust(key, -1)} aria-label={`Diminuir ${label}`} data-testid={`button-decrease-${key}`}>−</button>
+              <input
+                type="number" min="0" value={person[key]}
+                onChange={(e) => updatePerson({ ...person, [key]: Math.max(0, Number(e.target.value) || 0) })}
+                onBlur={() => notify('Atividade salva.')}
+                aria-label={label}
+                data-testid={`input-activity-${key}`}
+              />
+              <button type="button" onClick={() => adjust(key, 1)} aria-label={`Aumentar ${label}`} data-testid={`button-increase-${key}`}>+</button>
+            </div>
           </div>
         ))}
       </div>
@@ -524,6 +539,47 @@ function ActivityPanel({ person, updatePerson, notify }: {
         <div className="progress-track">
           <div className="progress-fill" style={{ width: `${Math.min(100, (person.conversions / person.goal) * 100)}%` }} />
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── NEXT STEP ─── */
+function NextStepCard({ appointment, pendingCount, onPrimary, onSecondary }: {
+  appointment?: AgendaAppointment;
+  pendingCount: number;
+  onPrimary: () => void;
+  onSecondary: () => void;
+}) {
+  const hasAppointment = Boolean(appointment);
+  const isPending = appointment?.status === 'pending';
+  const isRescheduled = appointment?.status === 'rescheduled';
+  return (
+    <section className="next-step-card panel mt-6" data-testid="card-next-step">
+      <div className="next-step-icon"><Zap size={19} /></div>
+      <div className="min-w-0 flex-1">
+        <div className="eyebrow">Próximo passo</div>
+        <h2 className="font-bold text-lg mt-1">
+          {isPending ? 'Confirme um agendamento' : isRescheduled ? 'Ajuste um reagendamento' : hasAppointment ? 'Prepare o próximo atendimento' : 'Comece sua agenda'}
+        </h2>
+        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+          {isPending
+            ? `${pendingCount} ${pendingCount === 1 ? 'pessoa espera' : 'pessoas esperam'} uma confirmação da equipe.`
+            : appointment
+              ? `${appointment.time} · ${appointment.patient} · ${appointment.collaborator}`
+              : 'Adicione o primeiro paciente para organizar o dia.'}
+        </p>
+      </div>
+      <div className="next-step-actions">
+        <button className="button-primary" onClick={onPrimary} data-testid="button-next-step-primary">
+          {isPending ? 'Confirmar agora' : 'Abrir meu dia'}
+          <ArrowRight size={14} />
+        </button>
+        {hasAppointment && (
+          <button className="button-secondary" onClick={onSecondary} data-testid="button-next-step-secondary">
+            Ver agenda
+          </button>
+        )}
       </div>
     </section>
   );
@@ -796,7 +852,7 @@ function Dashboard({ store, setStore, notify }: {
 }) {
   const [showClose, setShowClose] = useState(false);
   const [, setLocation] = useLocation();
-  const allAppts = store.collaborators
+  const allAppts: AgendaAppointment[] = store.collaborators
     .flatMap((p) => p.appointments.map((a) => ({ ...a, collaborator: p.name, collaboratorId: p.id, gender: p.gender })))
     .filter((a) => a.date === today)
     .sort((a, b) => a.time.localeCompare(b.time));
@@ -819,6 +875,17 @@ function Dashboard({ store, setStore, notify }: {
   }
 
   const pendingCount = allAppts.filter((a) => a.status === 'pending').length;
+  const nextAppointment = allAppts.find((a) => a.status === 'pending') ?? allAppts[0];
+
+  function confirmAppointment(appointment: AgendaAppointment) {
+    setStore({
+      ...store,
+      collaborators: store.collaborators.map((p) => p.id === appointment.collaboratorId
+        ? { ...p, appointments: p.appointments.map((a) => a.id === appointment.id ? { ...a, status: 'confirmed' } : a) }
+        : p),
+    });
+    notify(`${appointment.patient} foi confirmado.`);
+  }
 
   return (
     <AppShell store={store} onToggleSound={() => setStore({ ...store, soundEnabled: !store.soundEnabled })}>
@@ -828,32 +895,41 @@ function Dashboard({ store, setStore, notify }: {
           <div>
             <div className="eyebrow">{formatDate(today)} · {formatWeekday(today)}</div>
             <h1 className="page-title mt-3">{greeting()}, equipe.</h1>
-            <p className="text-sm text-muted-foreground mt-3">Aqui está o pulso da clínica. Um passo de cada vez.</p>
+            <p className="text-sm text-muted-foreground mt-3">Veja o que precisa acontecer e comece pelo próximo passo.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button className="button-secondary" onClick={() => setLocation('/colaborador/' + store.activeId)}>
-              <UserRound size={15} /> Minha fila
+              <UserRound size={15} /> Meu dia
             </button>
             <button className="button-primary" onClick={() => setShowClose(true)}>
-              <Check size={15} /> Fechar o dia
+              <Check size={15} /> Salvar e fechar
             </button>
           </div>
         </div>
 
         {/* ALERT PENDENTES */}
         {pendingCount > 0 && (
-          <div className="mt-5 flex items-center gap-3 p-4 rounded-xl bg-[hsl(38,90%,54%)]/12 border border-[hsl(38,90%,54%)]/25">
+          <div className="mt-5 flex items-center gap-3 p-4 rounded-xl bg-[hsl(38,90%,54%)]/12 border border-[hsl(38,90%,54%)]/25" role="status" data-testid="status-pending-appointments">
             <AlertTriangle size={18} className="text-[hsl(38,65%,40%)] shrink-0" />
-            <span className="text-sm font-bold text-[hsl(38,55%,32%)]">{pendingCount} {pendingCount === 1 ? 'agendamento aguarda' : 'agendamentos aguardam'} confirmação</span>
+            <span className="text-sm font-bold text-[hsl(38,55%,32%)]">{pendingCount} {pendingCount === 1 ? 'agendamento precisa' : 'agendamentos precisam'} de confirmação</span>
           </div>
         )}
 
+        <NextStepCard
+          appointment={nextAppointment}
+          pendingCount={pendingCount}
+          onPrimary={() => nextAppointment?.status === 'pending'
+            ? confirmAppointment(nextAppointment)
+            : setLocation(`/colaborador/${nextAppointment?.collaboratorId ?? store.activeId}`)}
+          onSecondary={() => setLocation(`/colaborador/${nextAppointment?.collaboratorId ?? store.activeId}`)}
+        />
+
         {/* STATS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
-          <StatCard label="Encontros na agenda" value={allAppts.length.toString()} detail={`${allAppts.filter((a) => a.status === 'confirmed').length} confirmados`} icon={CalendarDays} />
-          <StatCard label="Meta do time" value={`${Math.round((totalConv / totalGoal) * 100)}%`} detail={`${totalConv} de ${totalGoal} conversões`} icon={TrendingUp} accent />
-          <StatCard label="Atividade comercial" value={totalActivity.toString()} detail="contatos registrados hoje" icon={MessageCircle} />
-          <StatCard label="Pessoas em movimento" value={store.collaborators.length.toString()} detail="perfis ativos" icon={UsersRound} />
+          <StatCard label="Consultas hoje" value={allAppts.length.toString()} detail={`${allAppts.filter((a) => a.status === 'confirmed').length} confirmadas`} icon={CalendarDays} />
+          <StatCard label="Meta alcançada" value={`${Math.round((totalConv / totalGoal) * 100)}%`} detail={`${totalConv} de ${totalGoal} conversões`} icon={TrendingUp} accent />
+          <StatCard label="Contatos feitos" value={totalActivity.toString()} detail="registrados pela equipe" icon={MessageCircle} />
+          <StatCard label="Equipe ativa" value={store.collaborators.length.toString()} detail="pessoas com perfil" icon={UsersRound} />
         </div>
 
         {/* AGENDA + PULSE */}
@@ -861,8 +937,8 @@ function Dashboard({ store, setStore, notify }: {
           <section className="panel overflow-hidden">
             <div className="p-5 flex justify-between items-start">
               <div>
-                <div className="eyebrow">Agenda compartilhada</div>
-                <h2 className="font-bold text-lg mt-2">Hoje na clínica</h2>
+                <div className="eyebrow">Agenda da equipe</div>
+                <h2 className="font-bold text-lg mt-2">Quem será atendido hoje</h2>
               </div>
               <span className="chip chip-red chip-live"><span className="w-1.5 h-1.5 rounded-full bg-primary" /> ao vivo</span>
             </div>
@@ -882,9 +958,18 @@ function Dashboard({ store, setStore, notify }: {
                       {a.collaborator}
                     </button>
                     <span className="text-[11px] text-muted-foreground truncate">{a.note}</span>
-                    <span className={`chip ${a.status === 'confirmed' ? 'chip-red' : a.status === 'rescheduled' ? 'chip-coral' : ''}`}>
-                      {a.status === 'confirmed' ? 'confirmado' : a.status === 'rescheduled' ? 'reagendar' : 'aguardando'}
-                    </span>
+                    <button
+                      className={`chip ${statusClass(a.status)} cursor-pointer hover:opacity-80 transition-opacity`}
+                      onClick={() => a.status === 'pending'
+                        ? confirmAppointment(a)
+                        : a.status === 'rescheduled'
+                          ? setLocation(`/colaborador/${a.collaboratorId}`)
+                          : undefined}
+                      title={a.status === 'confirmed' ? 'Agendamento confirmado' : a.status === 'pending' ? 'Clique para confirmar' : 'Abrir para ajustar horário'}
+                      data-testid={`button-confirm-${a.id}`}
+                    >
+                      {statusLabel(a.status)}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -902,9 +987,9 @@ function Dashboard({ store, setStore, notify }: {
             <div className="eyebrow">Uma pausa para olhar</div>
             <h2 className="display-title text-3xl mt-2">O que merece<br /><span className="text-primary">atenção agora?</span></h2>
             <div className="space-y-3 mt-5">
-              <Priority icon={Zap} title={`${pendingCount > 0 ? pendingCount : '3'} retornos aguardando contato`} detail="Prioridade comercial · agora" tone="coral" />
-              <Priority icon={Clock3} title="Pedro Nunes precisa de novo horário" detail="Reagendamento · hoje" tone="red" />
-              <Priority icon={GraduationCap} title="2 aulas com mais tentativas" detail="Treinamento · esta semana" tone="gold" />
+              <Priority icon={Zap} title={`${pendingCount > 0 ? pendingCount : 'Nenhum'} confirmação${pendingCount === 1 ? '' : 'ões'} pendente${pendingCount === 1 ? '' : 's'}`} detail="Primeiro, resolva o que está parado" tone="coral" />
+              <Priority icon={Clock3} title="Revise os reagendamentos" detail="Depois, ajuste os horários de hoje" tone="red" />
+              <Priority icon={GraduationCap} title="Continue uma aula curta" detail="Quando a agenda estiver em dia" tone="gold" />
             </div>
           </section>
         </div>

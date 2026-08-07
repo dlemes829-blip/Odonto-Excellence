@@ -222,6 +222,36 @@
 
 /* ─── CARDS / PANELS ─── */
 .panel { background: hsl(var(--card)); border: 1px solid hsl(var(--card-border)); border-radius: 18px; box-shadow: var(--shadow-soft); }
+.next-step-card {
+  display: flex; align-items: center; gap: 14px; padding: 16px 18px;
+  border-color: hsl(var(--primary) / .22);
+  background: linear-gradient(105deg, hsl(var(--primary) / .075), hsl(var(--card)) 58%);
+}
+.next-step-icon {
+  width: 42px; height: 42px; border-radius: 13px; flex: 0 0 auto;
+  display: grid; place-items: center; color: hsl(var(--primary));
+  background: hsl(var(--primary) / .12);
+}
+.next-step-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.counter-control {
+  display: inline-flex; align-items: center; height: 38px;
+  border: 1px solid hsl(var(--input)); border-radius: 10px;
+  background: hsl(var(--background)); overflow: hidden;
+}
+.counter-control button {
+  width: 32px; height: 100%; display: grid; place-items: center;
+  color: hsl(var(--primary)); font-size: 18px; font-weight: 700; cursor: pointer;
+  transition: background .18s, color .18s;
+}
+.counter-control button:hover { background: hsl(var(--primary) / .1); }
+.counter-control input {
+  width: 38px; height: 100%; border: 0; border-left: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border)); background: transparent;
+  color: hsl(var(--foreground)); text-align: center; font-family: var(--app-font-mono);
+  font-size: 12px; font-weight: 700; outline: none;
+}
+.counter-control input::-webkit-outer-spin-button,
+.counter-control input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 /* ─── STATS ─── */
 .stat-value { font-size: 30px; line-height: 1; font-weight: 800; letter-spacing: -.06em; }
@@ -358,4 +388,8 @@
   .section-pad { padding: 60px 5vw; }
   .landing-nav { padding: 16px 5vw; }
   .table-row { min-width: 680px; }
+  .next-step-card { align-items: flex-start; flex-wrap: wrap; }
+  .next-step-icon { width: 38px; height: 38px; }
+  .next-step-actions { width: 100%; margin-left: 52px; justify-content: flex-start; }
+  .next-step-actions .button-primary, .next-step-actions .button-secondary { min-height: 40px; }
 }
