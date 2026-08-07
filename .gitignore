@@ -10,6 +10,9 @@ out-tsc
 
 # dependencies
 node_modules
+.env
+.env.*
+!.env.example
 
 # IDEs and editors
 /.idea
@@ -47,3 +50,4 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+/.tmp-odonto-*

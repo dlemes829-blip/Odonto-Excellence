@@ -25,7 +25,13 @@ app.use(
     },
   }),
 );
-app.use(cors());
+const portalOrigin = process.env.PORTAL_ORIGIN;
+app.use(
+  cors({
+    origin: portalOrigin ? [portalOrigin] : true,
+    methods: ["GET", "PUT", "OPTIONS"],
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -21,6 +21,7 @@ type DayArchive = { id: string; date: string; closedAt: string; appointments: Ap
 type Training = { id: string; title: string; duration: string; watched: boolean; attempts: number; area: string };
 type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; activeId: string; activeDate: string; soundEnabled: boolean };
 type AgendaAppointment = Appointment & { collaborator: string; collaboratorId: string; gender: Gender };
+type PortalEnvelope = { state: Record<string, unknown> | null; revision: number };
 
 /* ─── HELPERS ─── */
 function localDateKey(date = new Date()) {
@@ -29,6 +30,8 @@ function localDateKey(date = new Date()) {
 const today = localDateKey();
 const ARCHIVE_RETENTION_DAYS = 2;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const PORTAL_STORAGE_KEY = 'odonto-excellence-v3';
+const PORTAL_API_URL = (import.meta.env.VITE_ODONTO_API_URL ?? '').replace(/\/$/, '');
 function initials(name: string) { return name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase(); }
 function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`)).replace('.', ''); }
 function formatWeekday(value: string) { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${value}T12:00:00`)); }
@@ -145,35 +148,52 @@ function normalizeCollaborators(collaborators: Collaborator[]): Collaborator[] {
 }
 
 /* ─── STORE ─── */
+function normalizeStore(value: Partial<Store>): Store {
+  const collaborators = normalizeCollaborators(value.collaborators ?? initialCollaborators);
+  const storedDate = value.activeDate ?? today;
+  const archives = value.archives ?? [];
+
+  if (storedDate !== today) {
+    const hasData = collaborators.some((person) => person.appointments.length > 0 || person.calls > 0 || person.messages > 0 || person.whatsapp > 0 || person.conversions > 0);
+    const rollover: DayArchive = {
+      id: `archive-auto-${storedDate}`,
+      date: storedDate,
+      closedAt: 'virada automática',
+      appointments: collaborators.flatMap((person) => person.appointments.map((appointment) => ({ ...appointment }))),
+      collaboratorName: 'Equipe Odonto Excellence',
+      collaborators: collaborators.map((person) => ({ ...person, appointments: [...person.appointments] })),
+    };
+    return {
+      collaborators: collaborators.map((person) => ({ ...person, calls: 0, messages: 0, whatsapp: 0, conversions: 0, appointments: [] })),
+      archives: pruneArchives(hasData ? [rollover, ...archives] : archives),
+      training: value.training ?? initialTraining,
+      activeId: value.activeId ?? collaborators[0]?.id ?? 'daniel',
+      activeDate: today,
+      soundEnabled: value.soundEnabled ?? true,
+    };
+  }
+
+  return {
+    collaborators,
+    archives: pruneArchives(archives),
+    training: value.training ?? initialTraining,
+    activeId: value.activeId ?? collaborators[0]?.id ?? 'daniel',
+    activeDate: today,
+    soundEnabled: value.soundEnabled ?? true,
+  };
+}
+
 function readStore(): Store {
   try {
-    const saved = localStorage.getItem('odonto-excellence-v3');
-    if (saved) {
-      const parsed = JSON.parse(saved) as Partial<Store>;
-      const colabs = normalizeCollaborators(parsed.collaborators ?? initialCollaborators);
-      const storedDate = parsed.activeDate ?? today;
-      const archives = parsed.archives ?? [];
-      if (storedDate !== today) {
-        const hasData = colabs.some((p) => p.appointments.length > 0 || p.calls > 0 || p.messages > 0 || p.whatsapp > 0 || p.conversions > 0);
-        const rollover: DayArchive = {
-          id: `archive-auto-${storedDate}`, date: storedDate, closedAt: 'virada automática',
-          appointments: colabs.flatMap((p) => p.appointments.map((a) => ({ ...a }))),
-          collaboratorName: 'Equipe Odonto Excellence',
-          collaborators: colabs.map((p) => ({ ...p, appointments: [...p.appointments] })),
-        };
-        return {
-          collaborators: colabs.map((p) => ({ ...p, calls: 0, messages: 0, whatsapp: 0, conversions: 0, appointments: [] })),
-          archives: pruneArchives(hasData ? [rollover, ...archives] : archives),
-          training: parsed.training ?? initialTraining,
-          activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel',
-          activeDate: today,
-          soundEnabled: parsed.soundEnabled ?? true,
-        };
-      }
-      return { collaborators: colabs, archives: pruneArchives(archives), training: parsed.training ?? initialTraining, activeId: parsed.activeId ?? colabs[0]?.id ?? 'daniel', activeDate: today, soundEnabled: parsed.soundEnabled ?? true };
-    }
+    const saved = localStorage.getItem(PORTAL_STORAGE_KEY);
+    if (saved) return normalizeStore(JSON.parse(saved) as Partial<Store>);
   } catch { /* use seed */ }
   return { collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true };
+}
+
+function storeFromRemote(value: Record<string, unknown>): Store | null {
+  if (!Array.isArray(value.collaborators) || !Array.isArray(value.archives) || !Array.isArray(value.training)) return null;
+  return normalizeStore(value as Partial<Store>);
 }
 
 /* ─── BRAND LOGO ─── */
@@ -250,7 +270,7 @@ function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
           <span className="text-xs">{soundEnabled ? 'Som ativo' : 'Som desativado'}</span>
         </button>
         <div className="panel p-3 !bg-white/5 !border-white/10">
-          <div className="flex gap-2 text-xs text-white/80"><ShieldCheck size={16} className="text-[hsl(var(--sidebar-primary))] shrink-0" /><span>Dados locais · este dispositivo.</span></div>
+          <div className="flex gap-2 text-xs text-white/80"><ShieldCheck size={16} className="text-[hsl(var(--sidebar-primary))] shrink-0" /><span>Rotina centralizada da equipe.</span></div>
         </div>
       </div>
     </aside>
@@ -432,7 +452,7 @@ function GoalModal({ person, onCancel, onSave }: {
           <button type="button" onClick={onCancel} className="button-ghost button-icon" aria-label="Fechar"><X size={17} /></button>
         </div>
         <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
-          Defina quantas conversões <strong>{person.name}</strong> deve buscar no dia. A alteração fica salva somente neste dispositivo.
+          Defina quantas conversões <strong>{person.name}</strong> deve buscar no dia. A equipe acompanha a atualização na rotina compartilhada.
         </p>
         <label className="block mt-7">
           <span className="label-text">Conversões esperadas por dia</span>
@@ -845,7 +865,7 @@ function Landing() {
 
       <footer className="px-[7vw] py-8 border-t border-border flex flex-col sm:flex-row justify-between gap-3 text-[11px] text-muted-foreground">
         <span>© {new Date().getFullYear()} Odonto Excellence · Portal do Colaborador</span>
-        <span>Dados da equipe ficam neste dispositivo.</span>
+        <span>Rotina compartilhada da equipe.</span>
       </footer>
     </main>
   );
@@ -861,8 +881,8 @@ function Access({ store, setStore }: { store: Store; setStore: (s: Store) => voi
         <div className="mt-auto max-w-md pb-8">
           <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Portal nacional</div>
           <h1 className="display-title text-6xl mt-4 leading-[.87]">Quem está<br />conduzindo<br /><span className="text-[hsl(var(--sidebar-primary))]">hoje?</span></h1>
-          <p className="text-sm text-white/55 mt-7 leading-relaxed">Escolha um perfil para preparar a rotina da sua equipe. Os dados deste portal ficam somente neste dispositivo.</p>
-          <div className="mt-8 flex gap-2 text-[10px] text-white/40"><ShieldCheck size={14} /> Privacidade por design · uso local</div>
+          <p className="text-sm text-white/55 mt-7 leading-relaxed">Escolha um perfil para preparar a rotina da sua equipe e acompanhar o dia em um único ambiente.</p>
+          <div className="mt-8 flex gap-2 text-[10px] text-white/40"><ShieldCheck size={14} /> Ambiente de trabalho da equipe</div>
         </div>
         <div className="text-xs text-white/35">Odonto Excellence · Brasil</div>
       </section>
@@ -1228,7 +1248,7 @@ function History({ store }: { store: Store }) {
         <div className="grid lg:grid-cols-[.9fr_1.1fr] gap-5 mt-9">
           <section className="panel p-5">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold">Arquivo local</h2>
+              <h2 className="font-bold">Histórico da equipe</h2>
               <span className="chip">{store.archives.length} {store.archives.length === 1 ? 'dia' : 'dias'}</span>
             </div>
             <div className="retention-note mt-4">
@@ -1379,7 +1399,7 @@ function Settings({ store, setStore, notify }: {
   const [confirmReset, setConfirmReset] = useState(false);
 
   function clearData() {
-    localStorage.removeItem('odonto-excellence-v3');
+    localStorage.removeItem(PORTAL_STORAGE_KEY);
     setStore({ collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true });
     setConfirmReset(false);
     notify('Dados restaurados para o exemplo inicial.');
@@ -1390,9 +1410,9 @@ function Settings({ store, setStore, notify }: {
       <div className="content-wrap">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <div className="eyebrow">Controle do dispositivo</div>
-            <h1 className="page-title mt-3">Configurações locais.</h1>
-            <p className="text-sm text-muted-foreground mt-3 max-w-lg">Ajuste os perfis e cuide do espaço onde a rotina da clínica vive. Nada é enviado para um servidor.</p>
+            <div className="eyebrow">Controle da equipe</div>
+            <h1 className="page-title mt-3">Configurações da rotina.</h1>
+            <p className="text-sm text-muted-foreground mt-3 max-w-lg">Ajuste os perfis e mantenha a operação da equipe alinhada em um único ambiente.</p>
           </div>
           <BackToMenu />
         </div>
@@ -1460,9 +1480,9 @@ function Settings({ store, setStore, notify }: {
             <div className="flex gap-3">
               <span className="w-9 h-9 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0"><ShieldCheck size={17} /></span>
               <div>
-                <h2 className="font-bold text-sm">Armazenamento local</h2>
-                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">Consultas, metas, histórico e progresso ficam somente no navegador desta clínica.</p>
-                <span className="chip chip-red mt-4 inline-flex"><CheckCircle2 size={12} /> sincronização desativada</span>
+                <h2 className="font-bold text-sm">Dados da equipe</h2>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">Agenda, metas, histórico e progresso são mantidos no ambiente compartilhado da equipe.</p>
+                <span className="chip chip-red mt-4 inline-flex"><CheckCircle2 size={12} /> sincronização ativa</span>
               </div>
             </div>
           </div>
@@ -1471,7 +1491,7 @@ function Settings({ store, setStore, notify }: {
               <span className="w-9 h-9 rounded-lg bg-accent/15 text-accent grid place-items-center shrink-0"><RotateCcw size={17} /></span>
               <div>
                 <h2 className="font-bold text-sm">Começar de novo</h2>
-                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">Restaure os dados de exemplo para preparar este dispositivo para uma nova rotina.</p>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">Restaure os dados de exemplo para iniciar uma nova rotina da equipe.</p>
                 <button className="button-danger mt-4" onClick={() => setConfirmReset(true)}>Restaurar dados iniciais</button>
               </div>
             </div>
@@ -1500,7 +1520,7 @@ function Settings({ store, setStore, notify }: {
               <button onClick={() => setConfirmReset(false)} className="button-ghost button-icon"><X size={17} /></button>
             </div>
             <h2 className="display-title text-3xl mt-6">Restaurar dados iniciais?</h2>
-            <p className="text-sm text-muted-foreground mt-3">Seu histórico e alterações locais serão removidos deste dispositivo.</p>
+            <p className="text-sm text-muted-foreground mt-3">O histórico e as alterações atuais serão substituídos pelos dados de exemplo.</p>
             <div className="flex justify-end gap-2 mt-7">
               <button className="button-secondary" onClick={() => setConfirmReset(false)}>Manter meus dados</button>
               <button className="button-danger" onClick={clearData}>Restaurar agora</button>
@@ -1533,11 +1553,14 @@ function AppRouter({ store, setStore, notify }: { store: Store; setStore: (s: St
 export default function App() {
   const [store, setStoreState] = useState<Store>(() => readStore());
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  const [portalReady, setPortalReady] = useState(!PORTAL_API_URL);
   const prevApptCountRef = useRef<number>(store.collaborators.reduce((s, p) => s + p.appointments.length, 0));
+  const portalRevisionRef = useRef(0);
+  const skipNextSyncRef = useRef(false);
 
   const setStore = useCallback((next: Store) => {
     setStoreState(next);
-    localStorage.setItem('odonto-excellence-v3', JSON.stringify(next));
+    localStorage.setItem(PORTAL_STORAGE_KEY, JSON.stringify(next));
   }, []);
 
   const notify = useCallback((message: string, kind: ToastKind = 'success') => {
@@ -1548,10 +1571,67 @@ export default function App() {
     }
   }, [store.soundEnabled]);
 
+  const applyRemoteState = useCallback((envelope: PortalEnvelope) => {
+    portalRevisionRef.current = envelope.revision;
+    if (!envelope.state) return;
+    const next = storeFromRemote(envelope.state);
+    if (!next) return;
+    skipNextSyncRef.current = true;
+    localStorage.setItem(PORTAL_STORAGE_KEY, JSON.stringify(next));
+    setStoreState(next);
+  }, []);
+
+  const loadRemoteState = useCallback(async () => {
+    if (!PORTAL_API_URL) return;
+    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/state`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('portal state unavailable');
+    applyRemoteState(await response.json() as PortalEnvelope);
+  }, [applyRemoteState]);
+
+  useEffect(() => {
+    if (!PORTAL_API_URL) return;
+    let active = true;
+    void loadRemoteState()
+      .catch(() => undefined)
+      .finally(() => { if (active) setPortalReady(true); });
+    return () => { active = false; };
+  }, [loadRemoteState]);
+
+  useEffect(() => {
+    if (!PORTAL_API_URL || !portalReady) return;
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void fetch(`${PORTAL_API_URL}/odonto-portal/state`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: store, revision: portalRevisionRef.current }),
+      }).then(async (response) => {
+        if (response.status === 409) {
+          await loadRemoteState();
+          notify('A rotina foi atualizada por outra pessoa. Exibindo a versão mais recente.', 'notify');
+          return;
+        }
+        if (!response.ok) throw new Error('portal save unavailable');
+        const result = await response.json() as PortalEnvelope;
+        portalRevisionRef.current = result.revision;
+      }).catch(() => undefined);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [loadRemoteState, notify, portalReady, store]);
+
+  useEffect(() => {
+    if (!PORTAL_API_URL || !portalReady) return;
+    const timer = window.setInterval(() => { void loadRemoteState().catch(() => undefined); }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [loadRemoteState, portalReady]);
+
   // Real-time: detect new appointments added by any tab (storage event)
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key !== 'odonto-excellence-v3' || !e.newValue) return;
+      if (e.key !== PORTAL_STORAGE_KEY || !e.newValue) return;
       try {
         const next = JSON.parse(e.newValue) as Store;
         const newCount = next.collaborators.reduce((s, p) => s + p.appointments.length, 0);

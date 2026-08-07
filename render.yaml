@@ -1,5 +1,19 @@
 services:
   - type: web
+    runtime: node
+    name: odonto-excellence-api
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PORTAL_ORIGIN
+        sync: false
+      - key: NODE_ENV
+        value: production
+  - type: web
     runtime: static
     name: odonto-excellence-portal
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/odonto-excellence run build
