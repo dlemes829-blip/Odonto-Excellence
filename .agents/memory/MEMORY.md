@@ -1,0 +1,1 @@
+- [Git LFS access](git-lfs-access.md) — this repository includes large LFS assets; GitHub authentication is required to fetch them even when source refs are cached.
