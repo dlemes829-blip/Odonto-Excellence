@@ -18,8 +18,9 @@ type AppStatus = 'confirmed' | 'pending' | 'rescheduled';
 type Appointment = { id: string; patient: string; date: string; time: string; note: string; status: AppStatus };
 type Collaborator = { id: string; name: string; role: string; city: string; priority: string; gender: Gender; goal: number; calls: number; messages: number; whatsapp: number; conversions: number; appointments: Appointment[] };
 type DayArchive = { id: string; date: string; closedAt: string; appointments: Appointment[]; collaboratorName: string; collaborators: Collaborator[] };
-type Training = { id: string; title: string; duration: string; watched: boolean; attempts: number; area: string };
-type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; activeId: string; activeDate: string; soundEnabled: boolean };
+type Training = { id: string; title: string; durationMinutes: number; watched: boolean; attempts: number; area: string; ownerId: string; createdAt: string; completedAt?: string };
+type StudyBaseline = { total: number; watched: number; minutes: number; days: number };
+type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; studyBaselines: Record<string, StudyBaseline>; activeId: string; activeDate: string; soundEnabled: boolean };
 type AgendaAppointment = Appointment & { collaborator: string; collaboratorId: string; gender: Gender };
 type PortalEnvelope = { state: Record<string, unknown> | null; revision: number };
 
@@ -123,13 +124,80 @@ const initialCollaborators: Collaborator[] = [
   emptyCollaborator('sara', 'Sara'),
 ];
 const initialTraining: Training[] = [
-  { id: 't1', title: 'Acolhimento que gera confiança', duration: '08:42', watched: true, attempts: 1, area: 'Experiência' },
-  { id: 't2', title: 'Como conduzir uma avaliação', duration: '12:18', watched: true, attempts: 2, area: 'Comercial' },
-  { id: 't3', title: 'Follow-up sem perder o timing', duration: '06:34', watched: false, attempts: 4, area: 'Relacionamento' },
-  { id: 't4', title: 'Organizando uma agenda saudável', duration: '10:05', watched: true, attempts: 1, area: 'Gestão' },
-  { id: 't5', title: 'O cuidado depois da consulta', duration: '07:51', watched: false, attempts: 3, area: 'Experiência' },
-  { id: 't6', title: 'Conversas que destravam decisões', duration: '14:20', watched: false, attempts: 5, area: 'Comercial' },
+  { id: 't1', title: 'Acolhimento que gera confiança', durationMinutes: 9, watched: true, attempts: 1, area: 'Experiência', ownerId: 'daniel', createdAt: '2026-08-07T09:00:00.000Z', completedAt: '2026-08-07T09:10:00.000Z' },
+  { id: 't2', title: 'Como conduzir uma avaliação', durationMinutes: 12, watched: true, attempts: 2, area: 'Comercial', ownerId: 'daniel', createdAt: '2026-08-07T09:12:00.000Z', completedAt: '2026-08-07T09:25:00.000Z' },
+  { id: 't3', title: 'Follow-up sem perder o timing', durationMinutes: 7, watched: false, attempts: 4, area: 'Relacionamento', ownerId: 'daniel', createdAt: '2026-08-07T09:28:00.000Z' },
+  { id: 't4', title: 'Organizando uma agenda saudável', durationMinutes: 10, watched: true, attempts: 1, area: 'Gestão', ownerId: 'daniel', createdAt: '2026-08-07T09:36:00.000Z', completedAt: '2026-08-07T09:47:00.000Z' },
+  { id: 't5', title: 'O cuidado depois da consulta', durationMinutes: 8, watched: false, attempts: 3, area: 'Experiência', ownerId: 'daniel', createdAt: '2026-08-07T09:50:00.000Z' },
+  { id: 't6', title: 'Conversas que destravam decisões', durationMinutes: 14, watched: false, attempts: 5, area: 'Comercial', ownerId: 'daniel', createdAt: '2026-08-07T10:00:00.000Z' },
 ];
+
+// Importado da planilha do Daniel. Os novos registros ficam somente no perfil ativo.
+const initialStudyBaselines: Record<string, StudyBaseline> = {
+  daniel: { total: 212, watched: 125, minutes: 4_200, days: 7 },
+};
+
+function durationToMinutes(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(1, Math.round(value));
+  if (typeof value !== 'string') return 0;
+  const [minutes, seconds = '0'] = value.split(':');
+  const parsedMinutes = Number(minutes);
+  const parsedSeconds = Number(seconds);
+  if (!Number.isFinite(parsedMinutes)) return 0;
+  return Math.max(1, Math.round(parsedMinutes + (Number.isFinite(parsedSeconds) && parsedSeconds >= 30 ? 1 : 0)));
+}
+
+function formatMinutes(minutes: number) {
+  const normalized = Math.max(0, Math.round(minutes));
+  return normalized >= 60 ? `${Math.floor(normalized / 60)}h${String(normalized % 60).padStart(2, '0')}` : `${normalized} min`;
+}
+
+function normalizeTraining(value: unknown): Training[] {
+  if (!Array.isArray(value)) return initialTraining;
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return [];
+    const source = item as Partial<Training> & { duration?: unknown };
+    const title = typeof source.title === 'string' ? source.title.trim() : '';
+    if (!title) return [];
+    const durationMinutes = durationToMinutes(source.durationMinutes ?? source.duration);
+    return [{
+      id: typeof source.id === 'string' && source.id ? source.id : `legacy-study-${index}`,
+      title,
+      durationMinutes: durationMinutes || 1,
+      watched: Boolean(source.watched),
+      attempts: Number.isFinite(source.attempts) ? Math.max(0, Math.round(source.attempts as number)) : 0,
+      area: typeof source.area === 'string' && source.area.trim() ? source.area.trim() : 'Geral',
+      // Registros antigos eram do painel-base do Daniel; nunca os replicamos para outros perfis.
+      ownerId: typeof source.ownerId === 'string' && source.ownerId ? source.ownerId : 'daniel',
+      createdAt: typeof source.createdAt === 'string' ? source.createdAt : '2026-08-07T00:00:00.000Z',
+      completedAt: typeof source.completedAt === 'string' ? source.completedAt : undefined,
+    }];
+  });
+}
+
+function normalizeStudyBaselines(value: unknown): Record<string, StudyBaseline> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return initialStudyBaselines;
+  const normalized: Record<string, StudyBaseline> = {};
+  for (const [ownerId, raw] of Object.entries(value as Record<string, Partial<StudyBaseline>>)) {
+    normalized[ownerId] = {
+      total: Math.max(0, Math.round(Number(raw.total) || 0)),
+      watched: Math.max(0, Math.round(Number(raw.watched) || 0)),
+      minutes: Math.max(0, Math.round(Number(raw.minutes) || 0)),
+      days: Math.max(0, Math.round(Number(raw.days) || 0)),
+    };
+  }
+  return { ...initialStudyBaselines, ...normalized };
+}
+
+function studySummary(store: Store, ownerId: string) {
+  const baseline = store.studyBaselines[ownerId] ?? { total: 0, watched: 0, minutes: 0, days: 0 };
+  const records = store.training.filter((item) => item.ownerId === ownerId);
+  const watchedRecords = records.filter((item) => item.watched);
+  const total = baseline.total + records.length;
+  const watched = baseline.watched + watchedRecords.length;
+  const minutes = baseline.minutes + watchedRecords.reduce((sum, item) => sum + item.durationMinutes, 0);
+  return { records, watched, total, minutes, days: baseline.days, remaining: Math.max(0, total - watched), percentage: total ? Math.round((watched / total) * 100) : 0 };
+}
 
 function normalizeCollaborators(collaborators: Collaborator[]): Collaborator[] {
   const isLegacyEmptyPortal = collaborators.length === 1 && collaborators[0]?.id === 'coordenacao';
@@ -152,6 +220,8 @@ function normalizeStore(value: Partial<Store>): Store {
   const collaborators = normalizeCollaborators(value.collaborators ?? initialCollaborators);
   const storedDate = value.activeDate ?? today;
   const archives = value.archives ?? [];
+  const training = normalizeTraining(value.training);
+  const studyBaselines = normalizeStudyBaselines(value.studyBaselines);
 
   if (storedDate !== today) {
     const hasData = collaborators.some((person) => person.appointments.length > 0 || person.calls > 0 || person.messages > 0 || person.whatsapp > 0 || person.conversions > 0);
@@ -166,7 +236,8 @@ function normalizeStore(value: Partial<Store>): Store {
     return {
       collaborators: collaborators.map((person) => ({ ...person, calls: 0, messages: 0, whatsapp: 0, conversions: 0, appointments: [] })),
       archives: pruneArchives(hasData ? [rollover, ...archives] : archives),
-      training: value.training ?? initialTraining,
+      training,
+      studyBaselines,
       activeId: value.activeId ?? collaborators[0]?.id ?? 'daniel',
       activeDate: today,
       soundEnabled: value.soundEnabled ?? true,
@@ -176,7 +247,8 @@ function normalizeStore(value: Partial<Store>): Store {
   return {
     collaborators,
     archives: pruneArchives(archives),
-    training: value.training ?? initialTraining,
+    training,
+    studyBaselines,
     activeId: value.activeId ?? collaborators[0]?.id ?? 'daniel',
     activeDate: today,
     soundEnabled: value.soundEnabled ?? true,
@@ -188,7 +260,7 @@ function readStore(): Store {
     const saved = localStorage.getItem(PORTAL_STORAGE_KEY);
     if (saved) return normalizeStore(JSON.parse(saved) as Partial<Store>);
   } catch { /* use seed */ }
-  return { collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true };
+  return { collaborators: initialCollaborators, archives: [], training: initialTraining, studyBaselines: initialStudyBaselines, activeId: 'daniel', activeDate: today, soundEnabled: true };
 }
 
 function storeFromRemote(value: Record<string, unknown>): Store | null {
@@ -579,9 +651,7 @@ function TeamPulse({ store, onOpen, onEditGoal }: {
 }
 
 /* ─── TRAINING SNAPSHOT ─── */
-function TrainingSnapshot({ training, onOpen }: { training: Training[]; onOpen: () => void }) {
-  const watched = training.filter((t) => t.watched).length;
-  const pct = Math.round((watched / training.length) * 100);
+function TrainingSnapshot({ summary, onOpen }: { summary: ReturnType<typeof studySummary>; onOpen: () => void }) {
   return (
     <section className="panel p-5">
       <div className="flex justify-between items-start">
@@ -592,11 +662,11 @@ function TrainingSnapshot({ training, onOpen }: { training: Training[]; onOpen: 
         <button className="button-ghost button-icon" onClick={onOpen} aria-label="Abrir treinamento"><ArrowRight size={16} /></button>
       </div>
       <div className="flex items-center gap-7 mt-7">
-        <div className="metric-ring" style={{ '--pct': `${pct}%` } as React.CSSProperties}>
-          <div className="metric-ring-content"><b className="text-2xl">{pct}%</b><span className="text-[9px] block text-muted-foreground">concluído</span></div>
+        <div className="metric-ring" style={{ '--pct': `${summary.percentage}%` } as React.CSSProperties}>
+          <div className="metric-ring-content"><b className="text-2xl">{summary.percentage}%</b><span className="text-[9px] block text-muted-foreground">concluído</span></div>
         </div>
         <div>
-          <div className="text-sm font-bold">{watched} de {training.length} aulas</div>
+          <div className="text-sm font-bold">{summary.watched} de {summary.total} aulas</div>
           <p className="text-xs text-muted-foreground mt-2 leading-relaxed">10 minutos de preparo<br />mudam a próxima conversa.</p>
           <button className="text-xs text-primary font-bold mt-3 hover:underline" onClick={onOpen}>Continuar trilha <ArrowRight size={12} className="inline" /></button>
         </div>
@@ -926,6 +996,8 @@ function Dashboard({ store, setStore, notify }: {
   const totalGoal = store.collaborators.reduce((s, p) => s + p.goal, 0);
   const totalConv = store.collaborators.reduce((s, p) => s + p.conversions, 0);
   const totalActivity = store.collaborators.reduce((s, p) => s + p.calls + p.messages + p.whatsapp, 0);
+  const active = store.collaborators.find((person) => person.id === store.activeId) ?? store.collaborators[0];
+  const activeStudy = studySummary(store, active?.id ?? 'daniel');
 
   function closeDay() {
     const archivedAppointments = store.collaborators.flatMap((person) => person.appointments.map((appointment) => ({ ...appointment })));
@@ -1064,7 +1136,7 @@ function Dashboard({ store, setStore, notify }: {
 
         {/* TRAINING + PRIORITIES */}
         <div className="grid lg:grid-cols-2 gap-5 mt-5">
-          <TrainingSnapshot training={store.training} onOpen={() => setLocation('/treinamento')} />
+          <TrainingSnapshot summary={activeStudy} onOpen={() => setLocation('/treinamento')} />
           <section className="panel p-5">
             <div className="eyebrow">Uma pausa para olhar</div>
             <h2 className="display-title text-3xl mt-2">O que merece<br /><span className="text-primary">atenção agora?</span></h2>
@@ -1299,12 +1371,50 @@ function History({ store }: { store: Store }) {
 function Training({ store, setStore, notify }: {
   store: Store; setStore: (s: Store) => void; notify: (m: string, k?: ToastKind) => void;
 }) {
-  const watched = store.training.filter((t) => t.watched).length;
-  const highAttempts = store.training.filter((t) => t.attempts >= 4);
+  const [title, setTitle] = useState('');
+  const [minutes, setMinutes] = useState('');
+  const [area, setArea] = useState('Desenvolvimento');
+  const active = store.collaborators.find((person) => person.id === store.activeId) ?? store.collaborators[0];
+  const ownerId = active?.id ?? 'daniel';
+  const summary = studySummary(store, ownerId);
+  const highAttempts = summary.records.filter((t) => t.attempts >= 4);
   const toggle = (item: Training) => {
-    setStore({ ...store, training: store.training.map((t) => t.id === item.id ? { ...t, watched: !t.watched } : t) });
+    const now = new Date().toISOString();
+    setStore({
+      ...store,
+      training: store.training.map((t) => t.id === item.id
+        ? { ...t, watched: !t.watched, attempts: item.watched ? item.attempts : item.attempts + 1, completedAt: item.watched ? undefined : now }
+        : t),
+    });
     notify(item.watched ? 'Aula marcada como pendente.' : 'Aula concluída. Boa prática!');
   };
+
+  function registerStudy(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedTitle = title.trim();
+    const durationMinutes = Math.round(Number(minutes));
+    if (!normalizedTitle || !Number.isFinite(durationMinutes) || durationMinutes < 1 || durationMinutes > 720) {
+      notify('Informe o nome do vídeo e uma duração entre 1 e 720 minutos.', 'notify');
+      return;
+    }
+    setStore({
+      ...store,
+      training: [{
+        id: `study-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        title: normalizedTitle,
+        durationMinutes,
+        watched: false,
+        attempts: 0,
+        area: area.trim() || 'Desenvolvimento',
+        ownerId,
+        createdAt: new Date().toISOString(),
+      }, ...store.training],
+    });
+    setTitle('');
+    setMinutes('');
+    notify('Vídeo registrado na sua trilha individual.');
+  }
+
   return (
     <AppShell store={store} onToggleSound={() => setStore({ ...store, soundEnabled: !store.soundEnabled })}>
       <div className="content-wrap">
@@ -1312,28 +1422,28 @@ function Training({ store, setStore, notify }: {
           <div>
             <div className="eyebrow">Desenvolvimento contínuo</div>
             <h1 className="page-title mt-3">Treinar para cuidar.</h1>
-            <p className="text-sm text-muted-foreground mt-3 max-w-lg">Uma trilha pequena, acompanhada e possível — porque consistência faz parte da excelência.</p>
+            <p className="text-sm text-muted-foreground mt-3 max-w-lg">Trilha de {active?.name ?? 'colaborador'}: cada vídeo e cada avanço ficam vinculados ao seu perfil.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="button-primary" onClick={() => { const next = store.training.find((t) => !t.watched); if (next) toggle(next); }}>
+            <button className="button-primary" onClick={() => { const next = summary.records.find((t) => !t.watched); if (next) toggle(next); }} disabled={!summary.records.some((t) => !t.watched)}>
               <Play size={15} /> Marcar próxima aula
             </button>
             <BackToMenu />
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-9">
-          <StatCard label="Aulas totais" value={`${store.training.length}`} detail="na trilha da equipe" icon={Video} />
-          <StatCard label="Assistidas" value={`${watched}`} detail={`${Math.round((watched / store.training.length) * 100)}% do total`} icon={CheckCircle2} accent />
-          <StatCard label="Restantes" value={`${store.training.length - watched}`} detail="para sua próxima pausa" icon={Clock3} />
-          <StatCard label="Dias estudados" value="4" detail="nesta semana" icon={GraduationCap} />
+          <StatCard label="Aulas totais" value={`${summary.total}`} detail="no seu histórico" icon={Video} />
+          <StatCard label="Assistidas" value={`${summary.watched}`} detail={`${summary.percentage}% do total`} icon={CheckCircle2} accent />
+          <StatCard label="Restantes" value={`${summary.remaining}`} detail="para sua próxima pausa" icon={Clock3} />
+          <StatCard label="Tempo registrado" value={formatMinutes(summary.minutes)} detail={`${summary.days} dias no histórico`} icon={GraduationCap} />
         </div>
         <div className="grid xl:grid-cols-[1.3fr_.7fr] gap-5 mt-5">
           <section className="panel overflow-hidden">
             <div className="p-5">
-              <div className="eyebrow">Trilha da equipe</div>
+              <div className="eyebrow">Minha trilha</div>
               <h2 className="font-bold text-lg mt-2">Aulas para o dia a dia</h2>
             </div>
-            {store.training.map((item) => (
+            {summary.records.length ? summary.records.map((item) => (
               <div className="flex items-center gap-4 p-4 md:p-5 border-t border-border hover:bg-muted/30 transition-colors" key={item.id}>
                 <button
                   onClick={() => toggle(item)}
@@ -1344,24 +1454,33 @@ function Training({ store, setStore, notify }: {
                 <div className="min-w-0 flex-1">
                   <div className={`text-sm font-bold ${item.watched ? 'line-through text-muted-foreground' : ''}`}>{item.title}</div>
                   <div className="flex gap-3 text-[10px] text-muted-foreground mt-1">
-                    <span>{item.area}</span><span>{item.duration}</span><span>{item.attempts} tentativas</span>
+                    <span>{item.area}</span><span>{formatMinutes(item.durationMinutes)}</span><span>{item.attempts} tentativa{item.attempts === 1 ? '' : 's'}</span>
                   </div>
                 </div>
-                <button className="button-ghost button-icon" onClick={() => notify(`Abrindo aula: ${item.title}`)} aria-label={`Assistir ${item.title}`}>
+                <button className="button-ghost button-icon" onClick={() => notify(`Registrada como próxima aula: ${item.title}`)} aria-label={`Selecionar ${item.title}`}>
                   <Play size={15} />
                 </button>
               </div>
-            ))}
+            )) : <EmptyState icon={Video} title="Sua trilha começa aqui" copy="Registre o primeiro vídeo com duração estimada para acompanhar sua evolução." />}
           </section>
           <section className="panel p-5">
-            <div className="eyebrow">Leitura do estudo</div>
-            <h2 className="display-title text-3xl mt-2">Seu aprendizado<br /><span className="text-primary">tem um ritmo.</span></h2>
+            <img src="/clinic/odonto-excellence-reception.jpg" alt="Recepção de uma unidade Odonto Excellence" className="study-brand-photo" />
+            <div className="eyebrow">Registrar vídeo</div>
+            <h2 className="display-title text-3xl mt-2">Transforme tempo<br /><span className="text-primary">em avanço.</span></h2>
+            <form className="mt-6 space-y-3" onSubmit={registerStudy}>
+              <label className="block"><span className="label-text">Nome do vídeo</span><input className="input-field" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Como conduzir uma avaliação" maxLength={120} required /></label>
+              <div className="grid grid-cols-[.7fr_1.3fr] gap-3">
+                <label className="block"><span className="label-text">Minutos</span><input className="input-field" value={minutes} onChange={(event) => setMinutes(event.target.value)} inputMode="numeric" type="number" min="1" max="720" placeholder="12" required /></label>
+                <label className="block"><span className="label-text">Área</span><input className="input-field" value={area} onChange={(event) => setArea(event.target.value)} placeholder="Comercial" maxLength={48} /></label>
+              </div>
+              <button className="button-primary w-full" type="submit"><Plus size={15} /> Salvar na minha trilha</button>
+            </form>
             <div className="mt-8">
               <div className="flex justify-between text-xs mb-2">
                 <span className="text-muted-foreground">Progresso geral</span>
-                <b className="text-primary">{watched}/{store.training.length}</b>
+                <b className="text-primary">{summary.watched}/{summary.total}</b>
               </div>
-              <div className="progress-track"><div className="progress-fill" style={{ width: `${(watched / store.training.length) * 100}%` }} /></div>
+              <div className="progress-track"><div className="progress-fill" style={{ width: `${summary.percentage}%` }} /></div>
             </div>
             <div className="border-t border-border mt-7 pt-5">
               <div className="flex gap-2 items-center"><BarChart3 size={16} className="text-accent" /><b className="text-xs">Para revisitar</b></div>
@@ -1392,7 +1511,7 @@ function Settings({ store, setStore, notify }: {
 
   function clearData() {
     localStorage.removeItem(PORTAL_STORAGE_KEY);
-    setStore({ collaborators: initialCollaborators, archives: [], training: initialTraining, activeId: 'daniel', activeDate: today, soundEnabled: true });
+    setStore({ collaborators: initialCollaborators, archives: [], training: initialTraining, studyBaselines: initialStudyBaselines, activeId: 'daniel', activeDate: today, soundEnabled: true });
     setConfirmReset(false);
     notify('Dados restaurados para o exemplo inicial.');
   }
