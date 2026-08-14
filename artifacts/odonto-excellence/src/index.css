@@ -123,13 +123,13 @@
 }
 .brand-lockup { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; min-width: 0; }
 .brand-logo-frame {
-  width: 52px; height: 48px; border-radius: 11px; background: #fff;
-  display: grid; place-items: center; overflow: hidden;
+  width: 62px; height: 56px; border-radius: 12px; background: #fff;
+  display: grid; place-items: center; overflow: hidden; padding: 4px;
   box-shadow: 0 5px 16px rgba(90,8,8,.14); flex: 0 0 auto;
 }
 .brand-logo {
   width: 100%; height: 100%; display: block;
-  object-fit: cover; object-position: center 10%; transform: scale(2.45);
+  object-fit: contain; object-position: center; transform: none;
 }
 .brand-clinic-label {
   display: flex; flex-direction: column; gap: 3px;
@@ -170,6 +170,14 @@
   background: hsl(var(--background) / .88); backdrop-filter: blur(14px);
   position: sticky; top: 0; z-index: 10;
 }
+.access-page { min-height: 100dvh; display: grid; grid-template-columns: minmax(300px, .8fr) minmax(430px, 1.2fr); }
+.access-intro { background: hsl(var(--sidebar)); color: hsl(var(--sidebar-foreground)); padding: clamp(28px, 5vw, 72px); display: flex; flex-direction: column; min-height: 100dvh; }
+.access-form-wrap { display: grid; place-items: center; padding: 32px; background: hsl(var(--background)); }
+.access-form { width: min(100%, 440px); }
+.access-photo { width: min(100%, 390px); max-height: 190px; object-fit: cover; border-radius: 16px; margin-top: 32px; opacity: .92; box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+.access-switch { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 12px; background: hsl(var(--muted)); }
+.access-switch button { min-height: 38px; border-radius: 8px; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 800; }
+.access-switch button.active { background: hsl(var(--card)); color: hsl(var(--foreground)); box-shadow: 0 2px 8px rgba(90,8,8,.08); }
 .content-wrap { max-width: 1440px; padding: 32px 36px 72px; margin: 0 auto; }
 
 /* ─── TYPOGRAPHY ─── */
@@ -398,6 +406,13 @@
   .hero-grid { grid-template-columns: 1fr; }
   .hero-orbit { min-height: 380px; }
   .hero-brand-art { inset: 6%; width: 88%; height: 88%; }
+}
+@media (max-width: 760px) {
+  .access-page { grid-template-columns: 1fr; }
+  .access-intro { min-height: auto; padding: 28px 24px; }
+  .access-intro > div:nth-child(2) { margin: 48px 0 16px; }
+  .access-photo { display: none; }
+  .access-form-wrap { padding: 32px 22px 54px; align-items: start; }
 }
 @media (max-width: 720px) {
   .app-shell { display: block; }

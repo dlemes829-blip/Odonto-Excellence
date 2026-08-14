@@ -6,7 +6,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 export default defineConfig({
-  schema: path.join(__dirname, "./src/schema/index.ts"),
+  // Drizzle needs a concrete schema module at runtime; the barrel is for application imports.
+  schema: path.join(__dirname, "./src/schema/odontoPortal.ts"),
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,

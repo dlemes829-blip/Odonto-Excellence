@@ -11,6 +11,18 @@ services:
         sync: false
       - key: PORTAL_ORIGIN
         sync: false
+      - key: ODONTO_ADMIN_EMAIL
+        sync: false
+      - key: ODONTO_ADMIN_PASSWORD
+        sync: false
+      - key: ODONTO_SESSION_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: PORTAL_PUBLIC_URL
+        value: https://odonto-excellence-portal.onrender.com
       - key: NODE_ENV
         value: production
   - type: web
@@ -19,6 +31,9 @@ services:
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/odonto-excellence run build
     staticPublishPath: artifacts/odonto-excellence/dist/public
     autoDeployTrigger: commit
+    envVars:
+      - key: VITE_ODONTO_API_URL
+        value: https://odonto-excellence-api.onrender.com/api
     routes:
       - type: rewrite
         source: /*

@@ -1,10 +1,10 @@
-import { db, odontoPortalStates } from "@workspace/db";
+import { db, odontoPortalUserStates } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { Router, type IRouter, type Response } from "express";
 import { logger } from "../lib/logger";
+import { requirePortalUser, type PortalRequest } from "../lib/odontoPortalAuth";
 
 const router: IRouter = Router();
-const PORTAL_KEY = "odonto-excellence";
 const MAX_STATE_BYTES = 1_000_000;
 
 type StateEnvelope = { state: Record<string, unknown>; revision: number };
@@ -22,12 +22,14 @@ function sendState(res: Response, state: Record<string, unknown> | null, revisio
   res.json({ state, revision });
 }
 
-router.get("/odonto-portal/state", async (_req, res) => {
+router.get("/odonto-portal/state", async (req, res) => {
+  const user = requirePortalUser(req as PortalRequest, res);
+  if (!user) return;
   try {
     const [current] = await db
-      .select({ state: odontoPortalStates.state, revision: odontoPortalStates.revision })
-      .from(odontoPortalStates)
-      .where(eq(odontoPortalStates.portalKey, PORTAL_KEY))
+      .select({ state: odontoPortalUserStates.state, revision: odontoPortalUserStates.revision })
+      .from(odontoPortalUserStates)
+      .where(eq(odontoPortalUserStates.userId, user.id))
       .limit(1);
 
     sendState(res, current?.state ?? null, current?.revision ?? 0);
@@ -38,6 +40,8 @@ router.get("/odonto-portal/state", async (_req, res) => {
 });
 
 router.put("/odonto-portal/state", async (req, res) => {
+  const user = requirePortalUser(req as PortalRequest, res);
+  if (!user) return;
   const payload = parseStateEnvelope(req.body);
   if (!payload) {
     res.status(400).json({ error: "Os dados enviados são inválidos." });
@@ -53,9 +57,9 @@ router.put("/odonto-portal/state", async (req, res) => {
   try {
     const { state, revision } = payload;
     const [current] = await db
-      .select({ revision: odontoPortalStates.revision })
-      .from(odontoPortalStates)
-      .where(eq(odontoPortalStates.portalKey, PORTAL_KEY))
+      .select({ revision: odontoPortalUserStates.revision })
+      .from(odontoPortalUserStates)
+      .where(eq(odontoPortalUserStates.userId, user.id))
       .limit(1);
 
     if (!current) {
@@ -63,7 +67,7 @@ router.put("/odonto-portal/state", async (req, res) => {
         res.status(409).json({ error: "Os dados foram atualizados por outra sessão.", revision: 0 });
         return;
       }
-      await db.insert(odontoPortalStates).values({ portalKey: PORTAL_KEY, state, revision: 1 });
+      await db.insert(odontoPortalUserStates).values({ userId: user.id, state, revision: 1 });
       sendState(res, state, 1);
       return;
     }
@@ -75,10 +79,10 @@ router.put("/odonto-portal/state", async (req, res) => {
 
     const nextRevision = revision + 1;
     const updated = await db
-      .update(odontoPortalStates)
+      .update(odontoPortalUserStates)
       .set({ state, revision: nextRevision, updatedAt: new Date() })
-      .where(and(eq(odontoPortalStates.portalKey, PORTAL_KEY), eq(odontoPortalStates.revision, revision)))
-      .returning({ revision: odontoPortalStates.revision });
+      .where(and(eq(odontoPortalUserStates.userId, user.id), eq(odontoPortalUserStates.revision, revision)))
+      .returning({ revision: odontoPortalUserStates.revision });
 
     if (!updated.length) {
       res.status(409).json({ error: "Os dados foram atualizados por outra sessão." });

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Route, Router as WouterRouter, Switch, useLocation, useRoute } from 'wouter';
 import {
   AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Bell, CalendarDays, Check,
   CheckCircle2, ChevronRight, CircleHelp, Clock3, FileClock,
   GraduationCap, Home, LayoutDashboard, Menu, MessageCircle,
   MoreHorizontal, Pencil, Phone, Play, Plus, RotateCcw, Save, Settings2,
-  ShieldCheck, Sparkles, Target, Trash2, TrendingUp, UserRound, UsersRound,
+  ShieldCheck, Shield, Sparkles, Target, Trash2, TrendingUp, UserRound, UsersRound,
   Video, Volume2, VolumeX, X, Zap
 } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
@@ -23,6 +23,9 @@ type StudyBaseline = { total: number; watched: number; minutes: number; days: nu
 type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; studyBaselines: Record<string, StudyBaseline>; activeId: string; activeDate: string; soundEnabled: boolean };
 type AgendaAppointment = Appointment & { collaborator: string; collaboratorId: string; gender: Gender };
 type PortalEnvelope = { state: Record<string, unknown> | null; revision: number };
+type PortalUser = { id: string; email: string; displayName: string; role: 'admin' | 'member' };
+type PortalNotification = { id: string; title: string; body: string; createdAt: string; readAt: string | null };
+const PortalAuthContext = createContext<PortalUser | null>(null);
 
 /* ─── HELPERS ─── */
 function localDateKey(date = new Date()) {
@@ -31,8 +34,8 @@ function localDateKey(date = new Date()) {
 const today = localDateKey();
 const ARCHIVE_RETENTION_DAYS = 2;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const PORTAL_STORAGE_KEY = 'odonto-excellence-v3';
-const PORTAL_API_URL = (import.meta.env.VITE_ODONTO_API_URL ?? '').replace(/\/$/, '');
+const PORTAL_STORAGE_KEY = 'odonto-excellence-v4';
+const PORTAL_API_URL = (import.meta.env.VITE_ODONTO_API_URL ?? 'https://odonto-excellence-api.onrender.com/api').replace(/\/$/, '');
 function initials(name: string) { return name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase(); }
 function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`)).replace('.', ''); }
 function formatWeekday(value: string) { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(new Date(`${value}T12:00:00`)); }
@@ -260,7 +263,15 @@ function readStore(): Store {
     const saved = localStorage.getItem(PORTAL_STORAGE_KEY);
     if (saved) return normalizeStore(JSON.parse(saved) as Partial<Store>);
   } catch { /* use seed */ }
-  return { collaborators: initialCollaborators, archives: [], training: initialTraining, studyBaselines: initialStudyBaselines, activeId: 'daniel', activeDate: today, soundEnabled: true };
+  return { collaborators: [], archives: [], training: [], studyBaselines: {}, activeId: '', activeDate: today, soundEnabled: true };
+}
+
+function personalStore(user: PortalUser): Store {
+  const collaborator = emptyCollaborator(user.id, user.displayName);
+  const isAdmin = user.role === 'admin';
+  const training = isAdmin ? initialTraining.map((item) => ({ ...item, ownerId: user.id })) : [];
+  const studyBaselines = isAdmin ? { [user.id]: initialStudyBaselines.daniel } : {};
+  return { collaborators: [collaborator], archives: [], training, studyBaselines, activeId: user.id, activeDate: today, soundEnabled: true };
 }
 
 function storeFromRemote(value: Record<string, unknown>): Store | null {
@@ -297,6 +308,7 @@ function BackToMenu({ label = 'Menu principal' }: { label?: string }) {
 function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
   activeId: string; soundEnabled: boolean; onToggleSound: () => void; onClose: () => void;
 }) {
+  const portalUser = useContext(PortalAuthContext);
   const [location] = useLocation();
   const navItems = [
     { href: '/painel', label: 'Início', icon: LayoutDashboard },
@@ -305,6 +317,7 @@ function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
     { href: '/treinamento', label: 'Aprender', icon: GraduationCap },
     { href: '/configuracoes', label: 'Configurações', icon: Settings2 },
   ];
+  if (portalUser?.role === 'admin') navItems.push({ href: '/admin', label: 'Administração', icon: Shield });
   return (
     <aside className="sidebar">
       <div className="brand flex items-center justify-between">
@@ -390,6 +403,7 @@ function NotifBell({ count }: { count: number }) {
 function AppShell({ children, store, onToggleSound }: {
   children: React.ReactNode; store: Store; onToggleSound: () => void;
 }) {
+  const portalUser = useContext(PortalAuthContext);
   const active = store.collaborators.find((p) => p.id === store.activeId) ?? store.collaborators[0];
   const [mobileOpen, setMobileOpen] = useState(false);
   const [, setLocation] = useLocation();
@@ -415,7 +429,7 @@ function AppShell({ children, store, onToggleSound }: {
             </button>
             <Link href={`/colaborador/${active?.id}`} className="flex items-center gap-2">
               <span className="avatar w-8 h-8" style={{ background: genderTone(active?.gender ?? 'neutral') }}>{initials(active?.name ?? 'OE')}</span>
-              <span className="hidden sm:block text-xs font-bold">{active?.name}</span>
+              <span className="hidden sm:block text-xs font-bold">{portalUser?.displayName ?? active?.name}</span>
             </Link>
           </div>
         </header>
@@ -934,48 +948,63 @@ function Landing() {
 }
 
 /* ─── ACCESS PAGE ─── */
-function Access({ store, setStore }: { store: Store; setStore: (s: Store) => void }) {
+function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => void }) {
   const [, setLocation] = useLocation();
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setError(''); setBusy(true);
+    try {
+      const response = await fetch(`${PORTAL_API_URL}/odonto-portal/auth/${mode === 'login' ? 'login' : 'register'}`, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mode === 'login' ? { email, password } : { email, password, displayName: name }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string; user?: PortalUser };
+      if (!response.ok || !body.user) throw new Error(body.error ?? 'Não foi possível continuar.');
+      onAuthenticated(body.user);
+      setLocation('/painel');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível continuar.');
+    } finally { setBusy(false); }
+  }
+
   return (
-    <main className="min-h-dvh grid lg:grid-cols-[.85fr_1.15fr]">
-      <section className="bg-sidebar text-sidebar-foreground p-8 md:p-12 flex flex-col">
+    <main className="access-page">
+      <section className="access-intro">
         <Brand dark />
-        <div className="mt-auto max-w-md pb-8">
-          <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Portal nacional</div>
-          <h1 className="display-title text-6xl mt-4 leading-[.87]">Quem está<br />conduzindo<br /><span className="text-[hsl(var(--sidebar-primary))]">hoje?</span></h1>
-          <p className="text-sm text-white/55 mt-7 leading-relaxed">Escolha um perfil para preparar a rotina da sua equipe e acompanhar o dia em um único ambiente.</p>
-          <div className="mt-8 flex gap-2 text-[10px] text-white/40"><ShieldCheck size={14} /> Ambiente de trabalho da equipe</div>
+        <div className="max-w-md mt-auto mb-auto">
+          <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Odonto Excellence</div>
+          <h1 className="display-title text-5xl mt-4 leading-[.9]">Seu ambiente pessoal e privado de trabalho.</h1>
+          <p className="text-sm text-white/65 mt-6 leading-relaxed">Organize sua rotina, acompanhe atendimentos e evolua nos treinamentos. Seus dados ficam visíveis apenas para você.</p>
+          <img className="access-photo" src="/clinic/odonto-excellence-reception.jpg" alt="Ambiente Odonto Excellence" />
         </div>
-        <div className="text-xs text-white/35">Odonto Excellence · Brasil</div>
+        <div className="text-xs text-white/40">Odonto Excellence · Brasil</div>
       </section>
-      <section className="p-6 md:p-12 lg:p-20 bg-background">
-        <div className="max-w-xl mx-auto">
+      <section className="access-form-wrap">
+        <div className="access-form">
           <Link href="/" className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft size={14} /> Voltar para o início
           </Link>
-          <div className="mt-14">
-            <div className="eyebrow">Perfis da equipe</div>
-            <h2 className="display-title text-4xl mt-3">Escolha seu espaço.</h2>
-            <p className="text-sm text-muted-foreground mt-3">Você pode trocar de perfil a qualquer momento nas configurações.</p>
+          <div className="mt-12">
+            <div className="eyebrow">Acesso seguro</div>
+            <h2 className="display-title text-4xl mt-3">{mode === 'login' ? 'Entre na sua conta.' : 'Crie seu espaço.'}</h2>
+            <p className="text-sm text-muted-foreground mt-3">{mode === 'login' ? 'Use suas credenciais para continuar no seu ambiente.' : 'Cada conta recebe um ambiente isolado e privado.'}</p>
           </div>
-          <div className="grid sm:grid-cols-2 gap-3 mt-9">
-            {store.collaborators.map((p) => (
-              <button
-                key={p.id}
-                className="panel p-4 text-left flex items-center gap-3 hover:-translate-y-1 hover:border-primary/30 transition-all duration-200"
-                onClick={() => { setStore({ ...store, activeId: p.id }); setLocation('/painel'); }}>
-                <span className="avatar w-11 h-11" style={{ background: genderTone(p.gender) }}>{initials(p.name)}</span>
-                <span className="min-w-0">
-                  <b className="block text-sm">{p.name}</b>
-                  <span className="block text-[11px] text-muted-foreground truncate mt-1">{p.role}</span>
-                </span>
-                <ChevronRight size={15} className="ml-auto text-muted-foreground" />
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-8 flex gap-2 items-start">
-            <CircleHelp size={14} className="shrink-0 mt-0.5" /> Perfil novo? A coordenação pode criar em Configurações.
-          </p>
+          <div className="access-switch mt-8"><button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError(''); }}>Entrar</button><button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(''); }}>Criar conta</button></div>
+          <form className="space-y-4 mt-7" onSubmit={submit}>
+            {mode === 'register' && <label><span className="label-text">Seu nome</span><input className="input-field" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required /></label>}
+            <label><span className="label-text">E-mail</span><input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required /></label>
+            <label><span className="label-text">Senha</span><input className="input-field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} required /></label>
+            {error && <p className="text-xs text-destructive font-semibold">{error}</p>}
+            <button className="button-primary w-full" disabled={busy}>{busy ? 'Validando acesso...' : mode === 'login' ? 'Entrar no portal' : 'Criar conta e entrar'} <ArrowRight size={14} /></button>
+          </form>
+          <p className="text-[11px] text-muted-foreground mt-7 leading-relaxed">Ao continuar, você concorda com o uso deste ambiente profissional privado.</p>
         </div>
       </section>
     </main>
@@ -1643,19 +1672,70 @@ function Settings({ store, setStore, notify }: {
   );
 }
 
+/* ─── ADMINISTRATION ─── */
+function Admin({ store, notify }: { store: Store; notify: (message: string, kind?: ToastKind) => void }) {
+  const portalUser = useContext(PortalAuthContext);
+  const [users, setUsers] = useState<Array<PortalUser & { createdAt: string; lastSeenAt: string; online: boolean }>>([]);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [newPasswords, setNewPasswords] = useState<Record<string, string>>({});
+
+  const loadUsers = useCallback(async () => {
+    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/admin/users`, { credentials: 'include' });
+    if (!response.ok) throw new Error('Não foi possível atualizar a lista.');
+    const result = await response.json() as { users: typeof users };
+    setUsers(result.users);
+  }, []);
+  useEffect(() => { if (portalUser?.role === 'admin') void loadUsers().catch((error: Error) => notify(error.message, 'notify')); }, [loadUsers, notify, portalUser?.role]);
+  if (portalUser?.role !== 'admin') return <NotFound />;
+
+  async function resetPassword(userId: string) {
+    const password = newPasswords[userId] ?? '';
+    if (password.length < 8) { notify('A nova senha precisa ter ao menos 8 caracteres.', 'notify'); return; }
+    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/admin/users/${userId}/password`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    if (!response.ok) { notify('Não foi possível atualizar essa senha.', 'notify'); return; }
+    setNewPasswords((current) => ({ ...current, [userId]: '' }));
+    notify('Senha atualizada. As sessões desta conta foram encerradas.');
+  }
+  async function sendNotice(event: React.FormEvent) {
+    event.preventDefault();
+    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/admin/notifications`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body }) });
+    if (!response.ok) { notify('Não foi possível enviar o aviso.', 'notify'); return; }
+    setTitle(''); setBody(''); notify('Notificação enviada ao portal.');
+  }
+
+  return <AppShell store={store} onToggleSound={() => undefined}>
+    <div className="content-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8"><div><div className="eyebrow">Administração</div><h1 className="page-title mt-3">Visão segura do portal.</h1><p className="text-sm text-muted-foreground mt-3">Contas, acessos e comunicados do ambiente Odonto Excellence.</p></div><button className="button-secondary" onClick={() => void loadUsers()}><RotateCcw size={14} /> Atualizar</button></div>
+      <div className="grid xl:grid-cols-[1.45fr_.8fr] gap-6">
+        <section className="panel overflow-hidden"><div className="p-5 border-b border-border flex items-center justify-between"><div><h2 className="font-bold">Contas cadastradas</h2><p className="text-xs text-muted-foreground mt-1">Online nos últimos 90 segundos.</p></div><span className="chip-red">{users.filter((u) => u.online).length} online</span></div><div className="divide-y divide-border">{users.map((account) => <div key={account.id} className="p-5"><div className="flex gap-3 items-center"><span className="avatar w-10 h-10">{initials(account.displayName)}</span><div className="min-w-0"><b className="text-sm block">{account.displayName}</b><span className="text-xs text-muted-foreground">{account.email}</span></div><span className={`ml-auto text-[10px] font-bold ${account.online ? 'text-primary' : 'text-muted-foreground'}`}>{account.online ? 'ONLINE' : 'OFFLINE'}</span></div><div className="flex gap-2 mt-4"><input className="input-field" type="password" placeholder="Nova senha" value={newPasswords[account.id] ?? ''} onChange={(e) => setNewPasswords((current) => ({ ...current, [account.id]: e.target.value }))} /><button className="button-secondary shrink-0" onClick={() => void resetPassword(account.id)}>Atualizar senha</button></div></div>)}</div></section>
+        <form className="panel p-6 self-start" onSubmit={sendNotice}><div className="eyebrow">Comunicado</div><h2 className="display-title text-3xl mt-3">Notifique a equipe.</h2><p className="text-xs text-muted-foreground mt-2">O aviso aparece apenas para contas autenticadas.</p><label className="block mt-6"><span className="label-text">Título</span><input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} required /></label><label className="block mt-4"><span className="label-text">Mensagem</span><textarea className="textarea-field min-h-28" value={body} onChange={(e) => setBody(e.target.value)} required /></label><button className="button-primary w-full mt-5">Enviar comunicado</button></form>
+      </div>
+    </div>
+  </AppShell>;
+}
+
 /* ══════════════════════════════════════════════════════════
    APP ROOT
 ══════════════════════════════════════════════════════════ */
-function AppRouter({ store, setStore, notify }: { store: Store; setStore: (s: Store) => void; notify: (m: string, k?: ToastKind) => void }) {
+function AppRouter({ store, setStore, notify, user, onAuthenticated }: { store: Store; setStore: (s: Store) => void; notify: (m: string, k?: ToastKind) => void; user: PortalUser | null; onAuthenticated: (user: PortalUser) => void }) {
+  if (!user) {
+    return <Switch>
+      <Route path="/" component={Landing} />
+      <Route path="/acesso"><Access onAuthenticated={onAuthenticated} /></Route>
+      <Route component={Landing} />
+    </Switch>;
+  }
   return (
     <Switch>
       <Route path="/" component={Landing} />
-      <Route path="/acesso"><Access store={store} setStore={setStore} /></Route>
+      <Route path="/acesso"><Access onAuthenticated={onAuthenticated} /></Route>
       <Route path="/painel"><Dashboard store={store} setStore={setStore} notify={notify} /></Route>
       <Route path="/colaborador/:id"><CollaboratorWorkspace store={store} setStore={setStore} notify={notify} /></Route>
       <Route path="/historico"><History store={store} /></Route>
       <Route path="/treinamento"><Training store={store} setStore={setStore} notify={notify} /></Route>
       <Route path="/configuracoes"><Settings store={store} setStore={setStore} notify={notify} /></Route>
+      <Route path="/admin"><Admin store={store} notify={notify} /></Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -1663,16 +1743,19 @@ function AppRouter({ store, setStore, notify }: { store: Store; setStore: (s: St
 
 export default function App() {
   const [store, setStoreState] = useState<Store>(() => readStore());
+  const [user, setUser] = useState<PortalUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const [portalReady, setPortalReady] = useState(!PORTAL_API_URL);
   const prevApptCountRef = useRef<number>(store.collaborators.reduce((s, p) => s + p.appointments.length, 0));
   const portalRevisionRef = useRef(0);
   const skipNextSyncRef = useRef(false);
+  const seenNotificationIdsRef = useRef(new Set<string>());
 
   const setStore = useCallback((next: Store) => {
     setStoreState(next);
-    localStorage.setItem(PORTAL_STORAGE_KEY, JSON.stringify(next));
-  }, []);
+    if (user) localStorage.setItem(`${PORTAL_STORAGE_KEY}:${user.id}`, JSON.stringify(next));
+  }, [user]);
 
   const notify = useCallback((message: string, kind: ToastKind = 'success') => {
     const id = Date.now();
@@ -1682,34 +1765,48 @@ export default function App() {
     }
   }, [store.soundEnabled]);
 
-  const applyRemoteState = useCallback((envelope: PortalEnvelope) => {
+  const applyRemoteState = useCallback((envelope: PortalEnvelope, activeUser: PortalUser) => {
     portalRevisionRef.current = envelope.revision;
-    if (!envelope.state) return;
-    const next = storeFromRemote(envelope.state);
-    if (!next) return;
+    const next = envelope.state ? storeFromRemote(envelope.state) : null;
+    const personal = next ?? personalStore(activeUser);
     skipNextSyncRef.current = true;
-    localStorage.setItem(PORTAL_STORAGE_KEY, JSON.stringify(next));
-    setStoreState(next);
+    localStorage.setItem(`${PORTAL_STORAGE_KEY}:${activeUser.id}`, JSON.stringify(personal));
+    setStoreState(personal);
   }, []);
 
   const loadRemoteState = useCallback(async () => {
-    if (!PORTAL_API_URL) return;
-    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/state`, { cache: 'no-store' });
+    if (!PORTAL_API_URL || !user) return;
+    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/state`, { cache: 'no-store', credentials: 'include' });
     if (!response.ok) throw new Error('portal state unavailable');
-    applyRemoteState(await response.json() as PortalEnvelope);
-  }, [applyRemoteState]);
+    applyRemoteState(await response.json() as PortalEnvelope, user);
+  }, [applyRemoteState, user]);
+
+  const onAuthenticated = useCallback((nextUser: PortalUser) => {
+    portalRevisionRef.current = 0;
+    setUser(nextUser);
+    const saved = localStorage.getItem(`${PORTAL_STORAGE_KEY}:${nextUser.id}`);
+    setStoreState(saved ? normalizeStore(JSON.parse(saved) as Partial<Store>) : personalStore(nextUser));
+  }, []);
 
   useEffect(() => {
-    if (!PORTAL_API_URL) return;
+    void fetch(`${PORTAL_API_URL}/odonto-portal/auth/me`, { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => response.ok ? await response.json() as { user: PortalUser | null } : { user: null })
+      .then(({ user: current }) => { if (current) onAuthenticated(current); })
+      .catch(() => undefined)
+      .finally(() => setAuthReady(true));
+  }, [onAuthenticated]);
+
+  useEffect(() => {
+    if (!PORTAL_API_URL || !user) return;
     let active = true;
     void loadRemoteState()
       .catch(() => undefined)
       .finally(() => { if (active) setPortalReady(true); });
     return () => { active = false; };
-  }, [loadRemoteState]);
+  }, [loadRemoteState, user]);
 
   useEffect(() => {
-    if (!PORTAL_API_URL || !portalReady) return;
+    if (!PORTAL_API_URL || !portalReady || !user) return;
     if (skipNextSyncRef.current) {
       skipNextSyncRef.current = false;
       return;
@@ -1717,6 +1814,7 @@ export default function App() {
     const timer = window.setTimeout(() => {
       void fetch(`${PORTAL_API_URL}/odonto-portal/state`, {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: store, revision: portalRevisionRef.current }),
       }).then(async (response) => {
@@ -1731,18 +1829,42 @@ export default function App() {
       }).catch(() => undefined);
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [loadRemoteState, notify, portalReady, store]);
+  }, [loadRemoteState, notify, portalReady, store, user]);
 
   useEffect(() => {
-    if (!PORTAL_API_URL || !portalReady) return;
+    if (!PORTAL_API_URL || !portalReady || !user) return;
     const timer = window.setInterval(() => { void loadRemoteState().catch(() => undefined); }, 20_000);
     return () => window.clearInterval(timer);
-  }, [loadRemoteState, portalReady]);
+  }, [loadRemoteState, portalReady, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const heartbeat = () => { void fetch(`${PORTAL_API_URL}/odonto-portal/auth/heartbeat`, { method: 'POST', credentials: 'include' }); };
+    heartbeat();
+    const timer = window.setInterval(heartbeat, 45_000);
+    return () => window.clearInterval(timer);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const refreshNotifications = async () => {
+      const response = await fetch(`${PORTAL_API_URL}/odonto-portal/notifications`, { credentials: 'include', cache: 'no-store' });
+      if (!response.ok) return;
+      const result = await response.json() as { notifications: PortalNotification[] };
+      for (const notification of result.notifications.filter((item) => !item.readAt).reverse()) {
+        if (!seenNotificationIdsRef.current.has(notification.id)) notify(`${notification.title}: ${notification.body}`, 'notify');
+        seenNotificationIdsRef.current.add(notification.id);
+      }
+    };
+    void refreshNotifications();
+    const timer = window.setInterval(() => { void refreshNotifications(); }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [notify, user]);
 
   // Real-time: detect new appointments added by any tab (storage event)
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key !== PORTAL_STORAGE_KEY || !e.newValue) return;
+      if (!user || e.key !== `${PORTAL_STORAGE_KEY}:${user.id}` || !e.newValue) return;
       try {
         const next = JSON.parse(e.newValue) as Store;
         const newCount = next.collaborators.reduce((s, p) => s + p.appointments.length, 0);
@@ -1758,7 +1880,7 @@ export default function App() {
     }
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [notify]);
+  }, [notify, user]);
 
   // Track appointment count for sound when changed locally
   useEffect(() => {
@@ -1776,10 +1898,13 @@ export default function App() {
     document.title = 'Odonto Excellence · Gestão Clínica';
   }, []);
 
+  if (!authReady) return null;
   return (
     <TooltipProvider>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-        <AppRouter store={store} setStore={setStore} notify={notify} />
+        <PortalAuthContext.Provider value={user}>
+          <AppRouter store={store} setStore={setStore} notify={notify} user={user} onAuthenticated={onAuthenticated} />
+        </PortalAuthContext.Provider>
       </WouterRouter>
       <Toaster />
       {/* Toast stack */}
