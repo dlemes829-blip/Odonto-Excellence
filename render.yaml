@@ -15,8 +15,6 @@ services:
         sync: false
       - key: ODONTO_ADMIN_PASSWORD
         sync: false
-      - key: ODONTO_SESSION_SECRET
-        generateValue: true
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL
