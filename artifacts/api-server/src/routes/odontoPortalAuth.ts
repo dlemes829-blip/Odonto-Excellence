@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { db, odontoPortalNotifications, odontoPortalPasswordResets, odontoPortalSessions, odontoPortalUsers } from "@workspace/db";
-import { attachPortalUser, beginPortalSession, bootstrapAdmin, endPortalSession, loginRateLimit, passwordHash, passwordMatches, publicUser, requirePortalAdmin, requirePortalUser, tokenHash, type PortalRequest } from "../lib/odontoPortalAuth";
+import { attachPortalUser, beginPortalSession, bootstrapAdmin, endPortalSession, loginRateLimit, passwordHash, passwordMatches, publicUser, requirePortalAdmin, requirePortalManager, requirePortalUser, tokenHash, type PortalAccountType, type PortalRequest } from "../lib/odontoPortalAuth";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -17,27 +17,8 @@ router.get("/odonto-portal/auth/me", (req, res) => {
   res.json({ user: user ? publicUser(user) : null });
 });
 
-router.post("/odonto-portal/auth/register", loginRateLimit(), async (req, res) => {
-  const username = cleanUsername(req.body?.username);
-  const password = typeof req.body?.password === "string" ? req.body.password : "";
-  if (!usernamePattern.test(username) || password.length < 8) {
-    res.status(400).json({ error: "Use um nome de usuário de 3 a 32 caracteres e uma senha com pelo menos 8 caracteres." });
-    return;
-  }
-  try {
-    const [existing] = await db.select({ id: odontoPortalUsers.id }).from(odontoPortalUsers).where(eq(odontoPortalUsers.username, username)).limit(1);
-    if (existing) {
-      res.status(409).json({ error: "Este nome de usuário já está em uso." });
-      return;
-    }
-    const user = { id: crypto.randomUUID(), username, email: `${username}@portal.local`, displayName: username, role: "member" as const };
-    await db.insert(odontoPortalUsers).values({ ...user, passwordHash: await passwordHash(password) });
-    await beginPortalSession(res, user);
-    res.status(201).json({ user: publicUser(user) });
-  } catch (error) {
-    logger.error({ err: error }, "Unable to register Odonto portal user");
-    res.status(503).json({ error: "Não foi possível criar a conta agora." });
-  }
+router.post("/odonto-portal/auth/register", loginRateLimit(), (_req, res) => {
+  res.status(403).json({ error: "As contas são criadas pelo administrador ou pelo gerente da equipe." });
 });
 
 router.post("/odonto-portal/auth/login", loginRateLimit(), async (req, res) => {
@@ -49,7 +30,8 @@ router.post("/odonto-portal/auth/login", loginRateLimit(), async (req, res) => {
       res.status(401).json({ error: "Nome de usuário ou senha incorretos." });
       return;
     }
-    const user = { id: record.id, username: record.username, displayName: record.displayName, role: record.role === "admin" ? "admin" as const : "member" as const };
+    const accountType = (["creator", "manager", "member", "individual"].includes(record.accountType) ? record.accountType : "individual") as PortalAccountType;
+    const user = { id: record.id, username: record.username, displayName: record.displayName, role: record.role === "admin" ? "admin" as const : "member" as const, accountType, managerId: record.managerId, workspaceOwnerId: record.workspaceOwnerId || record.id };
     await db.update(odontoPortalUsers).set({ lastSeenAt: new Date() }).where(eq(odontoPortalUsers.id, user.id));
     await beginPortalSession(res, user);
     res.json({ user: publicUser(user) });
@@ -112,13 +94,46 @@ router.patch("/odonto-portal/notifications/:id/read", async (req, res) => {
 });
 
 router.get("/odonto-portal/admin/users", async (req, res) => {
-  if (!requirePortalAdmin(req as PortalRequest, res)) return;
-  const users = await db.select({ id: odontoPortalUsers.id, username: odontoPortalUsers.username, displayName: odontoPortalUsers.displayName, role: odontoPortalUsers.role, createdAt: odontoPortalUsers.createdAt, lastSeenAt: odontoPortalUsers.lastSeenAt }).from(odontoPortalUsers).orderBy(desc(odontoPortalUsers.lastSeenAt));
+  const principal = requirePortalManager(req as PortalRequest, res);
+  if (!principal) return;
+  const base = db.select({ id: odontoPortalUsers.id, username: odontoPortalUsers.username, displayName: odontoPortalUsers.displayName, role: odontoPortalUsers.role, accountType: odontoPortalUsers.accountType, managerId: odontoPortalUsers.managerId, workspaceOwnerId: odontoPortalUsers.workspaceOwnerId, createdAt: odontoPortalUsers.createdAt, lastSeenAt: odontoPortalUsers.lastSeenAt }).from(odontoPortalUsers);
+  const users = principal.accountType === "creator"
+    ? await base.orderBy(desc(odontoPortalUsers.lastSeenAt))
+    : await base.where(or(eq(odontoPortalUsers.id, principal.id), eq(odontoPortalUsers.managerId, principal.id))).orderBy(desc(odontoPortalUsers.lastSeenAt));
   res.json({ users: users.map((user) => ({ ...user, online: user.lastSeenAt.getTime() > Date.now() - 90_000 })) });
 });
 
+router.post("/odonto-portal/admin/users", async (req, res) => {
+  const principal = requirePortalManager(req as PortalRequest, res);
+  if (!principal) return;
+  const username = cleanUsername(req.body?.username);
+  const displayName = cleanText(req.body?.displayName, 80);
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  const requestedType = cleanText(req.body?.accountType, 20) as PortalAccountType;
+  const allowedTypes: PortalAccountType[] = principal.accountType === "creator" ? ["manager", "individual"] : ["member"];
+  if (!usernamePattern.test(username) || !displayName || password.length < 8 || !allowedTypes.includes(requestedType)) {
+    res.status(400).json({ error: "Confira nome, usuário, senha e tipo de conta." });
+    return;
+  }
+  try {
+    const [existing] = await db.select({ id: odontoPortalUsers.id }).from(odontoPortalUsers).where(eq(odontoPortalUsers.username, username)).limit(1);
+    if (existing) { res.status(409).json({ error: "Este nome de usuário já está em uso." }); return; }
+    const id = crypto.randomUUID();
+    const managerId = requestedType === "member" ? principal.id : null;
+    const workspaceOwnerId = requestedType === "member" ? principal.workspaceOwnerId : id;
+    const [created] = await db.insert(odontoPortalUsers).values({ id, username, email: `${username}@portal.local`, displayName, passwordHash: await passwordHash(password), role: "member", accountType: requestedType, managerId, workspaceOwnerId }).returning({ id: odontoPortalUsers.id, username: odontoPortalUsers.username, displayName: odontoPortalUsers.displayName, role: odontoPortalUsers.role, accountType: odontoPortalUsers.accountType, managerId: odontoPortalUsers.managerId, workspaceOwnerId: odontoPortalUsers.workspaceOwnerId });
+    res.status(201).json({ user: created });
+  } catch (error) {
+    logger.error({ err: error }, "Unable to create managed Odonto account");
+    res.status(503).json({ error: "Não foi possível criar a conta agora." });
+  }
+});
+
 router.put("/odonto-portal/admin/users/:id/password", async (req, res) => {
-  if (!requirePortalAdmin(req as PortalRequest, res)) return;
+  const principal = requirePortalManager(req as PortalRequest, res);
+  if (!principal) return;
+  const [target] = await db.select({ id: odontoPortalUsers.id, managerId: odontoPortalUsers.managerId, accountType: odontoPortalUsers.accountType }).from(odontoPortalUsers).where(eq(odontoPortalUsers.id, req.params.id)).limit(1);
+  if (!target || (principal.accountType !== "creator" && target.managerId !== principal.id)) { res.status(404).json({ error: "Conta não encontrada." }); return; }
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   if (password.length < 8) { res.status(400).json({ error: "A nova senha precisa ter pelo menos 8 caracteres." }); return; }
   const updated = await db.update(odontoPortalUsers).set({ passwordHash: await passwordHash(password) }).where(eq(odontoPortalUsers.id, req.params.id)).returning({ id: odontoPortalUsers.id });

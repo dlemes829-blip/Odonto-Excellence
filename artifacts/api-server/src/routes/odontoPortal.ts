@@ -29,7 +29,7 @@ router.get("/odonto-portal/state", async (req, res) => {
     const [current] = await db
       .select({ state: odontoPortalUserStates.state, revision: odontoPortalUserStates.revision })
       .from(odontoPortalUserStates)
-      .where(eq(odontoPortalUserStates.userId, user.id))
+      .where(eq(odontoPortalUserStates.userId, user.workspaceOwnerId))
       .limit(1);
 
     sendState(res, current?.state ?? null, current?.revision ?? 0);
@@ -59,7 +59,7 @@ router.put("/odonto-portal/state", async (req, res) => {
     const [current] = await db
       .select({ revision: odontoPortalUserStates.revision })
       .from(odontoPortalUserStates)
-      .where(eq(odontoPortalUserStates.userId, user.id))
+      .where(eq(odontoPortalUserStates.userId, user.workspaceOwnerId))
       .limit(1);
 
     if (!current) {
@@ -67,7 +67,7 @@ router.put("/odonto-portal/state", async (req, res) => {
         res.status(409).json({ error: "Os dados foram atualizados por outra sessão.", revision: 0 });
         return;
       }
-      await db.insert(odontoPortalUserStates).values({ userId: user.id, state, revision: 1 });
+      await db.insert(odontoPortalUserStates).values({ userId: user.workspaceOwnerId, state, revision: 1 });
       sendState(res, state, 1);
       return;
     }
@@ -81,7 +81,7 @@ router.put("/odonto-portal/state", async (req, res) => {
     const updated = await db
       .update(odontoPortalUserStates)
       .set({ state, revision: nextRevision, updatedAt: new Date() })
-      .where(and(eq(odontoPortalUserStates.userId, user.id), eq(odontoPortalUserStates.revision, revision)))
+      .where(and(eq(odontoPortalUserStates.userId, user.workspaceOwnerId), eq(odontoPortalUserStates.revision, revision)))
       .returning({ revision: odontoPortalUserStates.revision });
 
     if (!updated.length) {

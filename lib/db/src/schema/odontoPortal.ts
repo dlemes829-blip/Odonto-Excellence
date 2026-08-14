@@ -19,9 +19,12 @@ export const odontoPortalUsers = pgTable("odonto_portal_users", {
   displayName: text("display_name").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("member"),
+  accountType: text("account_type").notNull().default("individual"),
+  managerId: text("manager_id"),
+  workspaceOwnerId: text("workspace_owner_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("odonto_portal_users_username_idx").on(table.username), uniqueIndex("odonto_portal_users_email_idx").on(table.email), index("odonto_portal_users_last_seen_idx").on(table.lastSeenAt)]);
+}, (table) => [uniqueIndex("odonto_portal_users_username_idx").on(table.username), uniqueIndex("odonto_portal_users_email_idx").on(table.email), index("odonto_portal_users_last_seen_idx").on(table.lastSeenAt), index("odonto_portal_users_manager_idx").on(table.managerId), index("odonto_portal_users_workspace_idx").on(table.workspaceOwnerId)]);
 
 export const odontoPortalSessions = pgTable("odonto_portal_sessions", {
   id: text("id").primaryKey(),

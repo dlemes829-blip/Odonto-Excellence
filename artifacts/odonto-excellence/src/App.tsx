@@ -23,7 +23,8 @@ type StudyBaseline = { total: number; watched: number; minutes: number; days: nu
 type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; studyBaselines: Record<string, StudyBaseline>; activeId: string; activeDate: string; soundEnabled: boolean };
 type AgendaAppointment = Appointment & { collaborator: string; collaboratorId: string; gender: Gender };
 type PortalEnvelope = { state: Record<string, unknown> | null; revision: number };
-type PortalUser = { id: string; username: string; displayName: string; role: 'admin' | 'member' };
+type PortalAccountType = 'creator' | 'manager' | 'member' | 'individual';
+type PortalUser = { id: string; username: string; displayName: string; role: 'admin' | 'member'; accountType: PortalAccountType; managerId: string | null; workspaceOwnerId: string };
 type PortalNotification = { id: string; title: string; body: string; createdAt: string; readAt: string | null };
 const PortalAuthContext = createContext<PortalUser | null>(null);
 
@@ -317,7 +318,7 @@ function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
     { href: '/treinamento', label: 'Ambiente Videos', icon: GraduationCap },
     { href: '/configuracoes', label: 'Configurações', icon: Settings2 },
   ];
-  if (portalUser?.role === 'admin') navItems.push({ href: '/admin', label: 'Administração', icon: Shield });
+  if (portalUser?.accountType === 'creator' || portalUser?.accountType === 'manager') navItems.push({ href: '/admin', label: 'Usuários' , icon: Shield });
   return (
     <aside className="sidebar">
       <div className="brand flex items-center justify-between">
@@ -950,7 +951,6 @@ function Landing() {
 /* ─── ACCESS PAGE ─── */
 function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => void }) {
   const [, setLocation] = useLocation();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -960,7 +960,7 @@ function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => vo
     event.preventDefault();
     setError(''); setBusy(true);
     try {
-      const response = await fetch(`${PORTAL_API_URL}/odonto-portal/auth/${mode === 'login' ? 'login' : 'register'}`, {
+      const response = await fetch(`${PORTAL_API_URL}/odonto-portal/auth/login`, {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
@@ -992,15 +992,14 @@ function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => vo
           </Link>
           <div className="mt-12">
             <div className="eyebrow">Acesso seguro</div>
-            <h2 className="display-title text-4xl mt-3">{mode === 'login' ? 'Entre na sua conta.' : 'Crie seu espaço.'}</h2>
-            <p className="text-sm text-muted-foreground mt-3">{mode === 'login' ? 'Use suas credenciais para continuar no seu ambiente.' : 'Cada conta recebe um ambiente isolado e privado.'}</p>
+            <h2 className="display-title text-4xl mt-3">Entre na sua conta.</h2>
+            <p className="text-sm text-muted-foreground mt-3">Use as credenciais fornecidas pelo administrador ou pelo gerente da sua equipe.</p>
           </div>
-          <div className="access-switch mt-8"><button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError(''); }}>Entrar</button><button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(''); }}>Criar conta</button></div>
           <form className="space-y-4 mt-7" onSubmit={submit}>
             <label><span className="label-text">Nome de usuário</span><input className="input-field" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]+" required /></label>
-            <label><span className="label-text">Senha</span><input className="input-field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} required /></label>
+            <label><span className="label-text">Senha</span><input className="input-field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" minLength={6} required /></label>
             {error && <p className="text-xs text-destructive font-semibold">{error}</p>}
-            <button className="button-primary w-full" disabled={busy}>{busy ? 'Validando acesso...' : mode === 'login' ? 'Entrar no portal' : 'Criar conta e entrar'} <ArrowRight size={14} /></button>
+            <button className="button-primary w-full" disabled={busy}>{busy ? 'Validando acesso...' : 'Entrar no portal'} <ArrowRight size={14} /></button>
           </form>
           <p className="text-[11px] text-muted-foreground mt-7 leading-relaxed">Ao continuar, você concorda com o uso deste ambiente profissional privado.</p>
         </div>
@@ -1677,6 +1676,7 @@ function Admin({ store, notify }: { store: Store; notify: (message: string, kind
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [newPasswords, setNewPasswords] = useState<Record<string, string>>({});
+  const [newAccount, setNewAccount] = useState({ displayName: '', username: '', password: '', accountType: 'individual' as PortalAccountType });
 
   const loadUsers = useCallback(async () => {
     const response = await fetch(`${PORTAL_API_URL}/odonto-portal/admin/users`, { credentials: 'include' });
@@ -1684,8 +1684,21 @@ function Admin({ store, notify }: { store: Store; notify: (message: string, kind
     const result = await response.json() as { users: typeof users };
     setUsers(result.users);
   }, []);
-  useEffect(() => { if (portalUser?.role === 'admin') void loadUsers().catch((error: Error) => notify(error.message, 'notify')); }, [loadUsers, notify, portalUser?.role]);
-  if (portalUser?.role !== 'admin') return <NotFound />;
+  const canManage = portalUser?.accountType === 'creator' || portalUser?.accountType === 'manager';
+  useEffect(() => { if (canManage) void loadUsers().catch((error: Error) => notify(error.message, 'notify')); }, [canManage, loadUsers, notify]);
+  if (!canManage || !portalUser) return <NotFound />;
+  const currentManager = portalUser;
+
+  async function createAccount(event: React.FormEvent) {
+    event.preventDefault();
+    const accountType: PortalAccountType = currentManager.accountType === 'manager' ? 'member' : newAccount.accountType;
+    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/admin/users`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newAccount, accountType }) });
+    const result = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) { notify(result.error || 'Não foi possível criar a conta.', 'notify'); return; }
+    setNewAccount({ displayName: '', username: '', password: '', accountType: currentManager.accountType === 'creator' ? 'individual' : 'member' });
+    await loadUsers();
+    notify(accountType === 'manager' ? 'Gerente criado com ambiente de equipe.' : accountType === 'individual' ? 'Usuário criado com ambiente privado.' : 'Colaborador adicionado ao ambiente da equipe.');
+  }
 
   async function resetPassword(userId: string) {
     const password = newPasswords[userId] ?? '';
@@ -1704,10 +1717,10 @@ function Admin({ store, notify }: { store: Store; notify: (message: string, kind
 
   return <AppShell store={store} onToggleSound={() => undefined}>
     <div className="content-wrap">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8"><div><div className="eyebrow">Administração</div><h1 className="page-title mt-3">Visão segura do portal.</h1><p className="text-sm text-muted-foreground mt-3">Contas, acessos e comunicados do ambiente Odonto Excellence.</p></div><button className="button-secondary" onClick={() => void loadUsers()}><RotateCcw size={14} /> Atualizar</button></div>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8"><div><div className="eyebrow">{portalUser.accountType === 'creator' ? 'Painel do criador' : 'Gestão da equipe'}</div><h1 className="page-title mt-3">Usuários e ambientes.</h1><p className="text-sm text-muted-foreground mt-3">{portalUser.accountType === 'creator' ? 'Crie gerentes com equipes ou usuários com ambientes privados.' : 'Crie acessos para colaboradores do seu ambiente compartilhado.'}</p></div><button className="button-secondary" onClick={() => void loadUsers()}><RotateCcw size={14} /> Atualizar</button></div>
       <div className="grid xl:grid-cols-[1.45fr_.8fr] gap-6">
-        <section className="panel overflow-hidden"><div className="p-5 border-b border-border flex items-center justify-between"><div><h2 className="font-bold">Contas cadastradas</h2><p className="text-xs text-muted-foreground mt-1">Online nos últimos 90 segundos.</p></div><span className="chip-red">{users.filter((u) => u.online).length} online</span></div><div className="divide-y divide-border">{users.map((account) => <div key={account.id} className="p-5"><div className="flex gap-3 items-center"><span className="avatar w-10 h-10">{initials(account.displayName)}</span><div className="min-w-0"><b className="text-sm block">{account.displayName}</b><span className="text-xs text-muted-foreground">@{account.username}</span></div><span className={`ml-auto text-[10px] font-bold ${account.online ? 'text-primary' : 'text-muted-foreground'}`}>{account.online ? 'ONLINE' : 'OFFLINE'}</span></div><div className="flex gap-2 mt-4"><input className="input-field" type="password" placeholder="Nova senha" value={newPasswords[account.id] ?? ''} onChange={(e) => setNewPasswords((current) => ({ ...current, [account.id]: e.target.value }))} /><button className="button-secondary shrink-0" onClick={() => void resetPassword(account.id)}>Atualizar senha</button></div></div>)}</div></section>
-        <form className="panel p-6 self-start" onSubmit={sendNotice}><div className="eyebrow">Comunicado</div><h2 className="display-title text-3xl mt-3">Notifique a equipe.</h2><p className="text-xs text-muted-foreground mt-2">O aviso aparece apenas para contas autenticadas.</p><label className="block mt-6"><span className="label-text">Título</span><input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} required /></label><label className="block mt-4"><span className="label-text">Mensagem</span><textarea className="textarea-field min-h-28" value={body} onChange={(e) => setBody(e.target.value)} required /></label><button className="button-primary w-full mt-5">Enviar comunicado</button></form>
+        <section className="panel overflow-hidden"><div className="p-5 border-b border-border flex items-center justify-between"><div><h2 className="font-bold">Contas cadastradas</h2><p className="text-xs text-muted-foreground mt-1">Online nos últimos 90 segundos.</p></div><span className="chip-red">{users.filter((u) => u.online).length} online</span></div><div className="divide-y divide-border">{users.map((account) => <div key={account.id} className="p-5"><div className="flex gap-3 items-center"><span className="avatar w-10 h-10">{initials(account.displayName)}</span><div className="min-w-0"><b className="text-sm block">{account.displayName}</b><span className="text-xs text-muted-foreground">@{account.username} · {account.accountType === 'creator' ? 'Criador' : account.accountType === 'manager' ? 'Gerente' : account.accountType === 'member' ? 'Equipe' : 'Individual'}</span></div><span className={`ml-auto text-[10px] font-bold ${account.online ? 'text-primary' : 'text-muted-foreground'}`}>{account.online ? 'ONLINE' : 'OFFLINE'}</span></div>{account.id !== portalUser.id && <div className="flex gap-2 mt-4"><input className="input-field" type="password" placeholder="Nova senha" value={newPasswords[account.id] ?? ''} onChange={(e) => setNewPasswords((current) => ({ ...current, [account.id]: e.target.value }))} /><button className="button-secondary shrink-0" onClick={() => void resetPassword(account.id)}>Atualizar senha</button></div>}</div>)}</div></section>
+        <div className="space-y-5 self-start"><form className="panel p-6" onSubmit={createAccount}><div className="eyebrow">Novo acesso</div><h2 className="display-title text-3xl mt-3">Criar usuário.</h2><p className="text-xs text-muted-foreground mt-2">{portalUser.accountType === 'creator' ? 'Escolha entre um gerente com equipe ou um ambiente individual.' : 'O novo usuário compartilhará o ambiente da sua equipe.'}</p><label className="block mt-6"><span className="label-text">Nome</span><input className="input-field" value={newAccount.displayName} onChange={(e) => setNewAccount((current) => ({ ...current, displayName: e.target.value }))} required /></label><label className="block mt-4"><span className="label-text">Usuário</span><input className="input-field" value={newAccount.username} onChange={(e) => setNewAccount((current) => ({ ...current, username: e.target.value }))} minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]+" required /></label><label className="block mt-4"><span className="label-text">Senha inicial</span><input className="input-field" type="password" value={newAccount.password} onChange={(e) => setNewAccount((current) => ({ ...current, password: e.target.value }))} minLength={8} required /></label>{portalUser.accountType === 'creator' && <label className="block mt-4"><span className="label-text">Tipo de ambiente</span><select className="input-field" value={newAccount.accountType} onChange={(e) => setNewAccount((current) => ({ ...current, accountType: e.target.value as PortalAccountType }))}><option value="individual">Individual e privado</option><option value="manager">Gerente com equipe</option></select></label>}<button className="button-primary w-full mt-5"><Plus size={14} /> Criar acesso</button></form>{portalUser.accountType === 'creator' && <form className="panel p-6" onSubmit={sendNotice}><div className="eyebrow">Comunicado geral</div><label className="block mt-4"><span className="label-text">Título</span><input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} required /></label><label className="block mt-4"><span className="label-text">Mensagem</span><textarea className="textarea-field min-h-24" value={body} onChange={(e) => setBody(e.target.value)} required /></label><button className="button-secondary w-full mt-5">Enviar comunicado</button></form>}</div>
       </div>
     </div>
   </AppShell>;
@@ -1752,7 +1765,7 @@ export default function App() {
 
   const setStore = useCallback((next: Store) => {
     setStoreState(next);
-    if (user) localStorage.setItem(`${PORTAL_STORAGE_KEY}:${user.id}`, JSON.stringify(next));
+    if (user) localStorage.setItem(`${PORTAL_STORAGE_KEY}:${user.workspaceOwnerId}`, JSON.stringify(next));
   }, [user]);
 
   const notify = useCallback((message: string, kind: ToastKind = 'success') => {
@@ -1768,7 +1781,7 @@ export default function App() {
     const next = envelope.state ? storeFromRemote(envelope.state) : null;
     const personal = next ?? personalStore(activeUser);
     skipNextSyncRef.current = true;
-    localStorage.setItem(`${PORTAL_STORAGE_KEY}:${activeUser.id}`, JSON.stringify(personal));
+    localStorage.setItem(`${PORTAL_STORAGE_KEY}:${activeUser.workspaceOwnerId}`, JSON.stringify(personal));
     setStoreState(personal);
   }, []);
 
@@ -1782,7 +1795,7 @@ export default function App() {
   const onAuthenticated = useCallback((nextUser: PortalUser) => {
     portalRevisionRef.current = 0;
     setUser(nextUser);
-    const saved = localStorage.getItem(`${PORTAL_STORAGE_KEY}:${nextUser.id}`);
+    const saved = localStorage.getItem(`${PORTAL_STORAGE_KEY}:${nextUser.workspaceOwnerId}`);
     setStoreState(saved ? normalizeStore(JSON.parse(saved) as Partial<Store>) : personalStore(nextUser));
   }, []);
 
@@ -1862,7 +1875,7 @@ export default function App() {
   // Real-time: detect new appointments added by any tab (storage event)
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (!user || e.key !== `${PORTAL_STORAGE_KEY}:${user.id}` || !e.newValue) return;
+      if (!user || e.key !== `${PORTAL_STORAGE_KEY}:${user.workspaceOwnerId}` || !e.newValue) return;
       try {
         const next = JSON.parse(e.newValue) as Store;
         const newCount = next.collaborators.reduce((s, p) => s + p.appointments.length, 0);
