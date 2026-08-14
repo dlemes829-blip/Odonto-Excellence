@@ -11,7 +11,9 @@ services:
         sync: false
       - key: PORTAL_ORIGIN
         sync: false
-      - key: ODONTO_ADMIN_EMAIL
+      - key: ODONTO_ADMIN_USERNAME
+        sync: false
+      - key: ODONTO_ADMIN_DISPLAY_NAME
         sync: false
       - key: ODONTO_ADMIN_PASSWORD
         sync: false

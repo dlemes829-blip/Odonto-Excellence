@@ -23,7 +23,7 @@ type StudyBaseline = { total: number; watched: number; minutes: number; days: nu
 type Store = { collaborators: Collaborator[]; archives: DayArchive[]; training: Training[]; studyBaselines: Record<string, StudyBaseline>; activeId: string; activeDate: string; soundEnabled: boolean };
 type AgendaAppointment = Appointment & { collaborator: string; collaboratorId: string; gender: Gender };
 type PortalEnvelope = { state: Record<string, unknown> | null; revision: number };
-type PortalUser = { id: string; email: string; displayName: string; role: 'admin' | 'member' };
+type PortalUser = { id: string; username: string; displayName: string; role: 'admin' | 'member' };
 type PortalNotification = { id: string; title: string; body: string; createdAt: string; readAt: string | null };
 const PortalAuthContext = createContext<PortalUser | null>(null);
 
@@ -284,7 +284,7 @@ function Brand({ dark = false }: { dark?: boolean }) {
   return (
     <Link href="/" className={`brand-lockup ${dark ? 'brand-lockup-dark' : ''}`}>
       <span className="brand-logo-frame">
-        <img src="/clinic/odonto-excellence-logo.png" alt="Odonto Excellence" className="brand-logo" />
+        <img src="/brand/odonto-mark.svg" alt="Odonto Excellence" className="brand-logo" />
       </span>
       <span className="brand-clinic-label">
         <span>ODONTO EXCELLENCE</span>
@@ -314,7 +314,7 @@ function Sidebar({ activeId, soundEnabled, onToggleSound, onClose }: {
     { href: '/painel', label: 'Início', icon: LayoutDashboard },
     { href: `/colaborador/${activeId}`, label: 'Meu dia', icon: UserRound },
     { href: '/historico', label: 'Histórico', icon: FileClock },
-    { href: '/treinamento', label: 'Aprender', icon: GraduationCap },
+    { href: '/treinamento', label: 'Ambiente Videos', icon: GraduationCap },
     { href: '/configuracoes', label: 'Configurações', icon: Settings2 },
   ];
   if (portalUser?.role === 'admin') navItems.push({ href: '/admin', label: 'Administração', icon: Shield });
@@ -370,7 +370,7 @@ function MobileNav({ activeId }: { activeId: string }) {
         ['/painel', 'Início', LayoutDashboard],
         [`/colaborador/${activeId}`, 'Meu dia', UserRound],
         ['/historico', 'Histórico', FileClock],
-        ['/treinamento', 'Aprender', GraduationCap],
+        ['/treinamento', 'Ambiente Videos', GraduationCap],
       ] as [string, string, typeof Home][]).map(([href, label, Icon]) => (
         <Link key={href} href={href}
           className={`nav-item ${location === href || (href.includes('/colaborador') && location.startsWith('/colaborador')) ? 'active' : ''}`}>
@@ -671,7 +671,7 @@ function TrainingSnapshot({ summary, onOpen }: { summary: ReturnType<typeof stud
       <div className="flex justify-between items-start">
         <div>
           <div className="eyebrow">Treinamento</div>
-          <h2 className="font-bold text-lg mt-2">Aprender também é operar.</h2>
+          <h2 className="font-bold text-lg mt-2">Vídeos também fazem parte da rotina.</h2>
         </div>
         <button className="button-ghost button-icon" onClick={onOpen} aria-label="Abrir treinamento"><ArrowRight size={16} /></button>
       </div>
@@ -903,7 +903,7 @@ function Landing() {
             </div>
           </div>
           <div className="hero-orbit">
-            <img className="hero-brand-art" src="/clinic/odonto-excellence-logo.png" alt="Marca Odonto Excellence" />
+            <img className="hero-brand-art" src="/brand/odonto-mark.svg" alt="Marca Odonto Excellence" />
           </div>
         </div>
       </section>
@@ -951,8 +951,7 @@ function Landing() {
 function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => void }) {
   const [, setLocation] = useLocation();
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -963,7 +962,7 @@ function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => vo
     try {
       const response = await fetch(`${PORTAL_API_URL}/odonto-portal/auth/${mode === 'login' ? 'login' : 'register'}`, {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mode === 'login' ? { email, password } : { email, password, displayName: name }),
+        body: JSON.stringify({ username, password }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string; user?: PortalUser };
       if (!response.ok || !body.user) throw new Error(body.error ?? 'Não foi possível continuar.');
@@ -982,7 +981,7 @@ function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => vo
           <div className="eyebrow !text-[hsl(var(--sidebar-primary))]">Odonto Excellence</div>
           <h1 className="display-title text-5xl mt-4 leading-[.9]">Seu ambiente pessoal e privado de trabalho.</h1>
           <p className="text-sm text-white/65 mt-6 leading-relaxed">Organize sua rotina, acompanhe atendimentos e evolua nos treinamentos. Seus dados ficam visíveis apenas para você.</p>
-          <img className="access-photo" src="/clinic/odonto-excellence-reception.jpg" alt="Ambiente Odonto Excellence" />
+          <img className="mt-10 h-28 w-28" src="/brand/odonto-mark.svg" alt="Marca Odonto Excellence" />
         </div>
         <div className="text-xs text-white/40">Odonto Excellence · Brasil</div>
       </section>
@@ -998,8 +997,7 @@ function Access({ onAuthenticated }: { onAuthenticated: (user: PortalUser) => vo
           </div>
           <div className="access-switch mt-8"><button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError(''); }}>Entrar</button><button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(''); }}>Criar conta</button></div>
           <form className="space-y-4 mt-7" onSubmit={submit}>
-            {mode === 'register' && <label><span className="label-text">Seu nome</span><input className="input-field" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required /></label>}
-            <label><span className="label-text">E-mail</span><input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required /></label>
+            <label><span className="label-text">Nome de usuário</span><input className="input-field" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]+" required /></label>
             <label><span className="label-text">Senha</span><input className="input-field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} required /></label>
             {error && <p className="text-xs text-destructive font-semibold">{error}</p>}
             <button className="button-primary w-full" disabled={busy}>{busy ? 'Validando acesso...' : mode === 'login' ? 'Entrar no portal' : 'Criar conta e entrar'} <ArrowRight size={14} /></button>
@@ -1073,7 +1071,7 @@ function Dashboard({ store, setStore, notify }: {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-5">
           <div>
             <div className="eyebrow">{formatDate(today)} · {formatWeekday(today)}</div>
-            <h1 className="page-title mt-3">{greeting()}, equipe.</h1>
+            <h1 className="page-title mt-3">{greeting()}, {active?.name || 'você'}.</h1>
             <p className="text-sm text-muted-foreground mt-3">Veja o que precisa acontecer e comece pelo próximo passo.</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1493,7 +1491,7 @@ function Training({ store, setStore, notify }: {
             )) : <EmptyState icon={Video} title="Sua trilha começa aqui" copy="Registre o primeiro vídeo com duração estimada para acompanhar sua evolução." />}
           </section>
           <section className="panel p-5">
-            <img src="/clinic/odonto-excellence-reception.jpg" alt="Recepção de uma unidade Odonto Excellence" className="study-brand-photo" />
+            <div className="study-brand-card"><img src="/brand/odonto-mark.svg" alt="Odonto Excellence" /><span>Ambiente Videos</span></div>
             <div className="eyebrow">Registrar vídeo</div>
             <h2 className="display-title text-3xl mt-2">Transforme tempo<br /><span className="text-primary">em avanço.</span></h2>
             <form className="mt-6 space-y-3" onSubmit={registerStudy}>
@@ -1708,7 +1706,7 @@ function Admin({ store, notify }: { store: Store; notify: (message: string, kind
     <div className="content-wrap">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8"><div><div className="eyebrow">Administração</div><h1 className="page-title mt-3">Visão segura do portal.</h1><p className="text-sm text-muted-foreground mt-3">Contas, acessos e comunicados do ambiente Odonto Excellence.</p></div><button className="button-secondary" onClick={() => void loadUsers()}><RotateCcw size={14} /> Atualizar</button></div>
       <div className="grid xl:grid-cols-[1.45fr_.8fr] gap-6">
-        <section className="panel overflow-hidden"><div className="p-5 border-b border-border flex items-center justify-between"><div><h2 className="font-bold">Contas cadastradas</h2><p className="text-xs text-muted-foreground mt-1">Online nos últimos 90 segundos.</p></div><span className="chip-red">{users.filter((u) => u.online).length} online</span></div><div className="divide-y divide-border">{users.map((account) => <div key={account.id} className="p-5"><div className="flex gap-3 items-center"><span className="avatar w-10 h-10">{initials(account.displayName)}</span><div className="min-w-0"><b className="text-sm block">{account.displayName}</b><span className="text-xs text-muted-foreground">{account.email}</span></div><span className={`ml-auto text-[10px] font-bold ${account.online ? 'text-primary' : 'text-muted-foreground'}`}>{account.online ? 'ONLINE' : 'OFFLINE'}</span></div><div className="flex gap-2 mt-4"><input className="input-field" type="password" placeholder="Nova senha" value={newPasswords[account.id] ?? ''} onChange={(e) => setNewPasswords((current) => ({ ...current, [account.id]: e.target.value }))} /><button className="button-secondary shrink-0" onClick={() => void resetPassword(account.id)}>Atualizar senha</button></div></div>)}</div></section>
+        <section className="panel overflow-hidden"><div className="p-5 border-b border-border flex items-center justify-between"><div><h2 className="font-bold">Contas cadastradas</h2><p className="text-xs text-muted-foreground mt-1">Online nos últimos 90 segundos.</p></div><span className="chip-red">{users.filter((u) => u.online).length} online</span></div><div className="divide-y divide-border">{users.map((account) => <div key={account.id} className="p-5"><div className="flex gap-3 items-center"><span className="avatar w-10 h-10">{initials(account.displayName)}</span><div className="min-w-0"><b className="text-sm block">{account.displayName}</b><span className="text-xs text-muted-foreground">@{account.username}</span></div><span className={`ml-auto text-[10px] font-bold ${account.online ? 'text-primary' : 'text-muted-foreground'}`}>{account.online ? 'ONLINE' : 'OFFLINE'}</span></div><div className="flex gap-2 mt-4"><input className="input-field" type="password" placeholder="Nova senha" value={newPasswords[account.id] ?? ''} onChange={(e) => setNewPasswords((current) => ({ ...current, [account.id]: e.target.value }))} /><button className="button-secondary shrink-0" onClick={() => void resetPassword(account.id)}>Atualizar senha</button></div></div>)}</div></section>
         <form className="panel p-6 self-start" onSubmit={sendNotice}><div className="eyebrow">Comunicado</div><h2 className="display-title text-3xl mt-3">Notifique a equipe.</h2><p className="text-xs text-muted-foreground mt-2">O aviso aparece apenas para contas autenticadas.</p><label className="block mt-6"><span className="label-text">Título</span><input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} required /></label><label className="block mt-4"><span className="label-text">Mensagem</span><textarea className="textarea-field min-h-28" value={body} onChange={(e) => setBody(e.target.value)} required /></label><button className="button-primary w-full mt-5">Enviar comunicado</button></form>
       </div>
     </div>

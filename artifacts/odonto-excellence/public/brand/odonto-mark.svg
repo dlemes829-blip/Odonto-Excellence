@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title>Odonto Excellence</title>
+  <defs>
+    <linearGradient id="red" x1="18" y1="12" x2="110" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff4d4f"/>
+      <stop offset="1" stop-color="#b10f18"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#red)"/>
+  <path d="M37 31c-8 0-14 6-14 15 0 16 11 24 16 40 3 13 9 21 16 21 5 0 7-4 9-11l4-18 4 18c2 7 4 11 9 11 7 0 13-8 16-21 5-16 16-24 16-40 0-9-6-15-14-15-10 0-17 5-25 12-8-7-15-12-25-12-4 0-8 1-12 3 4 5 7 12 7 20 0 10-4 18-10 23-1-9-4-17-8-23 1-8 6-14 11-14Z" fill="#fff"/>
+  <path d="M64 47c5 0 9 4 9 9v13h13c5 0 9 4 9 9s-4 9-9 9H73v13c0 5-4 9-9 9s-9-4-9-9V87H42c-5 0-9-4-9-9s4-9 9-9h13V56c0-5 4-9 9-9Z" fill="#fff" opacity=".16"/>
+</svg>

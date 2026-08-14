@@ -5,9 +5,9 @@ import { attachPortalUser, beginPortalSession, bootstrapAdmin, endPortalSession,
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const normalizeEmail = (value: string) => value.trim().toLocaleLowerCase("pt-BR");
+const usernamePattern = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 const cleanText = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
+const cleanUsername = (value: unknown) => cleanText(value, 32).toLocaleLowerCase("pt-BR");
 
 router.use((req, res, next) => { void bootstrapAdmin().then(() => attachPortalUser(req as PortalRequest, res, next)).catch(next); });
 
@@ -18,20 +18,19 @@ router.get("/odonto-portal/auth/me", (req, res) => {
 });
 
 router.post("/odonto-portal/auth/register", loginRateLimit(), async (req, res) => {
-  const email = cleanText(req.body?.email, 254).toLocaleLowerCase("pt-BR");
-  const displayName = cleanText(req.body?.displayName, 80);
+  const username = cleanUsername(req.body?.username);
   const password = typeof req.body?.password === "string" ? req.body.password : "";
-  if (!emailPattern.test(email) || !displayName || password.length < 8) {
-    res.status(400).json({ error: "Informe nome, e-mail válido e uma senha com pelo menos 8 caracteres." });
+  if (!usernamePattern.test(username) || password.length < 8) {
+    res.status(400).json({ error: "Use um nome de usuário de 3 a 32 caracteres e uma senha com pelo menos 8 caracteres." });
     return;
   }
   try {
-    const [existing] = await db.select({ id: odontoPortalUsers.id }).from(odontoPortalUsers).where(eq(odontoPortalUsers.email, email)).limit(1);
+    const [existing] = await db.select({ id: odontoPortalUsers.id }).from(odontoPortalUsers).where(eq(odontoPortalUsers.username, username)).limit(1);
     if (existing) {
-      res.status(409).json({ error: "Já existe uma conta com este e-mail." });
+      res.status(409).json({ error: "Este nome de usuário já está em uso." });
       return;
     }
-    const user = { id: crypto.randomUUID(), email, displayName, role: "member" as const };
+    const user = { id: crypto.randomUUID(), username, email: `${username}@portal.local`, displayName: username, role: "member" as const };
     await db.insert(odontoPortalUsers).values({ ...user, passwordHash: await passwordHash(password) });
     await beginPortalSession(res, user);
     res.status(201).json({ user: publicUser(user) });
@@ -42,15 +41,15 @@ router.post("/odonto-portal/auth/register", loginRateLimit(), async (req, res) =
 });
 
 router.post("/odonto-portal/auth/login", loginRateLimit(), async (req, res) => {
-  const email = cleanText(req.body?.email, 254).toLocaleLowerCase("pt-BR");
+  const username = cleanUsername(req.body?.username);
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   try {
-    const [record] = await db.select().from(odontoPortalUsers).where(eq(odontoPortalUsers.email, email)).limit(1);
+    const [record] = await db.select().from(odontoPortalUsers).where(eq(odontoPortalUsers.username, username)).limit(1);
     if (!record || !(await passwordMatches(password, record.passwordHash))) {
-      res.status(401).json({ error: "E-mail ou senha incorretos." });
+      res.status(401).json({ error: "Nome de usuário ou senha incorretos." });
       return;
     }
-    const user = { id: record.id, email: record.email, displayName: record.displayName, role: record.role === "admin" ? "admin" as const : "member" as const };
+    const user = { id: record.id, username: record.username, displayName: record.displayName, role: record.role === "admin" ? "admin" as const : "member" as const };
     await db.update(odontoPortalUsers).set({ lastSeenAt: new Date() }).where(eq(odontoPortalUsers.id, user.id));
     await beginPortalSession(res, user);
     res.json({ user: publicUser(user) });
@@ -60,41 +59,8 @@ router.post("/odonto-portal/auth/login", loginRateLimit(), async (req, res) => {
   }
 });
 
-async function sendResetEmail(email: string, resetToken: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
-  const publicUrl = process.env.PORTAL_PUBLIC_URL;
-  if (!apiKey || !from || !publicUrl) return false;
-  const resetUrl = `${publicUrl.replace(/\/$/, "")}/acesso?reset=${encodeURIComponent(resetToken)}`;
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from,
-      to: [email],
-      subject: "Redefina sua senha - Odonto Excellence",
-      html: `<main style="font-family:Arial,sans-serif;color:#221414;max-width:560px;margin:auto;padding:32px"><p style="letter-spacing:.12em;color:#a91616;font-weight:700;font-size:12px">ODONTO EXCELLENCE</p><h1 style="font-size:28px">Redefina sua senha</h1><p>Recebemos uma solicitação para acessar seu ambiente privado. O link abaixo expira em 30 minutos.</p><p style="margin:28px 0"><a href="${resetUrl}" style="background:#a91616;color:#fff;padding:13px 20px;border-radius:8px;text-decoration:none;font-weight:700">Redefinir senha</a></p><p style="font-size:12px;color:#765f5f">Se você não solicitou esta alteração, pode ignorar este e-mail.</p></main>`,
-    }),
-  });
-  return response.ok;
-}
-
-router.post("/odonto-portal/auth/password-reset/request", loginRateLimit(5), async (req, res) => {
-  const email = cleanText(req.body?.email, 254).toLocaleLowerCase("pt-BR");
-  const generic = { message: "Se houver uma conta com este e-mail, enviaremos as instruções." };
-  if (!emailPattern.test(email)) { res.json(generic); return; }
-  try {
-    const [user] = await db.select({ id: odontoPortalUsers.id, email: odontoPortalUsers.email }).from(odontoPortalUsers).where(eq(odontoPortalUsers.email, email)).limit(1);
-    if (!user) { res.json(generic); return; }
-    const token = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
-    await db.insert(odontoPortalPasswordResets).values({ id: crypto.randomUUID(), userId: user.id, tokenHash: tokenHash(token), expiresAt: new Date(Date.now() + 30 * 60_000) });
-    const delivered = await sendResetEmail(user.email, token);
-    if (!delivered) logger.warn("Password reset email provider is not configured");
-    res.json(generic);
-  } catch (error) {
-    logger.error({ err: error }, "Unable to request Odonto password reset");
-    res.status(503).json({ error: "Não foi possível iniciar a recuperação agora." });
-  }
+router.post("/odonto-portal/auth/password-reset/request", loginRateLimit(5), (_req, res) => {
+  res.status(410).json({ error: "A redefinição de senha é feita pelo administrador do portal." });
 });
 
 router.post("/odonto-portal/auth/password-reset/confirm", loginRateLimit(), async (req, res) => {
@@ -147,7 +113,7 @@ router.patch("/odonto-portal/notifications/:id/read", async (req, res) => {
 
 router.get("/odonto-portal/admin/users", async (req, res) => {
   if (!requirePortalAdmin(req as PortalRequest, res)) return;
-  const users = await db.select({ id: odontoPortalUsers.id, email: odontoPortalUsers.email, displayName: odontoPortalUsers.displayName, role: odontoPortalUsers.role, createdAt: odontoPortalUsers.createdAt, lastSeenAt: odontoPortalUsers.lastSeenAt }).from(odontoPortalUsers).orderBy(desc(odontoPortalUsers.lastSeenAt));
+  const users = await db.select({ id: odontoPortalUsers.id, username: odontoPortalUsers.username, displayName: odontoPortalUsers.displayName, role: odontoPortalUsers.role, createdAt: odontoPortalUsers.createdAt, lastSeenAt: odontoPortalUsers.lastSeenAt }).from(odontoPortalUsers).orderBy(desc(odontoPortalUsers.lastSeenAt));
   res.json({ users: users.map((user) => ({ ...user, online: user.lastSeenAt.getTime() > Date.now() - 90_000 })) });
 });
 

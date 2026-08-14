@@ -9,10 +9,10 @@ export const ODONTO_SESSION_COOKIE = "odonto_portal_session";
 const SESSION_DAYS = 7;
 
 export type PortalRole = "admin" | "member";
-export type PortalPrincipal = { id: string; email: string; displayName: string; role: PortalRole };
+export type PortalPrincipal = { id: string; username: string; displayName: string; role: PortalRole };
 export type PortalRequest = Request & { portalUser?: PortalPrincipal };
 
-function normalizedEmail(value: string) {
+function normalizedUsername(value: string) {
   return value.trim().toLocaleLowerCase("pt-BR");
 }
 
@@ -35,20 +35,20 @@ export async function passwordMatches(value: string, stored: string) {
 }
 
 export function publicUser(user: PortalPrincipal) {
-  return { id: user.id, email: user.email, displayName: user.displayName, role: user.role };
+  return { id: user.id, username: user.username, displayName: user.displayName, role: user.role };
 }
 
 export async function bootstrapAdmin() {
-  const email = process.env.ODONTO_ADMIN_EMAIL?.trim();
+  const username = normalizedUsername(process.env.ODONTO_ADMIN_USERNAME ?? "daniel");
   const password = process.env.ODONTO_ADMIN_PASSWORD;
-  if (!email || !password) return;
-  const cleanEmail = normalizedEmail(email);
-  const [existing] = await db.select({ id: odontoPortalUsers.id }).from(odontoPortalUsers).where(eq(odontoPortalUsers.email, cleanEmail)).limit(1);
+  if (!password) return;
+  const [existing] = await db.select({ id: odontoPortalUsers.id }).from(odontoPortalUsers).where(eq(odontoPortalUsers.username, username)).limit(1);
   if (existing) return;
   await db.insert(odontoPortalUsers).values({
     id: crypto.randomUUID(),
-    email: cleanEmail,
-    displayName: "Daniel",
+    username,
+    email: `${username}@portal.local`,
+    displayName: process.env.ODONTO_ADMIN_DISPLAY_NAME?.trim() || "Daniel",
     passwordHash: await passwordHash(password),
     role: "admin",
   });
@@ -59,7 +59,7 @@ export async function attachPortalUser(req: PortalRequest, _res: Response, next:
   if (!rawToken || typeof rawToken !== "string") return next();
   try {
     const [session] = await db
-      .select({ id: odontoPortalUsers.id, email: odontoPortalUsers.email, displayName: odontoPortalUsers.displayName, role: odontoPortalUsers.role })
+      .select({ id: odontoPortalUsers.id, username: odontoPortalUsers.username, displayName: odontoPortalUsers.displayName, role: odontoPortalUsers.role })
       .from(odontoPortalSessions)
       .innerJoin(odontoPortalUsers, eq(odontoPortalSessions.userId, odontoPortalUsers.id))
       .where(and(eq(odontoPortalSessions.tokenHash, tokenHash(rawToken)), gt(odontoPortalSessions.expiresAt, new Date())))
@@ -114,7 +114,7 @@ export async function endPortalSession(req: PortalRequest, res: Response) {
 export function loginRateLimit(maxAttempts = 10, windowMs = 15 * 60_000) {
   const attempts = new Map<string, { count: number; resetAt: number }>();
   return (req: Request, res: Response, next: NextFunction) => {
-    const key = `${req.ip}:${typeof req.body?.email === "string" ? normalizedEmail(req.body.email) : "unknown"}`;
+    const key = `${req.ip}:${typeof req.body?.username === "string" ? normalizedUsername(req.body.username) : "unknown"}`;
     const now = Date.now();
     const entry = attempts.get(key);
     if (entry && entry.resetAt > now && entry.count >= maxAttempts) {
