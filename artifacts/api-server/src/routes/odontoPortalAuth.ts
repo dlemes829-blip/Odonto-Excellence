@@ -21,6 +21,7 @@ import {
   requirePortalUser,
   tokenHash,
   type PortalAccountType,
+  type PortalAccountStatus,
   type PortalRequest,
 } from "../lib/odontoPortalAuth";
 import { logger } from "../lib/logger";
@@ -95,13 +96,85 @@ router.get("/odonto-portal/auth/me", (req, res) => {
   res.json({ user: user ? publicUser(user) : null });
 });
 
-router.post("/odonto-portal/auth/register", loginRateLimit(), (_req, res) => {
-  res
-    .status(403)
-    .json({
+router.post("/odonto-portal/auth/register", loginRateLimit(), async (req, res) => {
+  const username = cleanUsername(req.body?.username);
+  const displayName = cleanText(req.body?.displayName, 80);
+  const password =
+    typeof req.body?.password === "string" ? req.body.password : "";
+  const requestedType = cleanText(
+    req.body?.accountType,
+    20,
+  ) as PortalAccountType;
+  if (
+    !usernamePattern.test(username) ||
+    !displayName ||
+    password.length < 8 ||
+    !["manager", "individual"].includes(requestedType)
+  ) {
+    res.status(400).json({
       error:
-        "As contas são criadas pelo administrador ou pelo gerente da equipe.",
+        "Informe nome, usuário, senha com 8 caracteres e o tipo de acesso.",
     });
+    return;
+  }
+  try {
+    const [existing] = await db
+      .select({ id: odontoPortalUsers.id })
+      .from(odontoPortalUsers)
+      .where(eq(odontoPortalUsers.username, username))
+      .limit(1);
+    if (existing) {
+      res.status(409).json({ error: "Este nome de usuário já está em uso." });
+      return;
+    }
+    const id = crypto.randomUUID();
+    await db.insert(odontoPortalUsers).values({
+      id,
+      username,
+      email: `${username}@portal.local`,
+      displayName,
+      passwordHash: await passwordHash(password),
+      role: "member",
+      accountType: requestedType,
+      accountStatus: "pending",
+      managerId: null,
+      workspaceOwnerId: id,
+      mustChangePassword: false,
+      isActive: false,
+      teamMemberLimit: requestedType === "manager" ? 10 : 0,
+    });
+    const creators = await db
+      .select({ id: odontoPortalUsers.id })
+      .from(odontoPortalUsers)
+      .where(
+        and(
+          eq(odontoPortalUsers.accountType, "creator"),
+          eq(odontoPortalUsers.isActive, true),
+        ),
+      );
+    if (creators.length) {
+      await db.insert(odontoPortalNotifications).values(
+        creators.map((creator) => ({
+          id: crypto.randomUUID(),
+          userId: creator.id,
+          title: "Novo pedido de acesso",
+          body: `${displayName} (@${username}) solicitou um ambiente ${
+            requestedType === "manager"
+              ? "de gerente com equipe"
+              : "individual privado"
+          }.`,
+          kind: "access_request",
+        })),
+      );
+    }
+    res.status(202).json({
+      message:
+        "Pedido enviado. Seu acesso será liberado depois da aprovação do administrador.",
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Unable to request Odonto portal access");
+    res.status(503).json({ error: "Não foi possível enviar o pedido agora." });
+  }
 });
 
 router.post("/odonto-portal/auth/login", loginRateLimit(), async (req, res) => {
@@ -116,6 +189,13 @@ router.post("/odonto-portal/auth/login", loginRateLimit(), async (req, res) => {
       .limit(1);
     if (!record || !(await passwordMatches(password, record.passwordHash))) {
       res.status(401).json({ error: "Nome de usuário ou senha incorretos." });
+      return;
+    }
+    if (record.accountStatus === "pending") {
+      res.status(403).json({
+        error:
+          "Seu pedido ainda está aguardando aprovação do administrador.",
+      });
       return;
     }
     if (!record.isActive) {
@@ -137,6 +217,11 @@ router.post("/odonto-portal/auth/login", loginRateLimit(), async (req, res) => {
       displayName: record.displayName,
       role: record.role === "admin" ? ("admin" as const) : ("member" as const),
       accountType,
+      accountStatus: (["pending", "active", "suspended"].includes(
+        record.accountStatus,
+      )
+        ? record.accountStatus
+        : "active") as PortalAccountStatus,
       managerId: record.managerId,
       workspaceOwnerId: record.workspaceOwnerId || record.id,
       mustChangePassword: record.mustChangePassword,
@@ -331,6 +416,7 @@ router.get("/odonto-portal/admin/users", async (req, res) => {
       displayName: odontoPortalUsers.displayName,
       role: odontoPortalUsers.role,
       accountType: odontoPortalUsers.accountType,
+      accountStatus: odontoPortalUsers.accountStatus,
       managerId: odontoPortalUsers.managerId,
       workspaceOwnerId: odontoPortalUsers.workspaceOwnerId,
       mustChangePassword: odontoPortalUsers.mustChangePassword,
@@ -440,6 +526,7 @@ router.post("/odonto-portal/admin/users", async (req, res) => {
         passwordHash: await passwordHash(password),
         role: "member",
         accountType: requestedType,
+        accountStatus: "active",
         managerId,
         workspaceOwnerId,
         mustChangePassword: true,
@@ -452,6 +539,7 @@ router.post("/odonto-portal/admin/users", async (req, res) => {
         displayName: odontoPortalUsers.displayName,
         role: odontoPortalUsers.role,
         accountType: odontoPortalUsers.accountType,
+        accountStatus: odontoPortalUsers.accountStatus,
         managerId: odontoPortalUsers.managerId,
         workspaceOwnerId: odontoPortalUsers.workspaceOwnerId,
         mustChangePassword: odontoPortalUsers.mustChangePassword,
@@ -520,12 +608,29 @@ router.patch("/odonto-portal/admin/users/:id", async (req, res) => {
   }
   const requestedDisplayName = cleanText(req.body?.displayName, 80);
   const displayName = requestedDisplayName || target.displayName;
-  const isActive =
-    typeof req.body?.isActive === "boolean"
+  const requestedStatus = cleanText(req.body?.accountStatus, 20);
+  const requestedAccountType = cleanText(
+    req.body?.accountType,
+    20,
+  ) as PortalAccountType;
+  const accountStatus = (["pending", "active", "suspended"].includes(
+    requestedStatus,
+  )
+    ? requestedStatus
+    : typeof req.body?.isActive === "boolean"
       ? req.body.isActive
-      : target.isActive;
+        ? "active"
+        : "suspended"
+      : target.accountStatus) as PortalAccountStatus;
+  const accountType =
+    principal.accountType === "creator" &&
+    target.accountType !== "creator" &&
+    ["manager", "individual"].includes(requestedAccountType)
+      ? requestedAccountType
+      : target.accountType;
+  const isActive = accountStatus === "active";
   const teamMemberLimit =
-    principal.accountType === "creator" && target.accountType === "manager"
+    principal.accountType === "creator" && accountType === "manager"
       ? Math.max(
           1,
           Math.min(
@@ -544,13 +649,30 @@ router.patch("/odonto-portal/admin/users/:id", async (req, res) => {
     res.status(400).json({ error: "Você não pode suspender a própria conta." });
     return;
   }
+  if (
+    principal.accountType !== "creator" &&
+    target.accountStatus === "pending"
+  ) {
+    res.status(403).json({ error: "Somente o criador aprova novos acessos." });
+    return;
+  }
   const [updated] = await db
     .update(odontoPortalUsers)
-    .set({ displayName, isActive, teamMemberLimit })
+    .set({
+      displayName,
+      accountType,
+      accountStatus,
+      isActive,
+      managerId: target.managerId,
+      workspaceOwnerId: target.workspaceOwnerId || target.id,
+      teamMemberLimit: accountType === "manager" ? teamMemberLimit : 0,
+    })
     .where(eq(odontoPortalUsers.id, target.id))
     .returning({
       id: odontoPortalUsers.id,
       displayName: odontoPortalUsers.displayName,
+      accountType: odontoPortalUsers.accountType,
+      accountStatus: odontoPortalUsers.accountStatus,
       isActive: odontoPortalUsers.isActive,
       teamMemberLimit: odontoPortalUsers.teamMemberLimit,
     });

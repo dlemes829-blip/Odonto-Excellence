@@ -143,12 +143,14 @@ type PortalEnvelope = {
   revision: number;
 };
 type PortalAccountType = "creator" | "manager" | "member" | "individual";
+type PortalAccountStatus = "pending" | "active" | "suspended";
 type PortalUser = {
   id: string;
   username: string;
   displayName: string;
   role: "admin" | "member";
   accountType: PortalAccountType;
+  accountStatus: PortalAccountStatus;
   managerId: string | null;
   workspaceOwnerId: string;
   mustChangePassword: boolean;
@@ -849,6 +851,7 @@ function AppShell({
 }) {
   const portalUser = useContext(PortalAuthContext);
   const notificationCenter = useContext(NotificationContext);
+  const [, setLocation] = useLocation();
   const active =
     store.collaborators.find((p) => p.id === store.activeId) ??
     store.collaborators[0];
@@ -870,6 +873,7 @@ function AppShell({
             id: "pending-system",
             title: "Agenda precisa de atenção",
             body: `${pendingCount} agendamento${pendingCount === 1 ? "" : "s"} aguardando confirmação.`,
+            kind: "system",
             createdAt: new Date().toISOString(),
             readAt: null,
           },
@@ -946,6 +950,10 @@ function AppShell({
                         onClick={() => {
                           if (!item.id.endsWith("-system"))
                             void notificationCenter.markRead(item.id);
+                          if (item.kind === "access_request") {
+                            setNotificationsOpen(false);
+                            setLocation("/admin");
+                          }
                         }}
                       >
                         <span className="notification-item-icon">
@@ -1969,9 +1977,20 @@ function Access({
   onAuthenticated: (user: PortalUser) => void;
 }) {
   const [, setLocation] = useLocation();
+  const [mode, setMode] = useState<"login" | "request">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [requestForm, setRequestForm] = useState({
+    displayName: "",
+    username: "",
+    password: "",
+    accountType: "individual" as Extract<
+      PortalAccountType,
+      "manager" | "individual"
+    >,
+  });
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(event: React.FormEvent) {
@@ -2001,6 +2020,48 @@ function Access({
         reason instanceof Error
           ? reason.message
           : "Não foi possível continuar.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestAccess(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+    setBusy(true);
+    try {
+      const response = await fetch(
+        `${PORTAL_API_URL}/odonto-portal/auth/register`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestForm),
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      if (!response.ok)
+        throw new Error(body.error ?? "Não foi possível enviar o pedido.");
+      setSuccess(
+        body.message ??
+          "Pedido enviado. Aguarde a aprovação do administrador.",
+      );
+      setRequestForm({
+        displayName: "",
+        username: "",
+        password: "",
+        accountType: "individual",
+      });
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível enviar o pedido.",
       );
     } finally {
       setBusy(false);
@@ -2042,44 +2103,152 @@ function Access({
             <div className="eyebrow">Acesso seguro</div>
             <h2 className="display-title text-4xl mt-3">Entre na sua conta.</h2>
             <p className="text-sm text-muted-foreground mt-3">
-              Use as credenciais fornecidas pelo administrador ou pelo gerente
-              da sua equipe.
+              Entre com seu acesso ou envie um pedido para o administrador
+              aprovar seu ambiente.
             </p>
           </div>
-          <form className="space-y-4 mt-7" onSubmit={submit}>
-            <label>
-              <span className="label-text">Nome de usuário</span>
-              <input
-                className="input-field"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                minLength={3}
-                maxLength={32}
-                pattern="[A-Za-z0-9._-]+"
-                required
-              />
-            </label>
-            <label>
-              <span className="label-text">Senha</span>
-              <input
-                className="input-field"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                minLength={6}
-                required
-              />
-            </label>
-            {error && (
-              <p className="text-xs text-destructive font-semibold">{error}</p>
-            )}
-            <button className="button-primary w-full" disabled={busy}>
-              {busy ? "Validando acesso..." : "Entrar no portal"}{" "}
-              <ArrowRight size={14} />
+          <div className="access-switch mt-7">
+            <button
+              type="button"
+              className={mode === "login" ? "active" : ""}
+              onClick={() => {
+                setMode("login");
+                setError("");
+                setSuccess("");
+              }}
+            >
+              Entrar
             </button>
-          </form>
+            <button
+              type="button"
+              className={mode === "request" ? "active" : ""}
+              onClick={() => {
+                setMode("request");
+                setError("");
+                setSuccess("");
+              }}
+            >
+              Solicitar acesso
+            </button>
+          </div>
+          {mode === "login" ? (
+            <form className="space-y-4 mt-7" onSubmit={submit}>
+              <label>
+                <span className="label-text">Nome de usuário</span>
+                <input
+                  className="input-field"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  minLength={3}
+                  maxLength={32}
+                  pattern="[A-Za-z0-9._-]+"
+                  required
+                />
+              </label>
+              <label>
+                <span className="label-text">Senha</span>
+                <input
+                  className="input-field"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  minLength={6}
+                  required
+                />
+              </label>
+              {error && (
+                <p className="text-xs text-destructive font-semibold">
+                  {error}
+                </p>
+              )}
+              <button className="button-primary w-full" disabled={busy}>
+                {busy ? "Validando acesso..." : "Entrar no portal"}{" "}
+                <ArrowRight size={14} />
+              </button>
+            </form>
+          ) : (
+            <form className="space-y-4 mt-7" onSubmit={requestAccess}>
+              <label>
+                <span className="label-text">Nome completo</span>
+                <input
+                  className="input-field"
+                  value={requestForm.displayName}
+                  onChange={(e) =>
+                    setRequestForm((current) => ({
+                      ...current,
+                      displayName: e.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                <span className="label-text">Nome de usuário</span>
+                <input
+                  className="input-field"
+                  value={requestForm.username}
+                  onChange={(e) =>
+                    setRequestForm((current) => ({
+                      ...current,
+                      username: e.target.value,
+                    }))
+                  }
+                  autoComplete="username"
+                  minLength={3}
+                  maxLength={32}
+                  pattern="[A-Za-z0-9._-]+"
+                  required
+                />
+              </label>
+              <label>
+                <span className="label-text">Senha</span>
+                <input
+                  className="input-field"
+                  type="password"
+                  value={requestForm.password}
+                  onChange={(e) =>
+                    setRequestForm((current) => ({
+                      ...current,
+                      password: e.target.value,
+                    }))
+                  }
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+              </label>
+              <label>
+                <span className="label-text">Tipo de acesso</span>
+                <select
+                  className="input-field"
+                  value={requestForm.accountType}
+                  onChange={(e) =>
+                    setRequestForm((current) => ({
+                      ...current,
+                      accountType: e.target.value as "manager" | "individual",
+                    }))
+                  }
+                >
+                  <option value="individual">Ambiente individual privado</option>
+                  <option value="manager">Gerente com equipe</option>
+                </select>
+              </label>
+              {error && (
+                <p className="text-xs text-destructive font-semibold">
+                  {error}
+                </p>
+              )}
+              {success && (
+                <p className="text-xs text-primary font-semibold">{success}</p>
+              )}
+              <button className="button-primary w-full" disabled={busy}>
+                {busy ? "Enviando pedido..." : "Enviar para aprovação"}{" "}
+                <ArrowRight size={14} />
+              </button>
+            </form>
+          )}
           <p className="text-[11px] text-muted-foreground mt-7 leading-relaxed">
             Ao continuar, você concorda com o uso deste ambiente profissional
             privado.
@@ -3770,6 +3939,8 @@ function Admin({
     patch: {
       displayName?: string;
       isActive?: boolean;
+      accountStatus?: PortalAccountStatus;
+      accountType?: PortalAccountType;
       teamMemberLimit?: number;
     },
   ) {
@@ -3793,7 +3964,14 @@ function Admin({
     notify("Configurações da conta atualizadas.");
   }
 
-  const visibleUsers = users.filter((account) =>
+  const managedAccounts = users.filter((account) => account.id !== portalUser.id);
+  const pendingAccounts = managedAccounts.filter(
+    (account) => account.accountStatus === "pending",
+  );
+  const activeAccounts = managedAccounts.filter(
+    (account) => account.accountStatus !== "pending",
+  );
+  const visibleUsers = activeAccounts.filter((account) =>
     `${account.displayName} ${account.username}`
       .toLowerCase()
       .includes(search.toLowerCase()),
@@ -3825,27 +4003,27 @@ function Admin({
         <div className="admin-kpi-grid mb-6">
           <StatCard
             label="Contas ativas"
-            value={`${users.filter((u) => u.isActive).length}`}
-            detail={`${users.length} cadastradas`}
+            value={`${managedAccounts.filter((u) => u.isActive).length}`}
+            detail={`${managedAccounts.length} gerenciáveis`}
             icon={UsersRound}
           />
           <StatCard
             label="Agora no portal"
-            value={`${users.filter((u) => u.online).length}`}
+            value={`${managedAccounts.filter((u) => u.online).length}`}
             detail="atividade nos últimos 90s"
             icon={Zap}
             accent
           />
           <StatCard
             label="Gerentes"
-            value={`${users.filter((u) => u.accountType === "manager").length}`}
+            value={`${managedAccounts.filter((u) => u.accountType === "manager").length}`}
             detail="ambientes de equipe"
             icon={Building2}
           />
           <StatCard
-            label="Primeiro acesso"
-            value={`${users.filter((u) => u.mustChangePassword).length}`}
-            detail="trocas de senha pendentes"
+            label="Pedidos"
+            value={`${pendingAccounts.length}`}
+            detail="aguardando aprovação"
             icon={LockKeyhole}
           />
         </div>
@@ -3859,7 +4037,7 @@ function Admin({
                 </p>
               </div>
               <span className="chip-red">
-                {users.filter((u) => u.online).length} online
+                {managedAccounts.filter((u) => u.online).length} online
               </span>
               <label className="admin-search">
                 <Search size={14} />
@@ -3870,6 +4048,33 @@ function Admin({
                 />
               </label>
             </div>
+            {pendingAccounts.length > 0 && (
+              <div className="admin-request-strip">
+                <div className="eyebrow">Pedidos de acesso</div>
+                {pendingAccounts.map((account) => (
+                  <div key={account.id} className="admin-request-row">
+                    <span className="avatar w-9 h-9">
+                      {initials(account.displayName)}
+                    </span>
+                    <div className="min-w-0">
+                      <b>{account.displayName}</b>
+                      <small>
+                        @{account.username} ·{" "}
+                        {account.accountType === "manager"
+                          ? "Gerente com equipe"
+                          : "Individual privado"}
+                      </small>
+                    </div>
+                    <button
+                      className="button-secondary ml-auto"
+                      onClick={() => setSelectedUserId(account.id)}
+                    >
+                      <ShieldCheck size={14} /> Configurar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="divide-y divide-border">
               {visibleUsers.map((account) => (
                 <div key={account.id} className="p-5">
@@ -4089,6 +4294,11 @@ function Admin({
                   <p className="text-xs text-muted-foreground">
                     @{selectedUser.username} · {selectedUser.accountType}
                   </p>
+                  {selectedUser.accountStatus === "pending" && (
+                    <span className="chip-coral mt-2 inline-flex">
+                      Aguardando aprovação
+                    </span>
+                  )}
                 </div>
               </div>
               <button
@@ -4135,6 +4345,26 @@ function Admin({
                   }}
                 />
               </label>
+              {portalUser.accountType === "creator" &&
+                selectedUser.accountType !== "creator" && (
+                  <label>
+                    <span className="label-text">Tipo de ambiente</span>
+                    <select
+                      className="input-field"
+                      defaultValue={selectedUser.accountType}
+                      onChange={(e) =>
+                        void updateAccount(selectedUser.id, {
+                          accountType: e.target.value as PortalAccountType,
+                        })
+                      }
+                    >
+                      <option value="individual">
+                        Individual e privado
+                      </option>
+                      <option value="manager">Gerente com equipe</option>
+                    </select>
+                  </label>
+                )}
               {selectedUser.accountType === "manager" && (
                 <label>
                   <span className="label-text">Limite da equipe</span>
@@ -4154,27 +4384,54 @@ function Admin({
               )}
             </div>
             <div className="flex flex-wrap gap-2 mt-6">
-              <button
-                className={
-                  selectedUser.isActive ? "button-danger" : "button-primary"
-                }
-                disabled={selectedUser.id === portalUser.id}
-                onClick={() =>
-                  void updateAccount(selectedUser.id, {
-                    isActive: !selectedUser.isActive,
-                  })
-                }
-              >
-                {selectedUser.isActive ? (
-                  <>
-                    <Ban size={14} /> Suspender acesso
-                  </>
-                ) : (
-                  <>
-                    <Check size={14} /> Reativar acesso
-                  </>
-                )}
-              </button>
+              {selectedUser.accountStatus === "pending" ? (
+                <>
+                  <button
+                    className="button-primary"
+                    onClick={() =>
+                      void updateAccount(selectedUser.id, {
+                        accountStatus: "active",
+                      })
+                    }
+                  >
+                    <Check size={14} /> Aprovar acesso
+                  </button>
+                  <button
+                    className="button-danger"
+                    onClick={() =>
+                      void updateAccount(selectedUser.id, {
+                        accountStatus: "suspended",
+                      })
+                    }
+                  >
+                    <Ban size={14} /> Recusar pedido
+                  </button>
+                </>
+              ) : (
+                <button
+                  className={
+                    selectedUser.isActive ? "button-danger" : "button-primary"
+                  }
+                  disabled={selectedUser.id === portalUser.id}
+                  onClick={() =>
+                    void updateAccount(selectedUser.id, {
+                      accountStatus: selectedUser.isActive
+                        ? "suspended"
+                        : "active",
+                    })
+                  }
+                >
+                  {selectedUser.isActive ? (
+                    <>
+                      <Ban size={14} /> Suspender acesso
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} /> Reativar acesso
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 className="button-secondary"
                 onClick={() => {

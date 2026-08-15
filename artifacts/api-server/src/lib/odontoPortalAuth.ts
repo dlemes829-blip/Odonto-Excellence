@@ -16,12 +16,14 @@ let bootstrapComplete = false;
 
 export type PortalRole = "admin" | "member";
 export type PortalAccountType = "creator" | "manager" | "member" | "individual";
+export type PortalAccountStatus = "pending" | "active" | "suspended";
 export type PortalPrincipal = {
   id: string;
   username: string;
   displayName: string;
   role: PortalRole;
   accountType: PortalAccountType;
+  accountStatus: PortalAccountStatus;
   managerId: string | null;
   workspaceOwnerId: string;
   mustChangePassword: boolean;
@@ -62,6 +64,7 @@ export function publicUser(user: PortalPrincipal) {
     displayName: user.displayName,
     role: user.role,
     accountType: user.accountType,
+    accountStatus: user.accountStatus,
     managerId: user.managerId,
     workspaceOwnerId: user.workspaceOwnerId,
     mustChangePassword: user.mustChangePassword,
@@ -74,6 +77,9 @@ export async function bootstrapAdmin() {
   if (bootstrapComplete) return;
   await db.execute(
     sql`ALTER TABLE odonto_portal_users ADD COLUMN IF NOT EXISTS account_type text NOT NULL DEFAULT 'individual'`,
+  );
+  await db.execute(
+    sql`ALTER TABLE odonto_portal_users ADD COLUMN IF NOT EXISTS account_status text NOT NULL DEFAULT 'active'`,
   );
   await db.execute(
     sql`ALTER TABLE odonto_portal_users ADD COLUMN IF NOT EXISTS manager_id text`,
@@ -97,6 +103,9 @@ export async function bootstrapAdmin() {
     sql`UPDATE odonto_portal_users SET account_type = CASE WHEN role = 'admin' THEN 'creator' ELSE 'individual' END WHERE account_type IS NULL`,
   );
   await db.execute(
+    sql`UPDATE odonto_portal_users SET account_status = CASE WHEN is_active = false THEN 'suspended' ELSE 'active' END WHERE account_status IS NULL OR account_status = ''`,
+  );
+  await db.execute(
     sql`UPDATE odonto_portal_users SET workspace_owner_id = id WHERE workspace_owner_id IS NULL`,
   );
   await db.execute(
@@ -104,6 +113,9 @@ export async function bootstrapAdmin() {
   );
   await db.execute(
     sql`CREATE INDEX IF NOT EXISTS odonto_portal_users_workspace_idx ON odonto_portal_users (workspace_owner_id)`,
+  );
+  await db.execute(
+    sql`CREATE INDEX IF NOT EXISTS odonto_portal_users_status_idx ON odonto_portal_users (account_status)`,
   );
   const username = normalizedUsername(
     process.env.ODONTO_ADMIN_USERNAME ?? "daniel",
@@ -114,6 +126,7 @@ export async function bootstrapAdmin() {
     .select({
       id: odontoPortalUsers.id,
       accountType: odontoPortalUsers.accountType,
+      accountStatus: odontoPortalUsers.accountStatus,
       passwordHash: odontoPortalUsers.passwordHash,
     })
     .from(odontoPortalUsers)
@@ -129,6 +142,7 @@ export async function bootstrapAdmin() {
       .set({
         role: "admin",
         accountType: "creator",
+        accountStatus: "active",
         managerId: null,
         workspaceOwnerId: existing.id,
         mustChangePassword: false,
@@ -155,6 +169,7 @@ export async function bootstrapAdmin() {
     passwordHash: await passwordHash(password),
     role: "admin",
     accountType: "creator",
+    accountStatus: "active",
     managerId: null,
     workspaceOwnerId: id,
     mustChangePassword: false,
@@ -179,6 +194,7 @@ export async function attachPortalUser(
         displayName: odontoPortalUsers.displayName,
         role: odontoPortalUsers.role,
         accountType: odontoPortalUsers.accountType,
+        accountStatus: odontoPortalUsers.accountStatus,
         managerId: odontoPortalUsers.managerId,
         workspaceOwnerId: odontoPortalUsers.workspaceOwnerId,
         mustChangePassword: odontoPortalUsers.mustChangePassword,
@@ -206,6 +222,11 @@ export async function attachPortalUser(
         )
           ? session.accountType
           : "individual") as PortalAccountType,
+        accountStatus: (["pending", "active", "suspended"].includes(
+          session.accountStatus,
+        )
+          ? session.accountStatus
+          : "active") as PortalAccountStatus,
         workspaceOwnerId: session.workspaceOwnerId || session.id,
       };
   } catch {

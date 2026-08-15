@@ -33,6 +33,7 @@ export const odontoPortalUsers = pgTable(
     passwordHash: text("password_hash").notNull(),
     role: text("role").notNull().default("member"),
     accountType: text("account_type").notNull().default("individual"),
+    accountStatus: text("account_status").notNull().default("active"),
     managerId: text("manager_id"),
     workspaceOwnerId: text("workspace_owner_id"),
     mustChangePassword: boolean("must_change_password").notNull().default(true),
