@@ -1,0 +1,14 @@
+/* Public access is intentionally role-neutral. Account type is assigned by the creator. */
+.access-page .access-form form label:has(> select) {
+  display: none !important;
+}
+
+/* Never surface application notifications/toasts before authentication. */
+body:has(.access-page) .toast-note,
+body:has(.access-page) [data-radix-toast-viewport],
+body:has(.access-page) [data-sonner-toaster],
+body:has(main.min-h-dvh) .toast-note,
+body:has(main.min-h-dvh) [data-radix-toast-viewport],
+body:has(main.min-h-dvh) [data-sonner-toaster] {
+  display: none !important;
+}
