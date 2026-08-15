@@ -17,6 +17,7 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const usernamePattern = /^[a-z0-9][a-z0-9._-]{2,31}$/;
+const approvableTypes = new Set(["manager", "individual"]);
 
 const cleanText = (value: unknown, max: number) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -30,13 +31,7 @@ router.use((req, res, next) => {
     .catch(next);
 });
 
-/**
- * Public registration policy.
- *
- * The requester never chooses an account type. Every public request enters as a
- * pending, inactive neutral `member`. The creator must explicitly change it to
- * `manager` or `individual` before activation.
- */
+/** Public requests never choose privileges. */
 router.post(
   "/odonto-portal/auth/register",
   loginRateLimit(),
@@ -115,26 +110,15 @@ router.post(
   },
 );
 
-/**
- * Prevent a pending neutral request from being activated before the creator has
- * explicitly assigned `manager` or `individual`.
- */
+/** A creator must assign Manager or Individual in the same approval request. */
 router.patch("/odonto-portal/admin/users/:id", async (req, res, next) => {
   const wantsActivation =
     req.body?.accountStatus === "active" || req.body?.isActive === true;
-
-  if (!wantsActivation) {
-    next();
-    return;
-  }
+  if (!wantsActivation) return next();
 
   const principal = requirePortalManager(req as PortalRequest, res);
   if (!principal) return;
-
-  if (principal.accountType !== "creator") {
-    next();
-    return;
-  }
+  if (principal.accountType !== "creator") return next();
 
   const [target] = await db
     .select({
@@ -145,13 +129,18 @@ router.patch("/odonto-portal/admin/users/:id", async (req, res, next) => {
     .where(eq(odontoPortalUsers.id, req.params.id))
     .limit(1);
 
+  const requestedType = cleanText(req.body?.accountType, 20);
+  const effectiveType = approvableTypes.has(requestedType)
+    ? requestedType
+    : target?.accountType;
+
   if (
     target?.accountStatus === "pending" &&
-    !["manager", "individual"].includes(target.accountType)
+    (!effectiveType || !approvableTypes.has(effectiveType))
   ) {
     res.status(400).json({
       error:
-        "Defina o tipo de acesso como Gerente ou Individual antes de aprovar esta conta.",
+        "Escolha Gerente ou Individual no momento da aprovação desta conta.",
     });
     return;
   }
