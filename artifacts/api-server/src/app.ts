@@ -4,8 +4,16 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import {
+  enforceTrustedOrigin,
+  reportCorsConfiguration,
+  securityHeaders,
+  trustedPortalOrigins,
+} from "./middlewares/httpSecurity";
 
 const app: Express = express();
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
@@ -19,23 +27,26 @@ app.use(
         };
       },
       res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
+        return { statusCode: res.statusCode };
       },
     },
   }),
 );
-const portalOrigin = process.env.PORTAL_ORIGIN;
+
+const portalOrigins = trustedPortalOrigins();
+reportCorsConfiguration();
 app.use(
   cors({
-    origin: portalOrigin ? [portalOrigin] : true,
+    origin: portalOrigins.length ? portalOrigins : true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
+    maxAge: 600,
   }),
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(securityHeaders);
+app.use(enforceTrustedOrigin);
+app.use(express.json({ limit: "1.1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "32kb" }));
 app.use(cookieParser());
 
 app.use("/api", router);
