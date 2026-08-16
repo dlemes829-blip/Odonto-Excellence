@@ -101,19 +101,22 @@ router.post("/odonto-portal/auth/register", loginRateLimit(), async (req, res) =
   const displayName = cleanText(req.body?.displayName, 80);
   const password =
     typeof req.body?.password === "string" ? req.body.password : "";
-  const requestedType = cleanText(
-    req.body?.accountType,
-    20,
-  ) as PortalAccountType;
+  // Security: accountType is NEVER accepted from the public registration
+  // request body. Whatever the client sends here is ignored. The account
+  // is created as a neutral, inactive, pending placeholder. Only the
+  // creator can assign the real accountType ("manager" or "individual"),
+  // exclusively at approval time via PATCH /odonto-portal/admin/users/:id.
+  const requestedType = "individual" as const;
   if (
     !usernamePattern.test(username) ||
     !displayName ||
     password.length < 8 ||
-    !["manager", "individual"].includes(requestedType)
+    !/[A-Za-z]/.test(password) ||
+    !/\d/.test(password)
   ) {
     res.status(400).json({
       error:
-        "Informe nome, usuário, senha com 8 caracteres e o tipo de acesso.",
+        "Use pelo menos 8 caracteres, com letra e número, no nome de usuário e na senha.",
     });
     return;
   }
@@ -141,7 +144,7 @@ router.post("/odonto-portal/auth/register", loginRateLimit(), async (req, res) =
       workspaceOwnerId: id,
       mustChangePassword: false,
       isActive: false,
-      teamMemberLimit: requestedType === "manager" ? 10 : 0,
+      teamMemberLimit: 0,
     });
     const creators = await db
       .select({ id: odontoPortalUsers.id })
@@ -158,11 +161,7 @@ router.post("/odonto-portal/auth/register", loginRateLimit(), async (req, res) =
           id: crypto.randomUUID(),
           userId: creator.id,
           title: "Novo pedido de acesso",
-          body: `${displayName} (@${username}) solicitou um ambiente ${
-            requestedType === "manager"
-              ? "de gerente com equipe"
-              : "individual privado"
-          }.`,
+          body: `${displayName} (@${username}) solicitou acesso ao portal. Defina o tipo de conta (gerente ou individual) ao aprovar.`,
           kind: "access_request",
         })),
       );

@@ -46,11 +46,14 @@ import {
   RotateCcw,
   Save,
   Search,
+  Send,
   Settings2,
   SlidersHorizontal,
   ShieldCheck,
   Shield,
+  Smile,
   Sparkles,
+  Paperclip,
   Target,
   Trash2,
   TrendingUp,
@@ -64,7 +67,66 @@ import {
 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import NotFound from "@/pages/not-found";
+
+/**
+ * Reusable confirmation dialog for destructive/irreversible actions
+ * (deleting an appointment, suspending an account, rejecting a request).
+ * Before this, those actions fired immediately on a single click with no
+ * way to back out - a real risk of losing patient data or locking someone
+ * out by accident.
+ */
+function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Confirmar",
+  destructive = true,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className={
+              destructive
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : undefined
+            }
+          >
+            {confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 /* ─── TYPES ─── */
 type Gender = "feminine" | "masculine" | "neutral";
@@ -716,6 +778,7 @@ function Sidebar({
     { href: `/colaborador/${activeId}`, label: "Meu dia", icon: UserRound },
     { href: "/historico", label: "Histórico", icon: FileClock },
     { href: "/treinamento", label: "Ambiente Videos", icon: GraduationCap },
+    { href: "/chat", label: "Chat", icon: MessageCircle },
     { href: "/configuracoes", label: "Configurações", icon: Settings2 },
   ];
   if (
@@ -1984,10 +2047,6 @@ function Access({
     displayName: "",
     username: "",
     password: "",
-    accountType: "individual" as Extract<
-      PortalAccountType,
-      "manager" | "individual"
-    >,
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -2055,7 +2114,6 @@ function Access({
         displayName: "",
         username: "",
         password: "",
-        accountType: "individual",
       });
     } catch (reason) {
       setError(
@@ -2218,22 +2276,9 @@ function Access({
                   minLength={8}
                   required
                 />
-              </label>
-              <label>
-                <span className="label-text">Tipo de acesso</span>
-                <select
-                  className="input-field"
-                  value={requestForm.accountType}
-                  onChange={(e) =>
-                    setRequestForm((current) => ({
-                      ...current,
-                      accountType: e.target.value as "manager" | "individual",
-                    }))
-                  }
-                >
-                  <option value="individual">Ambiente individual privado</option>
-                  <option value="manager">Gerente com equipe</option>
-                </select>
+                <span className="text-xs text-muted-foreground">
+                  Mínimo de 8 caracteres, com letra e número.
+                </span>
               </label>
               {error && (
                 <p className="text-xs text-destructive font-semibold">
@@ -2628,6 +2673,8 @@ function CollaboratorWorkspace({
   const [showForm, setShowForm] = useState(false);
   const [showGoal, setShowGoal] = useState(false);
   const [editing, setEditing] = useState<Appointment | null>(null);
+  const [confirmDeleteAppt, setConfirmDeleteAppt] =
+    useState<Appointment | null>(null);
   const updatePerson = (updated: Collaborator) =>
     setStore({
       ...store,
@@ -2802,7 +2849,7 @@ function CollaboratorWorkspace({
                       </button>
                       <button
                         className="button-ghost button-icon !text-destructive"
-                        onClick={() => removeAppt(a.id)}
+                        onClick={() => setConfirmDeleteAppt(a)}
                         aria-label={`Excluir ${a.patient}`}
                       >
                         <Trash2 size={14} />
@@ -2902,6 +2949,21 @@ function CollaboratorWorkspace({
           }}
         />
       )}
+      <ConfirmDialog
+        open={confirmDeleteAppt !== null}
+        title="Excluir este encontro?"
+        description={
+          confirmDeleteAppt
+            ? `Isso remove permanentemente o registro de ${confirmDeleteAppt.patient}. Essa ação não pode ser desfeita.`
+            : ""
+        }
+        confirmLabel="Excluir"
+        onCancel={() => setConfirmDeleteAppt(null)}
+        onConfirm={() => {
+          if (confirmDeleteAppt) removeAppt(confirmDeleteAppt.id);
+          setConfirmDeleteAppt(null);
+        }}
+      />
     </AppShell>
   );
 }
@@ -3293,6 +3355,246 @@ function Training({
               ))}
             </div>
           </section>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+/* ─── CHAT (preview, feature-flagged as not yet released) ─── */
+const CHAT_LOCKED_MESSAGE = "Funcionalidade ainda não liberada pelo dev.";
+const EMOJI_PICKER_OPTIONS = [
+  "😀", "😁", "😂", "🙂", "😉", "😊", "😍", "🤔",
+  "👍", "🙏", "👏", "🎉", "❤️", "🦷", "✅", "📅",
+];
+
+function ChatComposeLocked({ notify }: { notify: (m: string, k?: ToastKind) => void }) {
+  const [draft, setDraft] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const lock = () => notify(CHAT_LOCKED_MESSAGE, "notify");
+
+  return (
+    <div className="border-t border-border p-3 sm:p-4 bg-background">
+      {showEmoji && (
+        <div className="panel p-3 mb-2 grid grid-cols-8 gap-1 max-w-xs">
+          {EMOJI_PICKER_OPTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              className="text-lg hover:bg-muted rounded-md p-1.5"
+              onClick={() => {
+                setDraft((current) => current + emoji);
+                setShowEmoji(false);
+                lock();
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="button-ghost button-icon shrink-0"
+          onClick={() => setShowEmoji((v) => !v)}
+          aria-label="Emojis"
+        >
+          <Smile size={18} />
+        </button>
+        <button
+          type="button"
+          className="button-ghost button-icon shrink-0"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Anexar imagem"
+        >
+          <Paperclip size={18} />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={() => {
+            lock();
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+        />
+        <input
+          className="input-field flex-1"
+          placeholder="Escreva uma mensagem..."
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onPaste={(e) => {
+            if (e.clipboardData.files.length > 0) lock();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              lock();
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="button-primary button-icon shrink-0"
+          onClick={lock}
+          aria-label="Enviar mensagem"
+        >
+          <Send size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKind) => void }) {
+  const [chatEnabled, setChatEnabled] = useState(false);
+  const [activeContactId, setActiveContactId] = useState<string | null>(
+    store.collaborators[0]?.id ?? null,
+  );
+
+  useEffect(() => {
+    void fetch(`${PORTAL_API_URL}/odonto-portal/settings`, {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { chatEnabled?: boolean } | null) => {
+        if (body) setChatEnabled(body.chatEnabled === true);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const activeContact =
+    store.collaborators.find((c) => c.id === activeContactId) ??
+    store.collaborators[0];
+
+  const previewMessages = activeContact
+    ? [
+        {
+          id: "m1",
+          fromMe: false,
+          text: `Oi! Aqui é a pré-visualização da conversa com ${activeContact.name}.`,
+          time: "09:12",
+        },
+        {
+          id: "m2",
+          fromMe: true,
+          text: "Quando o recurso for liberado pelo desenvolvedor, as mensagens de verdade aparecem aqui.",
+          time: "09:13",
+        },
+      ]
+    : [];
+
+  return (
+    <AppShell store={store} onToggleSound={() => {}}>
+      <div className="content-wrap">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <div className="eyebrow flex items-center gap-2">
+              Comunicação da equipe
+              <span className="chip !bg-amber-500/15 !text-amber-600 !border-amber-500/30">
+                Em breve
+              </span>
+            </div>
+            <h1 className="page-title mt-3">Chat privado.</h1>
+            <p className="text-sm text-muted-foreground mt-3 max-w-lg">
+              Uma pré-visualização de como o chat vai funcionar — com emojis,
+              fotos e mensagens de texto, no estilo de um WhatsApp interno da
+              equipe.{" "}
+              {chatEnabled
+                ? "O administrador já sinalizou interesse em liberar este recurso, mas o desenvolvimento ainda está em andamento."
+                : "Ainda não foi liberado pelo administrador."}
+            </p>
+          </div>
+          <BackToMenu />
+        </div>
+
+        <div className="panel mt-9 overflow-hidden">
+          <div className="grid md:grid-cols-[280px_1fr] h-[560px]">
+            {/* Contact list */}
+            <div className="border-r border-border overflow-y-auto">
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                  <UsersRound size={14} /> Equipe
+                </div>
+              </div>
+              {store.collaborators.map((person) => (
+                <button
+                  key={person.id}
+                  onClick={() => setActiveContactId(person.id)}
+                  className={`w-full flex items-center gap-3 p-3 text-left border-b border-border/50 transition-colors ${
+                    activeContactId === person.id
+                      ? "bg-primary/5"
+                      : "hover:bg-muted/50"
+                  }`}
+                >
+                  <span className="w-9 h-9 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-sm shrink-0">
+                    {person.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold truncate">
+                      {person.name}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground truncate">
+                      {person.role}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Thread */}
+            <div className="flex flex-col min-w-0">
+              <div className="p-4 border-b border-border flex items-center gap-3">
+                {activeContact ? (
+                  <>
+                    <span className="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-xs shrink-0">
+                      {activeContact.name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="font-bold text-sm">
+                      {activeContact.name}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    Nenhum contato disponível
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
+                <div className="flex justify-center">
+                  <span className="chip !text-[10px]">
+                    Pré-visualização · nenhuma mensagem real é enviada
+                  </span>
+                </div>
+                {previewMessages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
+                        m.fromMe
+                          ? "bg-primary text-white rounded-br-sm"
+                          : "bg-background border border-border rounded-bl-sm"
+                      }`}
+                    >
+                      <p>{m.text}</p>
+                      <span
+                        className={`block text-[10px] mt-1 ${m.fromMe ? "text-white/70" : "text-muted-foreground"}`}
+                      >
+                        {m.time}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <ChatComposeLocked notify={notify} />
+            </div>
+          </div>
         </div>
       </div>
     </AppShell>
@@ -3828,6 +4130,14 @@ function Admin({
     password: "",
     accountType: "individual" as PortalAccountType,
   });
+  const [confirmAction, setConfirmAction] = useState<{
+    userId: string;
+    displayName: string;
+    kind: "suspend" | "reject";
+  } | null>(null);
+  const [chatEnabled, setChatEnabled] = useState(false);
+  const [savingChatToggle, setSavingChatToggle] = useState(false);
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   const loadUsers = useCallback(async () => {
     const response = await fetch(
@@ -3845,6 +4155,17 @@ function Admin({
     if (canManage)
       void loadUsers().catch((error: Error) => notify(error.message, "notify"));
   }, [canManage, loadUsers, notify]);
+  useEffect(() => {
+    void fetch(`${PORTAL_API_URL}/odonto-portal/settings`, {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { chatEnabled?: boolean } | null) => {
+        if (body) setChatEnabled(body.chatEnabled === true);
+      })
+      .catch(() => undefined);
+  }, []);
   if (!canManage || !portalUser) return <NotFound />;
   const currentManager = portalUser;
 
@@ -3943,6 +4264,7 @@ function Admin({
       accountType?: PortalAccountType;
       teamMemberLimit?: number;
     },
+    silent = false,
   ) {
     const response = await fetch(
       `${PORTAL_API_URL}/odonto-portal/admin/users/${userId}`,
@@ -3960,6 +4282,7 @@ function Admin({
       notify(result.error || "Não foi possível atualizar a conta.", "notify");
       return;
     }
+    if (silent) return;
     await loadUsers();
     notify("Configurações da conta atualizadas.");
   }
@@ -3971,6 +4294,54 @@ function Admin({
   const activeAccounts = managedAccounts.filter(
     (account) => account.accountStatus !== "pending",
   );
+
+  async function toggleChatFeature() {
+    if (portalUser?.accountType !== "creator") return;
+    setSavingChatToggle(true);
+    try {
+      const response = await fetch(
+        `${PORTAL_API_URL}/odonto-portal/admin/settings`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatEnabled: !chatEnabled }),
+        },
+      );
+      const result = (await response.json().catch(() => ({}))) as {
+        chatEnabled?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        notify(result.error || "Não foi possível salvar.", "notify");
+        return;
+      }
+      setChatEnabled(result.chatEnabled === true);
+      notify(
+        result.chatEnabled
+          ? "Chat sinalizado como liberado. O desenvolvimento do recurso continua em andamento."
+          : "Chat marcado como indisponível.",
+      );
+    } finally {
+      setSavingChatToggle(false);
+    }
+  }
+
+  async function bulkApprovePending() {
+    if (!pendingAccounts.length) return;
+    setBulkApproving(true);
+    try {
+      for (const account of pendingAccounts) {
+        await updateAccount(account.id, { accountStatus: "active" }, true);
+      }
+      await loadUsers();
+      notify(
+        `${pendingAccounts.length} ${pendingAccounts.length === 1 ? "pedido aprovado" : "pedidos aprovados"}.`,
+      );
+    } finally {
+      setBulkApproving(false);
+    }
+  }
   const visibleUsers = activeAccounts.filter((account) =>
     `${account.displayName} ${account.username}`
       .toLowerCase()
@@ -3996,9 +4367,53 @@ function Admin({
                 : "Crie acessos para colaboradores do seu ambiente compartilhado."}
             </p>
           </div>
-          <button className="button-secondary" onClick={() => void loadUsers()}>
-            <RotateCcw size={14} /> Atualizar
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="button-secondary"
+              onClick={() => {
+                const header = [
+                  "nome",
+                  "usuario",
+                  "tipo",
+                  "status",
+                  "ativo",
+                  "criado_em",
+                  "ultimo_acesso",
+                ];
+                const rows = managedAccounts.map((account) => [
+                  account.displayName,
+                  account.username,
+                  account.accountType,
+                  account.accountStatus,
+                  account.isActive ? "sim" : "não",
+                  account.createdAt,
+                  account.lastLoginAt ?? "",
+                ]);
+                const csv = [header, ...rows]
+                  .map((row) =>
+                    row
+                      .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+                      .join(","),
+                  )
+                  .join("\n");
+                const blob = new Blob([csv], {
+                  type: "text/csv;charset=utf-8;",
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `odonto-excellence-usuarios-${localDateKey()}.csv`;
+                link.click();
+                URL.revokeObjectURL(url);
+                notify("Exportação gerada.");
+              }}
+            >
+              <FileClock size={14} /> Exportar CSV
+            </button>
+            <button className="button-secondary" onClick={() => void loadUsers()}>
+              <RotateCcw size={14} /> Atualizar
+            </button>
+          </div>
         </div>
         <div className="admin-kpi-grid mb-6">
           <StatCard
@@ -4026,6 +4441,68 @@ function Admin({
             detail="aguardando aprovação"
             icon={LockKeyhole}
           />
+        </div>
+        <div className="panel p-5 md:p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <MessageCircle size={16} className="text-primary" />
+                <h2 className="font-bold text-sm">Chat ao vivo da equipe</h2>
+                <span className="chip !bg-amber-500/15 !text-amber-600 !border-amber-500/30 !text-[10px]">
+                  Em desenvolvimento
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5 max-w-md">
+                Controla se o portal sinaliza o chat como "liberado" para a
+                equipe. O recurso de mensagens em si (envio, fotos, emojis)
+                ainda está em desenvolvimento pelo dev e continua indisponível
+                para todos, independente deste botão.
+              </p>
+            </div>
+            {portalUser.accountType === "creator" ? (
+              <button
+                className={chatEnabled ? "button-primary" : "button-secondary"}
+                onClick={() => void toggleChatFeature()}
+                disabled={savingChatToggle}
+              >
+                {savingChatToggle ? (
+                  "Salvando..."
+                ) : chatEnabled ? (
+                  <>
+                    <Check size={14} /> Sinalizado como liberado
+                  </>
+                ) : (
+                  <>
+                    <Ban size={14} /> Liberar chat ao vivo
+                  </>
+                )}
+              </button>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Somente o criador controla este recurso.
+              </span>
+            )}
+          </div>
+          {pendingAccounts.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-5 pt-5 border-t border-border">
+              <div>
+                <h2 className="font-bold text-sm">Pedidos em massa</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Aprova todos os {pendingAccounts.length}{" "}
+                  {pendingAccounts.length === 1 ? "pedido pendente" : "pedidos pendentes"} como
+                  ambientes individuais. Você pode promover a gerente depois, um por um.
+                </p>
+              </div>
+              <button
+                className="button-secondary"
+                onClick={() => void bulkApprovePending()}
+                disabled={bulkApproving}
+              >
+                <Check size={14} />{" "}
+                {bulkApproving ? "Aprovando..." : `Aprovar todos (${pendingAccounts.length})`}
+              </button>
+            </div>
+          )}
         </div>
         <div className="grid xl:grid-cols-[1.45fr_.8fr] gap-6">
           <section className="panel overflow-hidden">
@@ -4399,8 +4876,10 @@ function Admin({
                   <button
                     className="button-danger"
                     onClick={() =>
-                      void updateAccount(selectedUser.id, {
-                        accountStatus: "suspended",
+                      setConfirmAction({
+                        userId: selectedUser.id,
+                        displayName: selectedUser.displayName,
+                        kind: "reject",
                       })
                     }
                   >
@@ -4413,13 +4892,19 @@ function Admin({
                     selectedUser.isActive ? "button-danger" : "button-primary"
                   }
                   disabled={selectedUser.id === portalUser.id}
-                  onClick={() =>
-                    void updateAccount(selectedUser.id, {
-                      accountStatus: selectedUser.isActive
-                        ? "suspended"
-                        : "active",
-                    })
-                  }
+                  onClick={() => {
+                    if (selectedUser.isActive) {
+                      setConfirmAction({
+                        userId: selectedUser.id,
+                        displayName: selectedUser.displayName,
+                        kind: "suspend",
+                      });
+                    } else {
+                      void updateAccount(selectedUser.id, {
+                        accountStatus: "active",
+                      });
+                    }
+                  }}
                 >
                   {selectedUser.isActive ? (
                     <>
@@ -4455,6 +4940,32 @@ function Admin({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={
+          confirmAction?.kind === "reject"
+            ? "Recusar este pedido de acesso?"
+            : "Suspender o acesso deste usuário?"
+        }
+        description={
+          confirmAction
+            ? confirmAction.kind === "reject"
+              ? `${confirmAction.displayName} não poderá entrar no portal. Você pode revisar o pedido novamente depois, se mudar de ideia.`
+              : `${confirmAction.displayName} perderá o acesso imediatamente e todas as sessões ativas dessa conta serão encerradas.`
+            : ""
+        }
+        confirmLabel={
+          confirmAction?.kind === "reject" ? "Recusar pedido" : "Suspender"
+        }
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (confirmAction)
+            void updateAccount(confirmAction.userId, {
+              accountStatus: "suspended",
+            });
+          setConfirmAction(null);
+        }}
+      />
     </AppShell>
   );
 }
@@ -4507,6 +5018,9 @@ function AppRouter({
       </Route>
       <Route path="/treinamento">
         <Training store={store} setStore={setStore} notify={notify} />
+      </Route>
+      <Route path="/chat">
+        <Chat store={store} notify={notify} />
       </Route>
       <Route path="/configuracoes">
         <Settings store={store} setStore={setStore} notify={notify} />
@@ -4775,7 +5289,31 @@ export default function App() {
     document.title = "Odonto Excellence · Gestão Clínica";
   }, []);
 
-  if (!authReady) return null;
+  if (!authReady)
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+        }}
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            border: "3px solid rgba(0,0,0,0.12)",
+            borderTopColor: "currentColor",
+            animation: "odonto-spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes odonto-spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   return (
     <TooltipProvider>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>

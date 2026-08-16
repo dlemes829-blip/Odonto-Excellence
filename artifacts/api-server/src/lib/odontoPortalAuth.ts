@@ -121,7 +121,14 @@ export async function bootstrapAdmin() {
     process.env.ODONTO_ADMIN_USERNAME ?? "daniel",
   );
   const password = process.env.ODONTO_ADMIN_PASSWORD;
-  if (!password) return;
+  if (!password) {
+    // No admin credentials configured: skip user provisioning, but the
+    // schema migration above only needs to run once per process. Without
+    // this flag, every single HTTP request would re-run 10+ ALTER TABLE /
+    // UPDATE statements against the database forever.
+    bootstrapComplete = true;
+    return;
+  }
   const [existing] = await db
     .select({
       id: odontoPortalUsers.id,
@@ -133,10 +140,6 @@ export async function bootstrapAdmin() {
     .where(eq(odontoPortalUsers.username, username))
     .limit(1);
   if (existing) {
-    const passwordChanged = !(await passwordMatches(
-      password,
-      existing.passwordHash,
-    ));
     await db
       .update(odontoPortalUsers)
       .set({
@@ -148,15 +151,12 @@ export async function bootstrapAdmin() {
         mustChangePassword: false,
         isActive: true,
         teamMemberLimit: 999,
-        ...(passwordChanged
-          ? { passwordHash: await passwordHash(password) }
-          : {}),
+        // Intentionally NOT touching passwordHash here. Overwriting it based
+        // on a mismatch with the env var used to silently revert any
+        // password change the creator made through the app, invalidating
+        // every session on the very next request.
       })
       .where(eq(odontoPortalUsers.id, existing.id));
-    if (passwordChanged)
-      await db
-        .delete(odontoPortalSessions)
-        .where(eq(odontoPortalSessions.userId, existing.id));
     bootstrapComplete = true;
     return;
   }
@@ -304,9 +304,19 @@ export async function endPortalSession(req: PortalRequest, res: Response) {
 
 export function loginRateLimit(maxAttempts = 10, windowMs = 15 * 60_000) {
   const attempts = new Map<string, { count: number; resetAt: number }>();
+  let lastSweep = Date.now();
   return (req: Request, res: Response, next: NextFunction) => {
-    const key = `${req.ip}:${typeof req.body?.username === "string" ? normalizedUsername(req.body.username) : "unknown"}`;
     const now = Date.now();
+    // Periodically drop expired entries so this map cannot grow unbounded
+    // for the lifetime of the process (a real memory leak in the original
+    // code, since entries were only ever added, never removed).
+    if (now - lastSweep > windowMs) {
+      for (const [mapKey, entry] of attempts) {
+        if (entry.resetAt <= now) attempts.delete(mapKey);
+      }
+      lastSweep = now;
+    }
+    const key = `${req.ip}:${typeof req.body?.username === "string" ? normalizedUsername(req.body.username) : "unknown"}`;
     const entry = attempts.get(key);
     if (entry && entry.resetAt > now && entry.count >= maxAttempts) {
       res

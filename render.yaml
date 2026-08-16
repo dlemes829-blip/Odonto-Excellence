@@ -10,7 +10,7 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: PORTAL_ORIGIN
-        sync: false
+        value: https://odonto-excellence-portal.onrender.com
       - key: ODONTO_ADMIN_USERNAME
         sync: false
       - key: ODONTO_ADMIN_DISPLAY_NAME

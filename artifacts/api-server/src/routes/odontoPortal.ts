@@ -1,11 +1,16 @@
-import { db, odontoPortalUserStates } from "@workspace/db";
+import { db, odontoPortalUserStates, odontoPortalStates } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { Router, type IRouter, type Response } from "express";
 import { logger } from "../lib/logger";
-import { requirePortalUser, type PortalRequest } from "../lib/odontoPortalAuth";
+import {
+  requirePortalManager,
+  requirePortalUser,
+  type PortalRequest,
+} from "../lib/odontoPortalAuth";
 
 const router: IRouter = Router();
 const MAX_STATE_BYTES = 1_000_000;
+const GLOBAL_SETTINGS_KEY = "global-settings";
 
 type StateEnvelope = { state: Record<string, unknown>; revision: number };
 
@@ -93,6 +98,69 @@ router.put("/odonto-portal/state", async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, "Unable to save Odonto portal state");
     res.status(503).json({ error: "Não foi possível salvar as alterações agora." });
+  }
+});
+
+/**
+ * Global portal settings (e.g. the "chat ao vivo" feature flag). These are
+ * NOT per-user - they apply to the whole portal, controlled by the
+ * creator from the admin panel. Reuses the odonto_portal_states table,
+ * which existed in the schema but had no route wired to it until now.
+ */
+router.get("/odonto-portal/settings", async (req, res) => {
+  const user = requirePortalUser(req as PortalRequest, res);
+  if (!user) return;
+  try {
+    const [row] = await db
+      .select({ state: odontoPortalStates.state })
+      .from(odontoPortalStates)
+      .where(eq(odontoPortalStates.portalKey, GLOBAL_SETTINGS_KEY))
+      .limit(1);
+    const state = (row?.state ?? {}) as { chatEnabled?: boolean };
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ chatEnabled: state.chatEnabled === true });
+  } catch (error) {
+    logger.error({ err: error }, "Unable to read Odonto portal settings");
+    res.status(503).json({ error: "Não foi possível carregar as configurações." });
+  }
+});
+
+router.patch("/odonto-portal/admin/settings", async (req, res) => {
+  const principal = requirePortalManager(req as PortalRequest, res);
+  if (!principal) return;
+  if (principal.accountType !== "creator") {
+    res
+      .status(403)
+      .json({ error: "Somente o criador altera as configurações globais." });
+    return;
+  }
+  const chatEnabled = req.body?.chatEnabled === true;
+  try {
+    const [existing] = await db
+      .select({ revision: odontoPortalStates.revision })
+      .from(odontoPortalStates)
+      .where(eq(odontoPortalStates.portalKey, GLOBAL_SETTINGS_KEY))
+      .limit(1);
+    if (existing) {
+      await db
+        .update(odontoPortalStates)
+        .set({
+          state: { chatEnabled },
+          revision: existing.revision + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(odontoPortalStates.portalKey, GLOBAL_SETTINGS_KEY));
+    } else {
+      await db.insert(odontoPortalStates).values({
+        portalKey: GLOBAL_SETTINGS_KEY,
+        state: { chatEnabled },
+        revision: 1,
+      });
+    }
+    res.json({ chatEnabled });
+  } catch (error) {
+    logger.error({ err: error }, "Unable to update Odonto portal settings");
+    res.status(503).json({ error: "Não foi possível salvar a configuração." });
   }
 });
 
