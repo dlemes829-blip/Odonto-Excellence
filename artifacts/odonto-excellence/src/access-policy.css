@@ -1,0 +1,14 @@
+/* Public applicants do not choose their privilege level. */
+.access-page .access-form form label:has(> select) {
+  display: none !important;
+}
+
+/* Operational notifications only exist after authentication. */
+body:has(.access-page) .toast-note,
+body:has(.access-page) [data-radix-toast-viewport],
+body:has(.access-page) [data-sonner-toaster],
+body:has(main.min-h-dvh) .toast-note,
+body:has(main.min-h-dvh) [data-radix-toast-viewport],
+body:has(main.min-h-dvh) [data-sonner-toaster] {
+  display: none !important;
+}
