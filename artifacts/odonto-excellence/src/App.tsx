@@ -25,6 +25,7 @@ import {
   Building2,
   CalendarDays,
   Check,
+  CheckCheck,
   CheckCircle2,
   ChevronRight,
   CircleHelp,
@@ -77,6 +78,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import NotFound from "@/pages/not-found";
 
 /**
@@ -237,6 +239,16 @@ const NotificationContext = createContext<{
   refresh: async () => undefined,
   markRead: async () => undefined,
 });
+type SyncStatus = {
+  lastSyncedAt: Date | null;
+  syncing: boolean;
+  syncError: boolean;
+};
+const SyncStatusContext = createContext<SyncStatus>({
+  lastSyncedAt: null,
+  syncing: false,
+  syncError: false,
+});
 
 /* ─── HELPERS ─── */
 function localDateKey(date = new Date()) {
@@ -271,6 +283,21 @@ function formatWeekday(value: string) {
 function greeting() {
   const h = new Date().getHours();
   return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+}
+function formatLastSeen(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const time = date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const isToday = localDateKey(date) === localDateKey(now);
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = localDateKey(date) === localDateKey(yesterday);
+  if (isToday) return `hoje às ${time}`;
+  if (isYesterday) return `ontem às ${time}`;
+  return `${date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${time}`;
 }
 function genderTone(g: Gender) {
   return g === "feminine"
@@ -914,6 +941,7 @@ function AppShell({
 }) {
   const portalUser = useContext(PortalAuthContext);
   const notificationCenter = useContext(NotificationContext);
+  const syncStatus = useContext(SyncStatusContext);
   const [, setLocation] = useLocation();
   const active =
     store.collaborators.find((p) => p.id === store.activeId) ??
@@ -970,6 +998,39 @@ function AppShell({
             <span>Odonto Excellence</span>
           </div>
           <div className="flex items-center gap-3 ml-auto">
+            <span
+              className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted-foreground"
+              title={
+                syncStatus.syncError
+                  ? "Não foi possível sincronizar com o servidor. Suas alterações continuam salvas neste navegador."
+                  : syncStatus.lastSyncedAt
+                    ? `Última sincronização: ${syncStatus.lastSyncedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                    : "Aguardando primeira sincronização"
+              }
+            >
+              {syncStatus.syncError ? (
+                <>
+                  <AlertTriangle size={13} className="text-amber-500" />
+                  <span className="text-amber-600 font-medium">
+                    Sem conexão
+                  </span>
+                </>
+              ) : syncStatus.syncing ? (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  Sincronizando...
+                </>
+              ) : syncStatus.lastSyncedAt ? (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Sincronizado às{" "}
+                  {syncStatus.lastSyncedAt.toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </>
+              ) : null}
+            </span>
             <div className="relative">
               <button
                 className={`button-ghost button-icon relative ${notificationsOpen ? "notification-trigger-active" : ""}`}
@@ -3449,27 +3510,65 @@ function ChatComposeLocked({ notify }: { notify: (m: string, k?: ToastKind) => v
   );
 }
 
+function ReadReceipt({ status }: { status: "sent" | "delivered" | "read" }) {
+  if (status === "sent") return <Check size={12} className="shrink-0" />;
+  return (
+    <CheckCheck
+      size={12}
+      className={`shrink-0 ${status === "read" ? "text-sky-300" : ""}`}
+    />
+  );
+}
+
+type TeammatePresence = { id: string; displayName: string; online: boolean; lastSeenAt: string };
+
 function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKind) => void }) {
-  const [chatEnabled, setChatEnabled] = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(
     store.collaborators[0]?.id ?? null,
   );
+  const [presence, setPresence] = useState<Record<string, TeammatePresence>>({});
+  const [showTypingDemo, setShowTypingDemo] = useState(false);
 
   useEffect(() => {
-    void fetch(`${PORTAL_API_URL}/odonto-portal/settings`, {
-      credentials: "include",
-      cache: "no-store",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body: { chatEnabled?: boolean } | null) => {
-        if (body) setChatEnabled(body.chatEnabled === true);
-      })
-      .catch(() => undefined);
+    let cancelled = false;
+    async function loadPresence() {
+      try {
+        const response = await fetch(
+          `${PORTAL_API_URL}/odonto-portal/team/presence`,
+          { credentials: "include", cache: "no-store" },
+        );
+        if (!response.ok || cancelled) return;
+        const body = (await response.json()) as { teammates: TeammatePresence[] };
+        if (cancelled) return;
+        setPresence(
+          Object.fromEntries(body.teammates.map((t) => [t.id, t])),
+        );
+      } catch {
+        // Presence is a nice-to-have; a failed fetch shouldn't break the screen.
+      }
+    }
+    void loadPresence();
+    const timer = window.setInterval(() => void loadPresence(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
+
+  // Illustrative only: cycles a "digitando..." indicator every few seconds so
+  // people can see what the real thing will look like. No real typing signal
+  // exists yet, since sending messages is still locked.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setShowTypingDemo((v) => !v);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [activeContactId]);
 
   const activeContact =
     store.collaborators.find((c) => c.id === activeContactId) ??
     store.collaborators[0];
+  const activePresence = activeContact ? presence[activeContact.id] : undefined;
 
   const previewMessages = activeContact
     ? [
@@ -3478,12 +3577,14 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
           fromMe: false,
           text: `Oi! Aqui é a pré-visualização da conversa com ${activeContact.name}.`,
           time: "09:12",
+          status: null as "sent" | "delivered" | "read" | null,
         },
         {
           id: "m2",
           fromMe: true,
           text: "Quando o recurso for liberado pelo desenvolvedor, as mensagens de verdade aparecem aqui.",
           time: "09:13",
+          status: "read" as "sent" | "delivered" | "read" | null,
         },
       ]
     : [];
@@ -3495,22 +3596,24 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
           <div>
             <div className="eyebrow flex items-center gap-2">
               Comunicação da equipe
-              <span className="chip !bg-amber-500/15 !text-amber-600 !border-amber-500/30">
-                Em breve
-              </span>
+              <span className="chip-red !text-[10px]">Indisponível</span>
             </div>
             <h1 className="page-title mt-3">Chat privado.</h1>
-            <p className="text-sm text-muted-foreground mt-3 max-w-lg">
-              Uma pré-visualização de como o chat vai funcionar — com emojis,
-              fotos e mensagens de texto, no estilo de um WhatsApp interno da
-              equipe.{" "}
-              {chatEnabled
-                ? "O administrador já sinalizou interesse em liberar este recurso, mas o desenvolvimento ainda está em andamento."
-                : "Ainda não foi liberado pelo administrador."}
-            </p>
           </div>
           <BackToMenu />
         </div>
+
+        <Alert className="mt-6 !border-destructive/30 bg-destructive/5">
+          <LockKeyhole className="text-destructive" size={18} />
+          <AlertTitle>Envio de mensagens indisponível no momento</AlertTitle>
+          <AlertDescription>
+            O envio de mensagens, imagens e anexos está em desenvolvimento e
+            não funciona ainda — nada digitado ou anexado aqui é entregue,
+            armazenado ou visível para outra pessoa. Já está funcionando de
+            verdade, porém, o status de presença da equipe: quem está online
+            agora e o horário do último acesso de cada pessoa.
+          </AlertDescription>
+        </Alert>
 
         <div className="panel mt-9 overflow-hidden">
           <div className="grid md:grid-cols-[280px_1fr] h-[560px]">
@@ -3521,29 +3624,44 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
                   <UsersRound size={14} /> Equipe
                 </div>
               </div>
-              {store.collaborators.map((person) => (
-                <button
-                  key={person.id}
-                  onClick={() => setActiveContactId(person.id)}
-                  className={`w-full flex items-center gap-3 p-3 text-left border-b border-border/50 transition-colors ${
-                    activeContactId === person.id
-                      ? "bg-primary/5"
-                      : "hover:bg-muted/50"
-                  }`}
-                >
-                  <span className="w-9 h-9 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-sm shrink-0">
-                    {person.name.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold truncate">
-                      {person.name}
+              {store.collaborators.map((person) => {
+                const p = presence[person.id];
+                return (
+                  <button
+                    key={person.id}
+                    onClick={() => setActiveContactId(person.id)}
+                    className={`w-full flex items-center gap-3 p-3 text-left border-b border-border/50 transition-colors ${
+                      activeContactId === person.id
+                        ? "bg-primary/5"
+                        : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className="relative shrink-0">
+                      <span className="w-9 h-9 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-sm">
+                        {person.name.charAt(0).toUpperCase()}
+                      </span>
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background ${
+                          p?.online ? "bg-emerald-500" : "bg-muted-foreground/40"
+                        }`}
+                        aria-label={p?.online ? "Online" : "Offline"}
+                      />
                     </span>
-                    <span className="block text-[11px] text-muted-foreground truncate">
-                      {person.role}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold truncate">
+                        {person.name}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground truncate">
+                        {p?.online
+                          ? "Online agora"
+                          : p?.lastSeenAt
+                            ? `Visto por último ${formatLastSeen(p.lastSeenAt)}`
+                            : person.role}
+                      </span>
                     </span>
-                  </span>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Thread */}
@@ -3551,12 +3669,30 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
               <div className="p-4 border-b border-border flex items-center gap-3">
                 {activeContact ? (
                   <>
-                    <span className="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-xs shrink-0">
-                      {activeContact.name.charAt(0).toUpperCase()}
+                    <span className="relative shrink-0">
+                      <span className="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-xs">
+                        {activeContact.name.charAt(0).toUpperCase()}
+                      </span>
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border-2 border-background ${
+                          activePresence?.online
+                            ? "bg-emerald-500"
+                            : "bg-muted-foreground/40"
+                        }`}
+                      />
                     </span>
-                    <span className="font-bold text-sm">
-                      {activeContact.name}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="block font-bold text-sm truncate">
+                        {activeContact.name}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {activePresence?.online
+                          ? "online agora"
+                          : activePresence?.lastSeenAt
+                            ? `visto por último ${formatLastSeen(activePresence.lastSeenAt)}`
+                            : "presença indisponível"}
+                      </span>
+                    </div>
                   </>
                 ) : (
                   <span className="text-sm text-muted-foreground">
@@ -3565,9 +3701,13 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
                 )}
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-1">
                   <span className="chip !text-[10px]">
-                    Pré-visualização · nenhuma mensagem real é enviada
+                    Mensagens abaixo: pré-visualização de layout, nada é
+                    enviado de fato
+                  </span>
+                  <span className="chip !text-[10px] !bg-emerald-500/10 !text-emerald-700 !border-emerald-500/25">
+                    Status online/offline e "visto por último": dados reais
                   </span>
                 </div>
                 {previewMessages.map((m) => (
@@ -3584,13 +3724,30 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
                     >
                       <p>{m.text}</p>
                       <span
-                        className={`block text-[10px] mt-1 ${m.fromMe ? "text-white/70" : "text-muted-foreground"}`}
+                        className={`flex items-center gap-1 justify-end text-[10px] mt-1 ${m.fromMe ? "text-white/70" : "text-muted-foreground"}`}
                       >
                         {m.time}
+                        {m.fromMe && m.status && (
+                          <ReadReceipt status={m.status} />
+                        )}
                       </span>
                     </div>
                   </div>
                 ))}
+                {showTypingDemo && activeContact && (
+                  <div className="flex justify-start">
+                    <div className="bg-background border border-border rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-2">
+                      <span className="flex gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.3s]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.15s]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" />
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        exemplo: indicador de digitação
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
               <ChatComposeLocked notify={notify} />
             </div>
@@ -4139,6 +4296,7 @@ function Admin({
   const [savingChatToggle, setSavingChatToggle] = useState(false);
   const [bulkApproving, setBulkApproving] = useState(false);
 
+  const [loadingUsers, setLoadingUsers] = useState(true);
   const loadUsers = useCallback(async () => {
     const response = await fetch(
       `${PORTAL_API_URL}/odonto-portal/admin/users`,
@@ -4153,7 +4311,10 @@ function Admin({
     portalUser?.accountType === "manager";
   useEffect(() => {
     if (canManage)
-      void loadUsers().catch((error: Error) => notify(error.message, "notify"));
+      void loadUsers()
+        .catch((error: Error) => notify(error.message, "notify"))
+        .finally(() => setLoadingUsers(false));
+    else setLoadingUsers(false);
   }, [canManage, loadUsers, notify]);
   useEffect(() => {
     void fetch(`${PORTAL_API_URL}/odonto-portal/settings`, {
@@ -4410,8 +4571,16 @@ function Admin({
             >
               <FileClock size={14} /> Exportar CSV
             </button>
-            <button className="button-secondary" onClick={() => void loadUsers()}>
-              <RotateCcw size={14} /> Atualizar
+            <button
+              className="button-secondary"
+              onClick={() => {
+                setLoadingUsers(true);
+                void loadUsers().finally(() => setLoadingUsers(false));
+              }}
+              disabled={loadingUsers}
+            >
+              <RotateCcw size={14} className={loadingUsers ? "animate-spin" : ""} />{" "}
+              Atualizar
             </button>
           </div>
         </div>
@@ -4516,13 +4685,30 @@ function Admin({
               <span className="chip-red">
                 {managedAccounts.filter((u) => u.online).length} online
               </span>
-              <label className="admin-search">
+              <label className="admin-search relative">
                 <Search size={14} />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar nome ou usuário"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  name="admin-account-filter"
+                  data-1p-ignore
+                  data-lpignore="true"
                 />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Limpar busca"
+                    className="button-ghost button-icon !w-6 !h-6 absolute right-2 top-1/2 -translate-y-1/2"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
               </label>
             </div>
             {pendingAccounts.length > 0 && (
@@ -4553,11 +4739,34 @@ function Admin({
               </div>
             )}
             <div className="divide-y divide-border">
-              {visibleUsers.map((account) => (
-                <div key={account.id} className="p-5">
-                  <div className="flex gap-3 items-center">
-                    <span className="avatar w-10 h-10">
-                      {initials(account.displayName)}
+              {loadingUsers ? (
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  Carregando contas...
+                </div>
+              ) : (
+                <>
+                  {visibleUsers.length === 0 && (
+                    <div className="p-8 text-center">
+                      <p className="text-sm font-bold text-muted-foreground">
+                        {search
+                          ? `Nenhuma conta encontrada para "${search}".`
+                          : "Nenhuma conta cadastrada ainda."}
+                      </p>
+                      {search && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Sua própria conta de administrador não aparece
+                          nesta lista. Verifique se digitou o nome
+                          corretamente ou limpe a busca para ver todas as
+                          contas.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {visibleUsers.map((account) => (
+                    <div key={account.id} className="p-5">
+                      <div className="flex gap-3 items-center">
+                        <span className="avatar w-10 h-10">
+                          {initials(account.displayName)}
                     </span>
                     <div className="min-w-0">
                       <b className="text-sm block">{account.displayName}</b>
@@ -4625,6 +4834,8 @@ function Admin({
                   )}
                 </div>
               ))}
+                </>
+              )}
             </div>
           </section>
           <div className="space-y-5 self-start">
@@ -5040,6 +5251,9 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const [portalReady, setPortalReady] = useState(!PORTAL_API_URL);
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const prevApptCountRef = useRef<number>(
     store.collaborators.reduce((s, p) => s + p.appointments.length, 0),
   );
@@ -5087,12 +5301,19 @@ export default function App() {
 
   const loadRemoteState = useCallback(async () => {
     if (!PORTAL_API_URL || !user) return;
-    const response = await fetch(`${PORTAL_API_URL}/odonto-portal/state`, {
-      cache: "no-store",
-      credentials: "include",
-    });
-    if (!response.ok) throw new Error("portal state unavailable");
-    applyRemoteState((await response.json()) as PortalEnvelope, user);
+    try {
+      const response = await fetch(`${PORTAL_API_URL}/odonto-portal/state`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("portal state unavailable");
+      applyRemoteState((await response.json()) as PortalEnvelope, user);
+      setLastSyncedAt(new Date());
+      setSyncError(false);
+    } catch (error) {
+      setSyncError(true);
+      throw error;
+    }
   }, [applyRemoteState, user]);
 
   const onAuthenticated = useCallback((nextUser: PortalUser) => {
@@ -5177,6 +5398,7 @@ export default function App() {
       return;
     }
     const timer = window.setTimeout(() => {
+      setSyncing(true);
       void fetch(`${PORTAL_API_URL}/odonto-portal/state`, {
         method: "PUT",
         credentials: "include",
@@ -5198,8 +5420,11 @@ export default function App() {
           if (!response.ok) throw new Error("portal save unavailable");
           const result = (await response.json()) as PortalEnvelope;
           portalRevisionRef.current = result.revision;
+          setLastSyncedAt(new Date());
+          setSyncError(false);
         })
-        .catch(() => undefined);
+        .catch(() => setSyncError(true))
+        .finally(() => setSyncing(false));
     }, 650);
     return () => window.clearTimeout(timer);
   }, [loadRemoteState, notify, portalReady, store, user]);
@@ -5325,20 +5550,24 @@ export default function App() {
               markRead: markNotificationRead,
             }}
           >
-            <AppRouter
-              store={store}
-              setStore={setStore}
-              notify={notify}
-              user={user}
-              onAuthenticated={onAuthenticated}
-            />
-            {user?.mustChangePassword && (
-              <PasswordChangeModal
-                required
-                onChanged={onAuthenticated}
+            <SyncStatusContext.Provider
+              value={{ lastSyncedAt, syncing, syncError }}
+            >
+              <AppRouter
+                store={store}
+                setStore={setStore}
                 notify={notify}
+                user={user}
+                onAuthenticated={onAuthenticated}
               />
-            )}
+              {user?.mustChangePassword && (
+                <PasswordChangeModal
+                  required
+                  onChanged={onAuthenticated}
+                  notify={notify}
+                />
+              )}
+            </SyncStatusContext.Provider>
           </NotificationContext.Provider>
         </PortalAuthContext.Provider>
       </WouterRouter>

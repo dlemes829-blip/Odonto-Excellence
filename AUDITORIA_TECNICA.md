@@ -176,3 +176,69 @@ recusou compilar (erro `TS2367`). Simplifiquei o código removendo essa compara�
 O `pnpm-lock.yaml` também foi atualizado para incluir a nova dependência `helmet`, evitando qualquer
 inconsistência na hora de instalar em outra máquina.
 
+## 🟢 Rodada seguinte — bug do campo de busca e tom do aviso do chat
+
+### 12. Campo de busca "travado" com autofill do navegador
+- **Onde**: campo de busca no painel Admin (lista de contas).
+- **Problema relatado**: o campo de busca aparecia com "daniel" já digitado, destacado, e não dava para
+  apagar. Isso era o navegador (Chrome/Edge) sugerindo autofill — o campo não tinha `autoComplete="off"`
+  e o texto ao redor ("nome ou usuário") faz o navegador associar o campo a dados de perfil salvos.
+- **Correção**: adicionado `autoComplete="off"` e atributos equivalentes, além de um **botão de limpar
+  (X)** que sempre funciona, independente do comportamento do navegador. Também adicionei uma mensagem
+  clara quando a busca não encontra nada — porque, como sua própria conta de administrador nunca aparece
+  nessa lista, buscar pelo seu próprio nome sempre resultará em "nenhum resultado", o que antes parecia
+  um erro (lista em branco) e agora é explicado na tela.
+
+### 13. Indicador de carregamento na lista de contas
+- Adicionado um estado de carregamento visível ("Carregando contas...") na primeira busca da lista, e um
+  ícone girando no botão "Atualizar" enquanto a atualização está em andamento.
+
+### 14. Aviso do chat: tom mais sério e direto
+- Reescrevi o aviso de "Em breve" do chat para ser mais direto e profissional: chip vermelho
+  "Indisponível" no lugar do chip amarelo "Em breve", e um alerta de destaque (ícone de cadeado,
+  variação `destructive`) explicando sem rodeios que o recurso está em desenvolvimento e que nada
+  enviado ali é entregue ou salvo de verdade. Removido o tom mais "de marketing" que comparava com
+  WhatsApp.
+
+### Validação final
+Rodei `pnpm install`, `pnpm run typecheck` (4 workspaces) e `pnpm run build` (mockup-sandbox, api-server,
+odonto-excellence) mais uma vez após essas mudanças — tudo passou limpo, sem erros.
+
+## 🟢 Rodada seguinte — presença real no chat + indicador de sincronização em todo o app
+
+### 15. Chat: presença online/offline e "visto por último" (dados reais)
+- Novo endpoint `GET /odonto-portal/team/presence`, disponível para qualquer usuário logado (não só
+  admin), retornando quem da própria equipe está online agora e quando foi visto pela última vez.
+- **Isso reaproveita uma infraestrutura que já existia e já funcionava de verdade**: o app já envia um
+  "heartbeat" ao servidor a cada 45 segundos, e o painel Admin já calculava "online" como
+  `lastSeenAt` nos últimos 90 segundos. Só faltava expor esse dado pra tela de chat — não é mock, é
+  presença real, com o mesmo mecanismo que já gera "ficar offline sozinho quando sai do sistema" (o
+  heartbeat para de ser enviado e, passados 90s, a pessoa aparece como offline automaticamente).
+- Bolinha verde/cinza no avatar de cada contato + texto "Visto por último hoje às HH:MM" / "ontem às
+  HH:MM" / "DD/MM às HH:MM", com uma função de formatação própria (`formatLastSeen`).
+- Isso também aparece no cabeçalho da conversa ativa.
+
+### 16. Chat: indicador de digitação e confirmação de leitura (ilustrativos, claramente identificados)
+- Como o envio de mensagens continua bloqueado (nenhuma infraestrutura de mensagens de verdade existe
+  ainda), adicionei esses dois elementos **apenas como demonstração visual do que vai existir quando o
+  recurso for liberado** — com identificação explícita na tela ("exemplo: indicador de digitação",
+  "Mensagens abaixo: pré-visualização de layout, nada é enviado de fato"). A tela agora deixa muito claro
+  o que é real (presença) e o que é ilustrativo (digitação, confirmação de leitura nas mensagens de
+  exemplo), para não passar a impressão de que o chat já funciona de ponta a ponta.
+
+### 17. Indicador de sincronização em todo o sistema
+- Novo indicador no cabeçalho, visível em **todas as telas** (Painel, Meu dia, Histórico, Treinamento,
+  Chat, Configurações, Admin): mostra "Sincronizado às HH:MM" quando tudo está em dia, "Sincronizando..."
+  durante o salvamento, ou um aviso "Sem conexão" (com ícone de alerta) se a última tentativa de
+  sincronizar com o servidor falhou.
+- Implementado com um novo Context (`SyncStatusContext`), seguindo o mesmo padrão que o app já usa para
+  autenticação e notificações — não precisou alterar a assinatura de nenhuma das 7 telas que usam o
+  layout principal (`AppShell`).
+- Antes, se a sincronização falhasse silenciosamente (ex: instabilidade de rede), o usuário não tinha
+  como saber se os dados estavam realmente salvos no servidor ou só localmente no navegador. Agora fica
+  visível.
+
+### Validação final (2ª rodada)
+`pnpm install`, `pnpm run typecheck` e `pnpm run build` completos rodados de novo após essas mudanças —
+tudo passou limpo, sem erros, incluindo o novo Context de sincronização.
+

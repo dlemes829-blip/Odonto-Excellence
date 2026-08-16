@@ -1,4 +1,4 @@
-import { db, odontoPortalUserStates, odontoPortalStates } from "@workspace/db";
+import { db, odontoPortalUserStates, odontoPortalStates, odontoPortalUsers } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { Router, type IRouter, type Response } from "express";
 import { logger } from "../lib/logger";
@@ -161,6 +161,40 @@ router.patch("/odonto-portal/admin/settings", async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, "Unable to update Odonto portal settings");
     res.status(503).json({ error: "Não foi possível salvar a configuração." });
+  }
+});
+
+/**
+ * Team presence for the chat contact list: who is online right now and
+ * when each teammate was last seen. This reuses the SAME lastSeenAt
+ * column and 90-second "online" threshold that already powers the online
+ * indicator in the admin panel - it is real, live data (kept fresh by the
+ * heartbeat the app already sends every 45s), not a mock.
+ */
+router.get("/odonto-portal/team/presence", async (req, res) => {
+  const user = requirePortalUser(req as PortalRequest, res);
+  if (!user) return;
+  try {
+    const rows = await db
+      .select({
+        id: odontoPortalUsers.id,
+        displayName: odontoPortalUsers.displayName,
+        lastSeenAt: odontoPortalUsers.lastSeenAt,
+      })
+      .from(odontoPortalUsers)
+      .where(eq(odontoPortalUsers.workspaceOwnerId, user.workspaceOwnerId));
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      teammates: rows.map((row) => ({
+        id: row.id,
+        displayName: row.displayName,
+        online: row.lastSeenAt.getTime() > Date.now() - 90_000,
+        lastSeenAt: row.lastSeenAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Unable to read Odonto team presence");
+    res.status(503).json({ error: "Não foi possível carregar a presença da equipe." });
   }
 });
 
