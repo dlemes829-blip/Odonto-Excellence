@@ -7,6 +7,7 @@ import organizationalHierarchyRouter from "./organizationalHierarchy";
 import dataDurabilityRouter from "./dataDurability";
 import odontoPortalAuthRouter from "./odontoPortalAuth";
 import odontoPortalRouter from "./odontoPortal";
+import trainingAgentRouter from "./trainingAgent";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,7 @@ router.use(organizationalHierarchyRouter);
 // rollover and archive copies are committed server-side first.
 router.use(dataDurabilityRouter);
 router.use(odontoPortalAuthRouter);
+router.use(trainingAgentRouter);
 router.use(odontoPortalRouter);
 
 export default router;
