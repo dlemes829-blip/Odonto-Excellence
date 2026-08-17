@@ -15,7 +15,12 @@ const SESSION_DAYS = 7;
 let bootstrapComplete = false;
 
 export type PortalRole = "admin" | "member";
-export type PortalAccountType = "creator" | "manager" | "member" | "individual";
+export type PortalAccountType =
+  | "creator"
+  | "supervisor"
+  | "manager"
+  | "member"
+  | "individual";
 export type PortalAccountStatus = "pending" | "active" | "suspended";
 export type PortalPrincipal = {
   id: string;
@@ -122,10 +127,6 @@ export async function bootstrapAdmin() {
   );
   const password = process.env.ODONTO_ADMIN_PASSWORD;
   if (!password) {
-    // No admin credentials configured: skip user provisioning, but the
-    // schema migration above only needs to run once per process. Without
-    // this flag, every single HTTP request would re-run 10+ ALTER TABLE /
-    // UPDATE statements against the database forever.
     bootstrapComplete = true;
     return;
   }
@@ -151,10 +152,6 @@ export async function bootstrapAdmin() {
         mustChangePassword: false,
         isActive: true,
         teamMemberLimit: 999,
-        // Intentionally NOT touching passwordHash here. Overwriting it based
-        // on a mismatch with the env var used to silently revert any
-        // password change the creator made through the app, invalidating
-        // every session on the very next request.
       })
       .where(eq(odontoPortalUsers.id, existing.id));
     bootstrapComplete = true;
@@ -213,13 +210,17 @@ export async function attachPortalUser(
         ),
       )
       .limit(1);
-    if (session?.isActive)
+    if (session?.isActive && session.accountStatus === "active")
       req.portalUser = {
         ...session,
         role: session.role === "admin" ? "admin" : "member",
-        accountType: (["creator", "manager", "member", "individual"].includes(
-          session.accountType,
-        )
+        accountType: ([
+          "creator",
+          "supervisor",
+          "manager",
+          "member",
+          "individual",
+        ].includes(session.accountType)
           ? session.accountType
           : "individual") as PortalAccountType,
         accountStatus: (["pending", "active", "suspended"].includes(
@@ -230,7 +231,7 @@ export async function attachPortalUser(
         workspaceOwnerId: session.workspaceOwnerId || session.id,
       };
   } catch {
-    // Authentication outages are handled by the protected endpoint rather than leaking database detail.
+    // Authentication outages are handled by protected endpoints rather than leaking database detail.
   }
   next();
 }
@@ -250,7 +251,7 @@ export function requirePortalAdmin(
 ): PortalPrincipal | null {
   const user = requirePortalUser(req, res);
   if (!user) return null;
-  if (user.role === "admin") return user;
+  if (user.accountType === "creator" && user.role === "admin") return user;
   res.status(403).json({ error: "Você não tem permissão para essa área." });
   return null;
 }
@@ -307,9 +308,6 @@ export function loginRateLimit(maxAttempts = 10, windowMs = 15 * 60_000) {
   let lastSweep = Date.now();
   return (req: Request, res: Response, next: NextFunction) => {
     const now = Date.now();
-    // Periodically drop expired entries so this map cannot grow unbounded
-    // for the lifetime of the process (a real memory leak in the original
-    // code, since entries were only ever added, never removed).
     if (now - lastSweep > windowMs) {
       for (const [mapKey, entry] of attempts) {
         if (entry.resetAt <= now) attempts.delete(mapKey);
