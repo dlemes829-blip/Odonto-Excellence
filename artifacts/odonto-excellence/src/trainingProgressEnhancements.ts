@@ -296,7 +296,12 @@ async function sendAgentMessage(agent: HTMLElement) {
     const body = (await response.json().catch(() => ({}))) as { content?: string; error?: string };
     if (!response.ok || !body.content) throw new Error(body.error || "O Kyron Agent está indisponível agora.");
     appendAgentMessage(agent, "assistant", body.content);
-    agentHistory = [...agentHistory, { role: "user", content: message }, { role: "assistant", content: body.content }].slice(-8);
+    const nextHistory: AgentHistoryItem[] = [
+      ...agentHistory,
+      { role: "user", content: message },
+      { role: "assistant", content: body.content },
+    ];
+    agentHistory = nextHistory.slice(-8);
   } catch (error) {
     appendAgentMessage(agent, "assistant", error instanceof Error ? error.message : "Não foi possível consultar o Kyron Agent agora.");
   } finally {
