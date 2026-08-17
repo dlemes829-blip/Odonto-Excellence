@@ -72,7 +72,11 @@ async function render(root: HTMLElement) {
     }));
 
     root.querySelector<HTMLFormElement>("#oe-as-link")?.addEventListener("submit", async (event) => {
-      event.preventDefault(); const values = new FormData(event.currentTarget); const primaryUserId = String(values.get("primaryUserId") || ""); const secondaryUserId = String(values.get("secondaryUserId") || "");
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement;
+      const values = new FormData(form);
+      const primaryUserId = String(values.get("primaryUserId") || "");
+      const secondaryUserId = String(values.get("secondaryUserId") || "");
       if (!primaryUserId || !secondaryUserId || primaryUserId === secondaryUserId) { window.alert("Selecione dois perfis diferentes."); return; }
       try { await api("/odonto-portal/hierarchy/admin/link-person", { method: "POST", body: JSON.stringify({ primaryUserId, secondaryUserId }) }); await render(root); }
       catch (error) { window.alert(error instanceof Error ? error.message : "Não foi possível vincular os perfis."); }
