@@ -57,93 +57,193 @@ const runtimeStyle = `
   }
 }
 
-#oe-training-editor {
-  margin-top: 20px;
+.oe-video-note {
+  margin-top: 7px;
+  max-width: 760px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.oe-video-note:empty {
+  display: none;
+}
+
+.oe-video-edit-trigger {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
   border: 1px solid hsl(var(--border));
   background: hsl(var(--card));
-  border-radius: 16px;
-  padding: 18px;
+  color: hsl(var(--primary));
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
 }
-#oe-training-editor .oe-editor-head {
+
+.oe-video-edit-trigger:hover {
+  background: hsl(var(--primary) / 0.07);
+  border-color: hsl(var(--primary) / 0.35);
+  transform: translateY(-1px);
+}
+
+.oe-video-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 10, 12, 0.58);
+  backdrop-filter: blur(5px);
+}
+
+.oe-video-modal {
+  width: min(100%, 560px);
+  border: 1px solid hsl(var(--border));
+  border-radius: 18px;
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.oe-video-modal-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 16px;
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid hsl(var(--border));
 }
-#oe-training-editor .oe-editor-title {
-  font-size: 15px;
+
+.oe-video-modal-head h2 {
+  margin: 0;
+  font-size: 19px;
   font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.oe-video-modal-head p {
+  margin: 6px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.oe-video-modal-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  border-radius: 9px;
+  color: hsl(var(--muted-foreground));
+  font-size: 23px;
+  line-height: 1;
+}
+
+.oe-video-modal-close:hover {
+  background: hsl(var(--muted));
   color: hsl(var(--foreground));
 }
-#oe-training-editor .oe-editor-copy,
-#oe-training-editor .oe-editor-status {
-  font-size: 11px;
-  color: hsl(var(--muted-foreground));
-  margin-top: 4px;
+
+.oe-video-modal-form {
+  padding: 20px 22px 22px;
 }
-#oe-training-editor .oe-video-edit-card {
-  border-top: 1px solid hsl(var(--border));
-  padding: 14px 0;
-}
-#oe-training-editor .oe-video-edit-card:first-of-type {
-  border-top: 0;
-}
-#oe-training-editor .oe-form-grid {
+
+.oe-video-modal-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 12px;
 }
-#oe-training-editor label {
+
+.oe-video-modal label {
   display: block;
-  font-size: 11px;
-  font-weight: 700;
   color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 800;
 }
-#oe-training-editor input,
-#oe-training-editor textarea {
+
+.oe-video-modal input,
+.oe-video-modal textarea {
   width: 100%;
-  margin-top: 6px;
+  margin-top: 7px;
   border: 1px solid hsl(var(--input));
+  border-radius: 11px;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  border-radius: 10px;
-  padding: 10px 11px;
+  padding: 11px 12px;
   outline: none;
 }
-#oe-training-editor input:focus,
-#oe-training-editor textarea:focus {
+
+.oe-video-modal textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.oe-video-modal input:focus,
+.oe-video-modal textarea:focus {
   border-color: hsl(var(--ring));
   box-shadow: 0 0 0 3px hsl(var(--ring) / 0.12);
 }
-#oe-training-editor textarea {
-  min-height: 92px;
-  resize: vertical;
-}
-#oe-training-editor .oe-editor-actions {
+
+.oe-video-modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 9px;
+  margin-top: 18px;
 }
-#oe-training-editor button {
-  min-height: 38px;
-  border-radius: 9px;
-  padding: 0 13px;
-  font-size: 11px;
+
+.oe-video-modal-actions button {
+  min-height: 40px;
+  border-radius: 10px;
+  padding: 0 15px;
+  font-size: 12px;
   font-weight: 800;
 }
-#oe-training-editor .oe-save {
+
+.oe-video-modal-cancel {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+}
+
+.oe-video-modal-save {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
 }
-#oe-training-editor .oe-refresh {
-  background: hsl(var(--secondary));
-  color: hsl(var(--secondary-foreground));
-  border: 1px solid hsl(var(--border));
+
+.oe-video-modal-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
+
+.oe-video-modal-error {
+  margin-top: 12px;
+  color: hsl(var(--destructive));
+  font-size: 11px;
+  font-weight: 700;
+}
+
 @media (max-width: 640px) {
-  #oe-training-editor .oe-form-grid { grid-template-columns: 1fr; }
+  .oe-video-modal-grid {
+    grid-template-columns: 1fr;
+  }
+  .oe-video-modal-backdrop {
+    padding: 12px;
+  }
+  .oe-video-modal-head,
+  .oe-video-modal-form {
+    padding-left: 17px;
+    padding-right: 17px;
+  }
 }
 `;
 
@@ -189,10 +289,14 @@ function hardenAdminSearch() {
   };
   input.addEventListener("pointerdown", unlock, { once: true });
   input.addEventListener("focus", unlock, { once: true });
-  input.addEventListener("keydown", () => {
-    touched = true;
-    input.readOnly = false;
-  }, { once: true });
+  input.addEventListener(
+    "keydown",
+    () => {
+      touched = true;
+      input.readOnly = false;
+    },
+    { once: true },
+  );
 
   for (const delay of [0, 80, 250, 700]) {
     window.setTimeout(() => {
@@ -245,7 +349,7 @@ async function saveTrainingMetadata(
     },
   );
   const body = (await response.json().catch(() => ({}))) as { error?: string };
-  if (!response.ok) throw new Error(body.error || "Falha ao salvar observação.");
+  if (!response.ok) throw new Error(body.error || "Não foi possível atualizar o vídeo.");
 }
 
 async function updateTrainingState(
@@ -255,12 +359,12 @@ async function updateTrainingState(
 ) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const envelope = await fetchPortalState();
-    if (!envelope.state) throw new Error("Estado do portal ainda não foi criado.");
+    if (!envelope.state) throw new Error("Não foi possível atualizar o vídeo.");
     const training = Array.isArray(envelope.state.training)
       ? (envelope.state.training as TrainingItem[])
       : [];
     const found = training.some((item) => item.id === videoId);
-    if (!found) throw new Error("Vídeo não encontrado no estado do portal.");
+    if (!found) throw new Error("Vídeo não encontrado.");
 
     const nextState = {
       ...envelope.state,
@@ -277,27 +381,166 @@ async function updateTrainingState(
     if (response.ok) return;
     if (response.status !== 409) {
       const body = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error || "Falha ao atualizar o vídeo.");
+      throw new Error(body.error || "Não foi possível atualizar o vídeo.");
     }
   }
-  throw new Error("O vídeo mudou em outra sessão. Tente salvar novamente.");
+  throw new Error("O vídeo foi alterado em outra sessão. Tente novamente.");
 }
 
-let trainingEditorLoading = false;
-let trainingEditorLastSignature = "";
+function getTrainingSection() {
+  const heading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find(
+    (element) => element.textContent?.trim() === "Aulas para o dia a dia",
+  );
+  return heading?.closest("section") as HTMLElement | null;
+}
 
-async function renderTrainingEditor(force = false) {
+function getVisibleTrainingRows(section: HTMLElement) {
+  return Array.from(section.children).filter((child): child is HTMLElement => {
+    if (!(child instanceof HTMLElement)) return false;
+    return child.classList.contains("border-t") && child.classList.contains("flex");
+  });
+}
+
+function findRowTitleElement(row: HTMLElement) {
+  return Array.from(row.querySelectorAll<HTMLElement>("div")).find((element) => {
+    const text = element.textContent?.trim() ?? "";
+    if (!text) return false;
+    if (element.children.length > 0) return false;
+    return element.classList.contains("font-bold") && element.classList.contains("text-sm");
+  }) ?? null;
+}
+
+function matchVideoForRow(
+  row: HTMLElement,
+  training: TrainingItem[],
+  metadata: TrainingMetadataEnvelope,
+) {
+  const titleElement = findRowTitleElement(row);
+  const rowTitle = titleElement?.textContent?.trim() ?? "";
+  if (!rowTitle) return null;
+  return (
+    training.find((video) => video.title === rowTitle) ??
+    training.find((video) => metadata.videos[video.id]?.title === rowTitle) ??
+    null
+  );
+}
+
+function closeVideoModal() {
+  document.getElementById("oe-video-modal-backdrop")?.remove();
+}
+
+function openVideoModal(
+  video: TrainingItem,
+  metadata: TrainingMetadataEnvelope,
+  onUpdated: () => Promise<void>,
+) {
+  closeVideoModal();
+  const saved = metadata.videos[video.id];
+  const backdrop = document.createElement("div");
+  backdrop.id = "oe-video-modal-backdrop";
+  backdrop.className = "oe-video-modal-backdrop";
+
+  const modal = document.createElement("div");
+  modal.className = "oe-video-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "oe-video-modal-title");
+
+  const head = document.createElement("div");
+  head.className = "oe-video-modal-head";
+  head.innerHTML = `
+    <div>
+      <h2 id="oe-video-modal-title">Detalhes do vídeo</h2>
+      <p>Atualize as informações que ajudam a equipe a entender e revisar este conteúdo.</p>
+    </div>
+  `;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "oe-video-modal-close";
+  close.setAttribute("aria-label", "Fechar");
+  close.textContent = "×";
+  close.addEventListener("click", closeVideoModal);
+  head.append(close);
+
+  const form = document.createElement("form");
+  form.className = "oe-video-modal-form";
+  form.innerHTML = `
+    <div class="oe-video-modal-grid">
+      <label>Título
+        <input name="title" maxlength="120" required value="${escapeHtml(saved?.title || video.title)}" />
+      </label>
+      <label>Duração (min)
+        <input name="minutes" type="number" min="1" max="720" required value="${saved?.durationMinutes || video.durationMinutes || 1}" />
+      </label>
+    </div>
+    <label style="margin-top:14px">Observação
+      <textarea name="notes" maxlength="4000" placeholder="Resumo, pontos importantes, orientações ou informações complementares.">${escapeHtml(saved?.notes || "")}</textarea>
+    </label>
+    <div class="oe-video-modal-error" hidden></div>
+    <div class="oe-video-modal-actions">
+      <button type="button" class="oe-video-modal-cancel">Cancelar</button>
+      <button type="submit" class="oe-video-modal-save">Salvar</button>
+    </div>
+  `;
+
+  form.querySelector<HTMLButtonElement>(".oe-video-modal-cancel")?.addEventListener(
+    "click",
+    closeVideoModal,
+  );
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const titleInput = form.querySelector<HTMLInputElement>('input[name="title"]');
+    const minutesInput = form.querySelector<HTMLInputElement>('input[name="minutes"]');
+    const notesInput = form.querySelector<HTMLTextAreaElement>('textarea[name="notes"]');
+    const saveButton = form.querySelector<HTMLButtonElement>(".oe-video-modal-save");
+    const errorBox = form.querySelector<HTMLElement>(".oe-video-modal-error");
+    if (!titleInput || !minutesInput || !notesInput || !saveButton || !errorBox) return;
+
+    const title = titleInput.value.trim();
+    const durationMinutes = Math.max(
+      1,
+      Math.min(720, Math.round(Number(minutesInput.value) || 1)),
+    );
+    const notes = notesInput.value.trim();
+    if (!title) return;
+
+    saveButton.disabled = true;
+    errorBox.hidden = true;
+    try {
+      await saveTrainingMetadata(video.id, { title, durationMinutes, notes });
+      await updateTrainingState(video.id, title, durationMinutes);
+      closeVideoModal();
+      await onUpdated();
+    } catch (error) {
+      saveButton.disabled = false;
+      errorBox.hidden = false;
+      errorBox.textContent =
+        error instanceof Error ? error.message : "Não foi possível atualizar o vídeo.";
+    }
+  });
+
+  modal.append(head, form);
+  backdrop.append(modal);
+  backdrop.addEventListener("mousedown", (event) => {
+    if (event.target === backdrop) closeVideoModal();
+  });
+  document.body.append(backdrop);
+  window.setTimeout(() => form.querySelector<HTMLInputElement>('input[name="title"]')?.focus(), 0);
+}
+
+let trainingRefreshInProgress = false;
+let lastTrainingSignature = "";
+
+async function enhanceTrainingRows(force = false) {
   if (!location.pathname.includes("treinamento")) return;
-  const content = document.querySelector<HTMLElement>(".content-wrap");
-  if (!content || trainingEditorLoading) return;
-  const existing = document.getElementById("oe-training-editor");
-  if (
-    existing &&
-    !force &&
-    existing.contains(document.activeElement)
-  ) return;
+  if (trainingRefreshInProgress) return;
+  if (document.getElementById("oe-video-modal-backdrop") && !force) return;
 
-  trainingEditorLoading = true;
+  const section = getTrainingSection();
+  if (!section) return;
+
+  trainingRefreshInProgress = true;
   try {
     const [envelope, metadata] = await Promise.all([
       fetchPortalState(),
@@ -306,95 +549,64 @@ async function renderTrainingEditor(force = false) {
     const training = Array.isArray(envelope.state?.training)
       ? (envelope.state?.training as TrainingItem[])
       : [];
-    const signature = JSON.stringify({ training, videos: metadata.videos });
-    if (!force && existing && signature === trainingEditorLastSignature) return;
-    trainingEditorLastSignature = signature;
-
-    const panel = existing ?? document.createElement("section");
-    panel.id = "oe-training-editor";
-    panel.innerHTML = "";
-
-    const head = document.createElement("div");
-    head.className = "oe-editor-head";
-    head.innerHTML = `
-      <div>
-        <div class="oe-editor-title">Editar vídeos e observações</div>
-        <div class="oe-editor-copy">Alterações são salvas no banco assim que você confirmar. As observações ficam preservadas separadamente para uso futuro pelo agente de aprendizagem.</div>
-        <div class="oe-editor-status">Sincronizado ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
-      </div>
-    `;
-    const refresh = document.createElement("button");
-    refresh.type = "button";
-    refresh.className = "oe-refresh";
-    refresh.textContent = "Atualizar";
-    refresh.addEventListener("click", () => void renderTrainingEditor(true));
-    head.append(refresh);
-    panel.append(head);
-
-    if (!training.length) {
-      const empty = document.createElement("div");
-      empty.className = "oe-editor-copy";
-      empty.textContent = "Nenhum vídeo cadastrado neste ambiente.";
-      panel.append(empty);
-    }
-
-    training.forEach((video) => {
-      const saved = metadata.videos[video.id];
-      const card = document.createElement("form");
-      card.className = "oe-video-edit-card";
-      card.innerHTML = `
-        <div class="oe-form-grid">
-          <label>Título
-            <input name="title" maxlength="120" required value="${escapeHtml(saved?.title || video.title)}" />
-          </label>
-          <label>Minutos
-            <input name="minutes" type="number" min="1" max="720" required value="${saved?.durationMinutes || video.durationMinutes || 1}" />
-          </label>
-        </div>
-        <label style="margin-top:10px">Observação
-          <textarea name="notes" maxlength="4000" placeholder="Pontos importantes, resumo, dúvidas, referências para estudo...">${escapeHtml(saved?.notes || "")}</textarea>
-        </label>
-        <div class="oe-editor-actions"><button type="submit" class="oe-save">Salvar alterações</button></div>
-      `;
-      card.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const button = card.querySelector<HTMLButtonElement>(".oe-save");
-        const titleInput = card.querySelector<HTMLInputElement>('input[name="title"]');
-        const minutesInput = card.querySelector<HTMLInputElement>('input[name="minutes"]');
-        const notesInput = card.querySelector<HTMLTextAreaElement>('textarea[name="notes"]');
-        if (!button || !titleInput || !minutesInput || !notesInput) return;
-        const title = titleInput.value.trim();
-        const durationMinutes = Math.max(1, Math.min(720, Number(minutesInput.value) || 1));
-        const notes = notesInput.value.trim();
-        if (!title) return;
-        button.disabled = true;
-        button.textContent = "Salvando...";
-        try {
-          await saveTrainingMetadata(video.id, { title, durationMinutes, notes });
-          await updateTrainingState(video.id, title, durationMinutes);
-          button.textContent = "Salvo";
-          window.setTimeout(() => window.location.reload(), 350);
-        } catch (error) {
-          button.disabled = false;
-          button.textContent = "Tentar novamente";
-          window.alert(error instanceof Error ? error.message : "Não foi possível salvar.");
-        }
-      });
-      panel.append(card);
+    const signature = JSON.stringify({
+      training: training.map((video) => ({
+        id: video.id,
+        title: video.title,
+        durationMinutes: video.durationMinutes,
+      })),
+      metadata: metadata.videos,
     });
+    if (!force && signature === lastTrainingSignature) return;
+    lastTrainingSignature = signature;
 
-    if (!existing) {
-      const firstPanel = content.querySelector(".panel");
-      if (firstPanel?.parentElement === content) {
-        firstPanel.insertAdjacentElement("afterend", panel);
-      } else {
-        content.prepend(panel);
+    document.getElementById("oe-training-editor")?.remove();
+
+    const rows = getVisibleTrainingRows(section);
+    rows.forEach((row) => {
+      const video = matchVideoForRow(row, training, metadata);
+      if (!video) return;
+
+      const saved = metadata.videos[video.id];
+      const titleElement = findRowTitleElement(row);
+      if (!titleElement) return;
+
+      const currentTitle = saved?.title || video.title;
+      if (titleElement.textContent?.trim() !== currentTitle) {
+        titleElement.textContent = currentTitle;
       }
-    }
+
+      let note = row.querySelector<HTMLElement>(".oe-video-note");
+      if (!note) {
+        note = document.createElement("div");
+        note.className = "oe-video-note";
+        titleElement.insertAdjacentElement("afterend", note);
+      }
+      note.textContent = saved?.notes?.trim() || "";
+
+      let editButton = row.querySelector<HTMLButtonElement>(".oe-video-edit-trigger");
+      if (!editButton) {
+        editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "oe-video-edit-trigger";
+        editButton.textContent = "+";
+        editButton.title = "Editar vídeo";
+        editButton.setAttribute("aria-label", `Editar ${currentTitle}`);
+        const playButton = Array.from(row.querySelectorAll<HTMLButtonElement>("button")).at(-1);
+        if (playButton) row.insertBefore(editButton, playButton);
+        else row.append(editButton);
+      }
+
+      editButton.onclick = () =>
+        openVideoModal(video, metadata, async () => {
+          lastTrainingSignature = "";
+          await enhanceTrainingRows(true);
+        });
+    });
   } catch {
-    // The authenticated app remains usable even if this enhancement endpoint is unavailable.
+    // Mantém a experiência principal disponível se a atualização complementar falhar.
   } finally {
-    trainingEditorLoading = false;
+    trainingRefreshInProgress = false;
   }
 }
 
@@ -407,10 +619,16 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
+let refreshScheduled = false;
 function refreshEnhancements() {
-  hardenAdminSearch();
-  removeTrainingAreaField();
-  void renderTrainingEditor();
+  if (refreshScheduled) return;
+  refreshScheduled = true;
+  window.requestAnimationFrame(() => {
+    refreshScheduled = false;
+    hardenAdminSearch();
+    removeTrainingAreaField();
+    void enhanceTrainingRows();
+  });
 }
 
 export function installRuntimeEnhancements() {
@@ -421,12 +639,12 @@ export function installRuntimeEnhancements() {
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
   window.addEventListener("popstate", refreshEnhancements);
-  window.addEventListener("focus", refreshEnhancements);
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refreshEnhancements();
-  });
+  window.addEventListener("hashchange", refreshEnhancements);
+  document.addEventListener("click", () => window.setTimeout(refreshEnhancements, 0));
 
   window.setInterval(() => {
-    if (location.pathname.includes("treinamento")) void renderTrainingEditor();
-  }, 4000);
+    if (!document.hidden && location.pathname.includes("treinamento")) {
+      void enhanceTrainingRows();
+    }
+  }, 10_000);
 }
