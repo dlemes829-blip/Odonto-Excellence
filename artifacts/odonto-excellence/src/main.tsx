@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 
 import App from './App';
 import applicationStyles from './index.css?inline';
+import { installStabilityEnhancements } from './stabilityEnhancements';
 import { installRuntimeEnhancements } from './runtimeEnhancements';
 import { installHierarchyEnhancements } from './hierarchyEnhancements';
 import { installAdminRoleEnhancements } from './adminRoleEnhancements';
@@ -17,6 +18,9 @@ if (!document.getElementById(styleId)) {
   document.head.append(style);
 }
 
+// Session/fetch/timer stability must be installed before React effects issue
+// the first auth and synchronization requests.
+installStabilityEnhancements();
 installRuntimeEnhancements();
 installHierarchyEnhancements();
 installAdminRoleEnhancements();
