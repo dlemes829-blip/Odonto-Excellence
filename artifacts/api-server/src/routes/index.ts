@@ -6,6 +6,8 @@ import hierarchyCompatibilityRouter from "./hierarchyCompatibility";
 import organizationalHierarchyRouter from "./organizationalHierarchy";
 import dataDurabilityRouter from "./dataDurability";
 import odontoPortalAuthRouter from "./odontoPortalAuth";
+import trainingMetadataFastRouter from "./trainingMetadataFast";
+import trainingAgentSecureRouter from "./trainingAgentSecure";
 import odontoPortalRouter from "./odontoPortal";
 import trainingAgentRouter from "./trainingAgent";
 
@@ -24,6 +26,10 @@ router.use(organizationalHierarchyRouter);
 // rollover and archive copies are committed server-side first.
 router.use(dataDurabilityRouter);
 router.use(odontoPortalAuthRouter);
+// Fast/hardened endpoints intentionally mount before their legacy equivalents.
+// They own the response and avoid the slower full-document implementations.
+router.use(trainingMetadataFastRouter);
+router.use(trainingAgentSecureRouter);
 router.use(trainingAgentRouter);
 router.use(odontoPortalRouter);
 
