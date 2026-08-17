@@ -11,8 +11,18 @@ import {
 const router: IRouter = Router();
 const MAX_STATE_BYTES = 1_000_000;
 const GLOBAL_SETTINGS_KEY = "global-settings";
+const TRAINING_METADATA_PREFIX = "training-metadata:";
 
 type StateEnvelope = { state: Record<string, unknown>; revision: number };
+type TrainingMetadataItem = {
+  title: string;
+  durationMinutes: number;
+  notes: string;
+  updatedAt: string;
+};
+type TrainingMetadataState = {
+  videos: Record<string, TrainingMetadataItem>;
+};
 
 function parseStateEnvelope(value: unknown): StateEnvelope | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -25,6 +35,30 @@ function parseStateEnvelope(value: unknown): StateEnvelope | null {
 function sendState(res: Response, state: Record<string, unknown> | null, revision: number) {
   res.setHeader("Cache-Control", "no-store");
   res.json({ state, revision });
+}
+
+function trainingMetadataKey(workspaceOwnerId: string) {
+  return `${TRAINING_METADATA_PREFIX}${workspaceOwnerId}`;
+}
+
+function normalizeTrainingMetadata(value: unknown): TrainingMetadataState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { videos: {} };
+  const source = value as { videos?: unknown };
+  if (!source.videos || typeof source.videos !== "object" || Array.isArray(source.videos)) {
+    return { videos: {} };
+  }
+  const videos: Record<string, TrainingMetadataItem> = {};
+  for (const [id, raw] of Object.entries(source.videos as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const item = raw as Partial<TrainingMetadataItem>;
+    const title = typeof item.title === "string" ? item.title.trim().slice(0, 120) : "";
+    const durationMinutes = Math.max(1, Math.min(720, Math.round(Number(item.durationMinutes) || 1)));
+    const notes = typeof item.notes === "string" ? item.notes.trim().slice(0, 4000) : "";
+    const updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : new Date(0).toISOString();
+    if (!title) continue;
+    videos[id] = { title, durationMinutes, notes, updatedAt };
+  }
+  return { videos };
 }
 
 router.get("/odonto-portal/state", async (req, res) => {
@@ -98,6 +132,87 @@ router.put("/odonto-portal/state", async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, "Unable to save Odonto portal state");
     res.status(503).json({ error: "Não foi possível salvar as alterações agora." });
+  }
+});
+
+/**
+ * Durable metadata for training videos. Notes are intentionally kept outside
+ * the generic dashboard document so the regular store normalizer can never
+ * erase them. The record is scoped by workspace and is suitable for future
+ * learning-agent retrieval.
+ */
+router.get("/odonto-portal/training-metadata", async (req, res) => {
+  const user = requirePortalUser(req as PortalRequest, res);
+  if (!user) return;
+  try {
+    const [row] = await db
+      .select({ state: odontoPortalStates.state })
+      .from(odontoPortalStates)
+      .where(eq(odontoPortalStates.portalKey, trainingMetadataKey(user.workspaceOwnerId)))
+      .limit(1);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(normalizeTrainingMetadata(row?.state));
+  } catch (error) {
+    logger.error({ err: error }, "Unable to read training metadata");
+    res.status(503).json({ error: "Não foi possível carregar os dados dos vídeos." });
+  }
+});
+
+router.put("/odonto-portal/training-metadata/:videoId", async (req, res) => {
+  const user = requirePortalUser(req as PortalRequest, res);
+  if (!user) return;
+
+  const videoId = typeof req.params.videoId === "string" ? req.params.videoId.trim().slice(0, 160) : "";
+  const title = typeof req.body?.title === "string" ? req.body.title.trim().slice(0, 120) : "";
+  const durationMinutes = Math.max(1, Math.min(720, Math.round(Number(req.body?.durationMinutes) || 0)));
+  const notes = typeof req.body?.notes === "string" ? req.body.notes.trim().slice(0, 4000) : "";
+
+  if (!videoId || !title || !Number.isFinite(durationMinutes)) {
+    res.status(400).json({ error: "Informe título e duração válidos." });
+    return;
+  }
+
+  const portalKey = trainingMetadataKey(user.workspaceOwnerId);
+  try {
+    const [existing] = await db
+      .select({ state: odontoPortalStates.state, revision: odontoPortalStates.revision })
+      .from(odontoPortalStates)
+      .where(eq(odontoPortalStates.portalKey, portalKey))
+      .limit(1);
+
+    const current = normalizeTrainingMetadata(existing?.state);
+    const item: TrainingMetadataItem = {
+      title,
+      durationMinutes,
+      notes,
+      updatedAt: new Date().toISOString(),
+    };
+    const nextState: TrainingMetadataState = {
+      videos: { ...current.videos, [videoId]: item },
+    };
+
+    if (existing) {
+      await db
+        .update(odontoPortalStates)
+        .set({
+          state: nextState,
+          revision: existing.revision + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(odontoPortalStates.portalKey, portalKey));
+    } else {
+      await db.insert(odontoPortalStates).values({
+        portalKey,
+        state: nextState,
+        revision: 1,
+      });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ video: item });
+  } catch (error) {
+    logger.error({ err: error, videoId }, "Unable to save training metadata");
+    res.status(503).json({ error: "Não foi possível salvar os dados do vídeo." });
   }
 });
 
