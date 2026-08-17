@@ -1,11 +1,14 @@
 import { db, odontoPortalStates, odontoPortalUserStates } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { like } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger";
 import { requirePortalUser, type PortalRequest } from "../lib/odontoPortalAuth";
 
 const router: IRouter = Router();
 const TRAINING_METADATA_PREFIX = "training-metadata:";
+const TRAINING_TARGET = 218;
+const KYRON_MESSAGE_LIMIT = 3_900;
+const KYRON_CONTEXT_BUDGET = 2_350;
 const KYRON_CONVERSATION_URL = (
   process.env.KYRON_AGENT_CONVERSATION_URL ??
   "https://kyronagent.com.br/api/public/conversation"
@@ -22,6 +25,12 @@ type MetadataItem = {
   title?: string;
   durationMinutes?: number;
   notes?: string;
+};
+type CorpusItem = {
+  workspaceOwnerId: string;
+  record: TrainingRecord;
+  meta?: MetadataItem;
+  ordinal: number;
 };
 
 function cleanText(value: unknown, max = 2_000) {
@@ -49,6 +58,47 @@ function scoreRecord(record: TrainingRecord, metadata: MetadataItem | undefined,
   return queryTokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0);
 }
 
+function metadataMap(rows: Array<{ portalKey: string; state: unknown }>) {
+  const map = new Map<string, Record<string, MetadataItem>>();
+  for (const row of rows) {
+    if (!row.portalKey.startsWith(TRAINING_METADATA_PREFIX)) continue;
+    const workspaceOwnerId = row.portalKey.slice(TRAINING_METADATA_PREFIX.length);
+    const state = (row.state ?? {}) as { videos?: unknown };
+    const videos =
+      state.videos && typeof state.videos === "object" && !Array.isArray(state.videos)
+        ? (state.videos as Record<string, MetadataItem>)
+        : {};
+    map.set(workspaceOwnerId, videos);
+  }
+  return map;
+}
+
+function buildContext(items: CorpusItem[], queryTokens: string[]) {
+  const ranked = items
+    .map((item) => ({
+      ...item,
+      score: scoreRecord(item.record, item.meta, queryTokens),
+    }))
+    .sort((a, b) => b.score - a.score || b.ordinal - a.ordinal);
+
+  const lines: string[] = [];
+  let used = 0;
+  for (const item of ranked) {
+    if (lines.length >= 36) break;
+    const title = cleanText(item.meta?.title || item.record.title, 150);
+    if (!title) continue;
+    const notes = cleanText(item.meta?.notes, 520);
+    const area = cleanText(item.record.area, 70);
+    const line = [title, area ? `Tema: ${area}` : "", notes ? `Observações: ${notes}` : ""]
+      .filter(Boolean)
+      .join(" | ");
+    if (used + line.length > KYRON_CONTEXT_BUDGET) continue;
+    lines.push(`${lines.length + 1}. ${line}`);
+    used += line.length + 4;
+  }
+  return lines.join("\n");
+}
+
 router.post("/odonto-portal/training-agent", async (req, res) => {
   const user = requirePortalUser(req as PortalRequest, res);
   if (!user) return;
@@ -66,66 +116,60 @@ router.post("/odonto-portal/training-agent", async (req, res) => {
     });
 
   if (!message) {
-    res.status(400).json({ error: "Escreva uma pergunta sobre os treinamentos." });
+    res.status(400).json({ error: "Escreva uma pergunta para o Kyron Agent." });
     return;
   }
 
   try {
-    const [[stateRow], [metadataRow]] = await Promise.all([
+    // The learning corpus is intentionally shared across portal users. Only
+    // training titles, areas and notes are extracted; user identities, agenda,
+    // financial records, passwords and administrative data are never included.
+    const [stateRows, metadataRows] = await Promise.all([
       db
-        .select({ state: odontoPortalUserStates.state })
-        .from(odontoPortalUserStates)
-        .where(eq(odontoPortalUserStates.userId, user.workspaceOwnerId))
-        .limit(1),
+        .select({ userId: odontoPortalUserStates.userId, state: odontoPortalUserStates.state })
+        .from(odontoPortalUserStates),
       db
-        .select({ state: odontoPortalStates.state })
+        .select({ portalKey: odontoPortalStates.portalKey, state: odontoPortalStates.state })
         .from(odontoPortalStates)
-        .where(eq(odontoPortalStates.portalKey, `${TRAINING_METADATA_PREFIX}${user.workspaceOwnerId}`))
-        .limit(1),
+        .where(like(odontoPortalStates.portalKey, `${TRAINING_METADATA_PREFIX}%`)),
     ]);
 
-    const state = (stateRow?.state ?? {}) as { training?: unknown };
-    const records = Array.isArray(state.training)
-      ? (state.training as TrainingRecord[]).filter((item) => cleanText(item?.title, 120))
-      : [];
-    const metadataState = (metadataRow?.state ?? {}) as { videos?: unknown };
-    const metadata =
-      metadataState.videos && typeof metadataState.videos === "object" && !Array.isArray(metadataState.videos)
-        ? (metadataState.videos as Record<string, MetadataItem>)
-        : {};
+    const metadataByWorkspace = metadataMap(metadataRows);
+    const corpus: CorpusItem[] = [];
+    let ordinal = 0;
+    let ownRecords = 0;
+
+    for (const row of stateRows) {
+      const state = (row.state ?? {}) as { training?: unknown };
+      if (!Array.isArray(state.training)) continue;
+      const records = (state.training as TrainingRecord[]).filter((item) => cleanText(item?.title, 120));
+      if (row.userId === user.workspaceOwnerId) ownRecords = records.length;
+      const metadata = metadataByWorkspace.get(row.userId) ?? {};
+      for (const record of records) {
+        ordinal += 1;
+        corpus.push({
+          workspaceOwnerId: row.userId,
+          record,
+          meta: record.id ? metadata[record.id] : undefined,
+          ordinal,
+        });
+      }
+    }
 
     const queryTokens = tokens(message);
-    const selected = records
-      .map((record, index) => ({
-        record,
-        index,
-        meta: record.id ? metadata[record.id] : undefined,
-        score: scoreRecord(record, record.id ? metadata[record.id] : undefined, queryTokens),
-      }))
-      .sort((a, b) => b.score - a.score || b.index - a.index)
-      .slice(0, 28);
-
-    const context = selected
-      .map(({ record, meta }, index) => {
-        const notes = cleanText(meta?.notes, 1_200);
-        return [
-          `${index + 1}. ${cleanText(meta?.title || record.title, 160)}`,
-          record.area ? `Tema: ${cleanText(record.area, 80)}` : "",
-          notes ? `Observações: ${notes}` : "",
-        ]
-          .filter(Boolean)
-          .join(" | ");
-      })
-      .join("\n");
-
-    const scopedMessage = [
+    const context = buildContext(corpus, queryTokens);
+    const instructions = [
       "Você é o Kyron Agent dentro do Treinamento Gerente Odonto Excellence.",
-      "Responda de forma didática, objetiva e profissional usando prioritariamente o conteúdo dos vídeos e observações abaixo.",
-      "Se o conteúdo disponível não sustentar uma resposta específica, diga claramente que essa informação não consta nos treinamentos registrados. Não invente regras clínicas, jurídicas ou financeiras.",
-      `PROGRESSO: ${records.length} vídeos registrados de uma meta total de 218.`,
-      context ? `CONTEÚDO DE TREINAMENTO RELEVANTE:\n${context}` : "CONTEÚDO DE TREINAMENTO RELEVANTE: nenhum registro disponível.",
+      "Converse naturalmente em português, entenda perguntas de acompanhamento e explique como um assistente inteligente de gestão.",
+      "Use a base compartilhada de treinamentos de todos os usuários do portal para responder. A base contém somente títulos, temas e observações de vídeos, sem identidade de quem cadastrou.",
+      "Você também pode fazer cálculos, porcentagens, médias, projeções, regra de três e comparações usando números fornecidos pelo usuário ou encontrados nos treinamentos. Mostre a conta de forma curta quando isso ajudar.",
+      "Para regras específicas da operação, priorize o conteúdo registrado. Se a base não sustentar uma afirmação específica, diga isso claramente em vez de inventar.",
+      `PROGRESSO DO USUÁRIO ATUAL: ${ownRecords} vídeos registrados de ${TRAINING_TARGET}.`,
+      `BASE COMPARTILHADA: ${corpus.length} registros de vídeo disponíveis para consulta.`,
+      context ? `CONTEÚDO MAIS RELEVANTE PARA ESTA PERGUNTA:\n${context}` : "CONTEÚDO RELEVANTE: nenhum registro encontrado.",
       `PERGUNTA DO USUÁRIO:\n${message}`,
-    ].join("\n\n");
+    ];
+    const scopedMessage = instructions.join("\n\n").slice(0, KYRON_MESSAGE_LIMIT);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25_000);
