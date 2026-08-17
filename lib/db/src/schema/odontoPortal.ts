@@ -22,11 +22,25 @@ export const odontoPortalStates = pgTable("odonto_portal_states", {
     .defaultNow(),
 });
 
-/** Accounts and state are deliberately separate: one person's dashboard is never a shared document. */
+/** A human identity can own multiple isolated login profiles. */
+export const odontoPortalPeople = pgTable("odonto_portal_people", {
+  id: text("id").primaryKey(),
+  displayName: text("display_name").notNull(),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/** Accounts and state are deliberately separate: one login never inherits another login's privileges. */
 export const odontoPortalUsers = pgTable(
   "odonto_portal_users",
   {
     id: text("id").primaryKey(),
+    personId: text("person_id"),
     username: text("username").notNull(),
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
@@ -50,9 +64,55 @@ export const odontoPortalUsers = pgTable(
   (table) => [
     uniqueIndex("odonto_portal_users_username_idx").on(table.username),
     uniqueIndex("odonto_portal_users_email_idx").on(table.email),
+    index("odonto_portal_users_person_idx").on(table.personId),
     index("odonto_portal_users_last_seen_idx").on(table.lastSeenAt),
     index("odonto_portal_users_manager_idx").on(table.managerId),
     index("odonto_portal_users_workspace_idx").on(table.workspaceOwnerId),
+  ],
+);
+
+/** One manager can belong to at most one supervisor; one supervisor can own many managers. */
+export const odontoPortalSupervisorManagers = pgTable(
+  "odonto_portal_supervisor_managers",
+  {
+    supervisorId: text("supervisor_id")
+      .notNull()
+      .references(() => odontoPortalUsers.id, { onDelete: "cascade" }),
+    managerId: text("manager_id")
+      .notNull()
+      .references(() => odontoPortalUsers.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").references(() => odontoPortalUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("odonto_portal_supervisor_manager_unique_idx").on(table.managerId),
+    index("odonto_portal_supervisor_idx").on(table.supervisorId),
+  ],
+);
+
+export const odontoPortalAuditLog = pgTable(
+  "odonto_portal_audit_log",
+  {
+    id: text("id").primaryKey(),
+    actorUserId: text("actor_user_id").references(() => odontoPortalUsers.id, {
+      onDelete: "set null",
+    }),
+    targetUserId: text("target_user_id").references(() => odontoPortalUsers.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    context: jsonb("context").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("odonto_portal_audit_actor_idx").on(table.actorUserId, table.createdAt),
+    index("odonto_portal_audit_target_idx").on(table.targetUserId, table.createdAt),
   ],
 );
 
