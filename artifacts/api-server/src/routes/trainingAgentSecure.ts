@@ -1,6 +1,7 @@
 import { db, odontoPortalStates, odontoPortalUserStates } from "@workspace/db";
 import { like } from "drizzle-orm";
-import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
+import { Router, type IRouter, type NextFunction, type Request } from "express";
+import type { Response as ExpressResponse } from "express";
 import { logger } from "../lib/logger";
 import { requirePortalUser, type PortalRequest } from "../lib/odontoPortalAuth";
 
@@ -51,7 +52,7 @@ function scoreRecord(record: TrainingRecord, metadata: MetadataItem | undefined,
   return queryTokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0);
 }
 
-function agentRateLimit(req: Request, res: Response, next: NextFunction) {
+function agentRateLimit(req: Request, res: ExpressResponse, next: NextFunction) {
   const principal = (req as PortalRequest).portalUser;
   const key = principal?.id || req.ip || "unknown";
   const now = Date.now();
@@ -171,7 +172,7 @@ router.post("/odonto-portal/training-agent", agentRateLimit, async (req, res) =>
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 18_000);
-    let response: Response;
+    let response: globalThis.Response;
     try {
       response = await fetch(KYRON_CONVERSATION_URL, {
         method: "POST",
