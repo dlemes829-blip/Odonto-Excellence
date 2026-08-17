@@ -70,6 +70,47 @@ function refineRoleControls(root: ParentNode) {
   });
 }
 
+function installLinkedProfileFix(root: HTMLElement) {
+  const form = root.querySelector<HTMLFormElement>("#oe-link-person");
+  if (!form || form.dataset.oeLinkFixed === "true") return;
+  form.dataset.oeLinkFixed = "true";
+
+  form.addEventListener(
+    "submit",
+    async (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const values = new FormData(form);
+      const primaryUserId = String(values.get("primaryUserId") || "");
+      const secondaryUserId = String(values.get("linkedUserId") || "");
+      if (!primaryUserId || !secondaryUserId || primaryUserId === secondaryUserId) {
+        window.alert("Selecione dois perfis diferentes para vincular.");
+        return;
+      }
+
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"], button:not([type])');
+      if (submit) submit.disabled = true;
+      try {
+        const response = await fetch(`${API_URL}/odonto-portal/hierarchy/admin/link-person`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ primaryUserId, secondaryUserId }),
+        });
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) throw new Error(body.error || "Não foi possível vincular os perfis.");
+        window.alert("Perfis vinculados com sucesso. Os dados pessoais compartilhados permanecerão sincronizados.");
+        document.querySelector<HTMLButtonElement>(".oe-hierarchy-close")?.click();
+      } catch (error) {
+        if (submit) submit.disabled = false;
+        window.alert(error instanceof Error ? error.message : "Não foi possível vincular os perfis.");
+      }
+    },
+    true,
+  );
+}
+
 function installCreatorHelper(root: HTMLElement) {
   if (root.querySelector("[data-oe-admin-role-note]")) return;
   const title = Array.from(root.querySelectorAll<HTMLElement>(".oe-hierarchy-section-title")).find((node) =>
@@ -102,6 +143,7 @@ export function installAdminRoleEnhancements() {
     const overlay = document.getElementById("oe-hierarchy-overlay");
     if (!overlay || !creator) return;
     refineRoleControls(overlay);
+    installLinkedProfileFix(overlay);
     installCreatorHelper(overlay);
   });
 
