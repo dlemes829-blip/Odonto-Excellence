@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import applicationStyles from './index.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
+import { installTrainingProgressEnhancements } from './trainingProgressEnhancements';
 import { installRuntimeEnhancements } from './runtimeEnhancements';
 import { installHierarchyEnhancements } from './hierarchyEnhancements';
 import { installAdminRoleEnhancements } from './adminRoleEnhancements';
@@ -21,6 +22,9 @@ if (!document.getElementById(styleId)) {
 // Session/fetch/timer stability must be installed before React effects issue
 // the first auth and synchronization requests.
 installStabilityEnhancements();
+// Training records are authoritative: every registered video is automatically
+// considered watched and cannot be toggled back to pending by the UI.
+installTrainingProgressEnhancements();
 installRuntimeEnhancements();
 installHierarchyEnhancements();
 installAdminRoleEnhancements();
