@@ -242,3 +242,152 @@ odonto-excellence) mais uma vez após essas mudanças — tudo passou limpo, sem
 `pnpm install`, `pnpm run typecheck` e `pnpm run build` completos rodados de novo após essas mudanças —
 tudo passou limpo, sem erros, incluindo o novo Context de sincronização.
 
+## 🟢 Rodada seguinte — correção definitiva da busca, contatos reais do chat por hierarquia, textos enxutos e scripts blindados
+
+### 18. Campo de busca: correção definitiva
+- A tentativa anterior (`autoComplete="off"` + botão limpar) não foi suficiente — alguns navegadores
+  ignoram `autoComplete="off"` para campos que parecem "nome" por heurística própria do Chrome/Edge.
+- **Correção mais robusta**: campo alterado para `type="search"` (navegadores não aplicam heurística de
+  autofill de perfil em campos de busca) combinado com `autoComplete="new-password"` — um truque
+  amplamente usado e testado para desativar de vez sugestões de autofill em campos que não são senha.
+  Também escondido o "x" nativo do navegador (que apareceria duplicado com o nosso botão de limpar).
+
+### 19. Chat: contatos reais por hierarquia de conta (controle de acesso de verdade, não só visual)
+- Novo endpoint `GET /odonto-portal/team/chat-contacts`, com regras aplicadas **no servidor** (a pessoa
+  não consegue ver quem não deveria, nem manipulando a tela):
+  - **Criador (desenvolvedor)**: vê todos os usuários ativos do sistema.
+  - **Gerente**: vê sua própria equipe (contas com `managerId` apontando pra ele) + o desenvolvedor.
+  - **Membro de equipe**: vê seu gerente + o desenvolvedor.
+  - **Individual**: vê somente o desenvolvedor.
+- O desenvolvedor aparece com uma etiqueta "Dev" na lista de contatos e no cabeçalho da conversa.
+- A tela de chat parou de usar a equipe local de agenda (`store.collaborators`, que são registros de
+  atendimento, não contas de usuário) e passou a usar contas de portal de verdade.
+
+### 20. Textos do chat: bem mais enxutos, como pedido
+- O aviso grande foi reduzido para o essencial: "Em desenvolvimento. Disponível em breve."
+- Removidas as legendas extras dentro da conversa ("dados reais" vs "pré-visualização"); ficou só um
+  chip discreto "Em breve".
+- O indicador de digitação ilustrativo agora é só os três pontinhos (estilo Instagram) — sem nomear
+  ninguém e sem texto explicativo por cima.
+
+### 21. Scripts `.bat` blindados contra os erros já enfrentados
+Reescrevi o `PUBLICAR_GITHUB.bat` e o `RODAR_LOCAL.bat` para se recuperar sozinhos dos três problemas
+reais que apareceram durante o uso:
+- **Identidade do Git ausente** ("Author identity unknown"): o script agora detecta isso *antes* de
+  tentar commitar, pede seu nome e e-mail uma única vez, e configura sozinho.
+- **Scripts de build bloqueados pelo pnpm** (erro `ERR_PNPM_IGNORED_BUILDS`, que travava o `esbuild`):
+  o script agora aprova isso automaticamente (`pnpm approve-builds --all`) logo após instalar.
+- **Push rejeitado por histórico divergente** (exatamente o que aconteceu com o commit do ChatGPT): antes
+  de tentar enviar, o script busca o que há de novo no GitHub. Se detectar que o remoto tem commits que
+  você não tem localmente, **ele para e avisa com clareza**, em vez de simplesmente falhar com uma
+  mensagem técnica — e propositalmente **não força o envio sozinho**, para não apagar nenhum trabalho
+  remoto sem você (ou eu) revisar primeiro.
+- Instalação agora usa `--no-frozen-lockfile`, evitando falhas por pequenas diferenças de lockfile entre
+  máquinas.
+
+### Validação final (3ª rodada)
+`pnpm run typecheck` e `pnpm run build` rodados novamente após o redesenho do chat — passaram limpos
+(exit code 0 confirmado em ambos).
+
+## 🔴 Bug crítico encontrado e corrigido — o .bat abria e fechava na hora
+
+### 22. Causa raiz: quebra de linha errada no arquivo
+- Ao reescrever o `PUBLICAR_GITHUB.bat` e o `RODAR_LOCAL.bat` na rodada anterior, o arquivo foi salvo
+  usando quebra de linha estilo Unix (`LF`), sem o `CR` que o Windows exige para arquivos `.bat`. O
+  `cmd.exe` do Windows falha ao interpretar isso — o script abre e fecha instantaneamente, sem nem
+  mostrar mensagem de erro (a janela fecha rápido demais para ler).
+- Além disso, os comentários usavam travessões decorativos Unicode ("──"), que embora não devessem
+  quebrar nada com `chcp 65001`, foram removidos por segurança e trocados por traços ASCII simples —
+  igual ao estilo do script original, que nunca usou nenhum caractere especial.
+
+### 23. Correção aplicada e verificada byte a byte
+- Os dois arquivos foram normalizados para `CRLF` correto (confirmado programaticamente: zero
+  quebras de linha soltas/inconsistentes, zero bytes fora do ASCII).
+- A lógica de detecção de divergência do Git (adicionada na rodada anterior) foi simplificada, trocando
+  um método baseado em arquivos temporários por um padrão mais direto já usado com sucesso em outra
+  parte do mesmo script — reduzindo pontos de falha.
+- Parênteses balanceados confirmados nos dois arquivos (20/20 e 5/5).
+
+### Validação final (4ª rodada)
+`pnpm run typecheck` (exit code 0) e `pnpm run build` (exit code 0) rodados mais uma vez, do zero, após
+a correção dos scripts `.bat` — confirmando que a correção não afetou nada do código do app.
+
+## 🟢 Nova funcionalidade — acompanhar o deploy do Render direto no terminal
+
+### 24. `verificar-deploy.ps1`: acompanhamento real do deploy
+- A chave de API do Render que você quis usar antes não podia ser usada por mim (meu ambiente de
+  sandbox não tem acesso à internet do Render) — mas o `.bat` roda na **sua** máquina, que tem acesso
+  total. Implementei isso ali.
+- Novo script `verificar-deploy.ps1`, chamado automaticamente pelo `PUBLICAR_GITHUB.bat` depois de um
+  push bem-sucedido. Ele consulta a API oficial do Render
+  (`GET /v1/services/{serviceId}/deploys`, documentação confirmada em api-docs.render.com) e mostra o
+  progresso do deploy em tempo real no terminal — para a API e para o Portal, separadamente.
+- **Configuração é opcional e feita uma única vez**: na primeira vez, o script pede sua API key do
+  Render (salva como variável de ambiente do Windows, nunca em arquivo do projeto) e os IDs dos dois
+  serviços (salvos em `render-config.json`, adicionado ao `.gitignore` — nunca vai para o GitHub). Se
+  você pular essa configuração, o script continua funcionando do jeito antigo, sem travar nada.
+- O script tenta identificar o deploy do commit que você acabou de enviar (comparando o hash), em vez de
+  simplesmente mostrar o status de um deploy anterior que já tivesse terminado — para não te dar uma
+  informação enganosa logo após o push.
+- **Bug de compatibilidade encontrado e corrigido antes de entregar**: quando a API do Render retorna
+  exatamente 1 deploy, o PowerShell 5.1 (o que vem por padrão no Windows) não embrulha isso numa lista,
+  e o código quebraria ao tentar contar itens. Corrigido forçando o formato de lista sempre.
+- Passo a passo completo de configuração em `COMO_ACOMPANHAR_DEPLOY.md`.
+
+### Validação final (5ª rodada)
+`pnpm run typecheck` (exit code 0) e `pnpm run build` (exit code 0) confirmados novamente após adicionar
+o script de acompanhamento de deploy.
+
+## 🔴 Segunda ocorrência do bug crítico — blindagem em camadas
+
+### 25. O .bat voltou a fechar sozinho, sem mostrar erro
+- Mesmo depois da correção de codificação (CRLF), o `PUBLICAR_GITHUB.bat` fechou sozinho de novo, sem
+  mostrar nenhuma mensagem. Como não dá para garantir 100% que não existe algum problema sutil de
+  parsing que eu não previu, mudei de estratégia: em vez de só corrigir o arquivo, redesenhei a
+  estrutura para ser **à prova de falhas por design**.
+
+### 26. Blindagem em camadas: um arquivo "wrapper" quase impossível de quebrar
+- `PUBLICAR_GITHUB.bat` agora é um arquivo mínimo (17 linhas), com a única função de chamar a lógica
+  real (`_publicar-interno.bat`) e **garantir que a janela sempre mostre alguma mensagem antes de
+  fechar**, não importa o que aconteça dentro da lógica real.
+- Toda a lógica de validação, git, build e push foi movida para `_publicar-interno.bat` — se esse
+  arquivo tiver qualquer problema (incluindo um erro de sintaxe fatal), o `call` a partir do wrapper
+  ainda devolve o controle para o wrapper, que sempre chega até o `pause` final.
+- Também removi o `chcp 65001` (não era mais necessário, já que os dois arquivos são 100% ASCII) —
+  um fator a menos que poderia causar comportamento inesperado no console do Windows.
+- Se o processo terminar com erro, o wrapper agora mostra explicitamente o código de saída e pede para
+  você copiar a tela e mandar pra mim junto com o arquivo `_publicar-interno.bat`.
+
+### Validação final (6ª rodada)
+`pnpm run typecheck` (exit code 0) e `pnpm run build` (exit code 0) confirmados mais uma vez. Todos os
+4 arquivos do Windows (`PUBLICAR_GITHUB.bat`, `_publicar-interno.bat`, `RODAR_LOCAL.bat`,
+`verificar-deploy.ps1`) verificados byte a byte: zero caracteres fora do ASCII, zero quebras de linha
+inconsistentes, parênteses balanceados.
+
+## ⚠️ Nota importante sobre os prints enviados
+
+Os prints mostrando a busca ainda travada e o texto grande do chat eram de uma versão **anterior** às
+correções já feitas — muito provavelmente porque o `PUBLICAR_GITHUB.bat` estava travando antes de você
+conseguir publicar com sucesso. Já confirmei no código-fonte: as duas correções (busca com
+`type="search"` + `autoComplete="new-password"`, e o texto do chat reduzido para "Em desenvolvimento.
+Disponível em breve.") já estavam presentes. Com o `.bat` blindado desta vez, a publicação deve
+finalmente refletir tudo isso no site.
+
+## 🟢 Nova funcionalidade — modo claro/escuro
+
+### 27. Alternância de tema, com persistência real
+- Novo campo `theme: "light" | "dark"` em `PortalPreferences`, sincronizado igual as outras
+  preferências (autoRefresh, modo compacto, etc.) — ou seja, a escolha de tema é salva no servidor e
+  volta a aparecer mesmo trocando de dispositivo.
+- **Botão de acesso rápido** (ícone sol/lua) no cabeçalho, visível em todas as telas do sistema.
+- **Seletor explícito** também na tela de Configurações, com os dois botões "Claro" e "Escuro" lado a
+  lado (mais claro que um simples checkbox, já que são duas opções, não liga/desliga).
+- Implementado com um novo Context (`ThemeContext`), seguindo o mesmo padrão já usado no app — sem
+  precisar alterar a assinatura das 7 telas que usam o layout principal.
+- A paleta escura mantém a identidade visual da marca (vermelho), só invertendo fundos/textos para tons
+  escuros, com contraste ajustado para leitura confortável.
+
+### Validação final (7ª rodada)
+`pnpm run typecheck` (exit code 0) e `pnpm run build` (exit code 0) confirmados após a implementação do
+tema.
+

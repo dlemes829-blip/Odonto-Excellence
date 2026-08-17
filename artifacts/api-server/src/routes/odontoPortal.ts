@@ -165,13 +165,16 @@ router.patch("/odonto-portal/admin/settings", async (req, res) => {
 });
 
 /**
- * Team presence for the chat contact list: who is online right now and
- * when each teammate was last seen. This reuses the SAME lastSeenAt
- * column and 90-second "online" threshold that already powers the online
- * indicator in the admin panel - it is real, live data (kept fresh by the
- * heartbeat the app already sends every 45s), not a mock.
+ * Chat contact list, scoped by account hierarchy - this is real
+ * server-side access control, not just a UI filter:
+ *   - creator (the developer account): sees every other active user.
+ *   - manager: sees their own team members + the developer.
+ *   - member (belongs to a manager): sees their manager + the developer.
+ *   - individual: sees only the developer.
+ * Presence (online / lastSeenAt) reuses the same heartbeat-based data
+ * that already powers the admin panel's online indicator.
  */
-router.get("/odonto-portal/team/presence", async (req, res) => {
+router.get("/odonto-portal/team/chat-contacts", async (req, res) => {
   const user = requirePortalUser(req as PortalRequest, res);
   if (!user) return;
   try {
@@ -179,22 +182,48 @@ router.get("/odonto-portal/team/presence", async (req, res) => {
       .select({
         id: odontoPortalUsers.id,
         displayName: odontoPortalUsers.displayName,
+        accountType: odontoPortalUsers.accountType,
+        managerId: odontoPortalUsers.managerId,
+        isActive: odontoPortalUsers.isActive,
         lastSeenAt: odontoPortalUsers.lastSeenAt,
       })
-      .from(odontoPortalUsers)
-      .where(eq(odontoPortalUsers.workspaceOwnerId, user.workspaceOwnerId));
+      .from(odontoPortalUsers);
+
+    const isDeveloper = (row: (typeof rows)[number]) =>
+      row.accountType === "creator";
+
+    let contacts: typeof rows;
+    if (user.accountType === "creator") {
+      contacts = rows.filter((row) => row.isActive && row.id !== user.id);
+    } else if (user.accountType === "manager") {
+      contacts = rows.filter(
+        (row) => row.isActive && (isDeveloper(row) || row.managerId === user.id),
+      );
+    } else if (user.accountType === "member") {
+      contacts = rows.filter(
+        (row) =>
+          row.isActive && (isDeveloper(row) || row.id === user.managerId),
+      );
+    } else {
+      // "individual" accounts only ever talk to the developer.
+      contacts = rows.filter((row) => row.isActive && isDeveloper(row));
+    }
+
     res.setHeader("Cache-Control", "no-store");
     res.json({
-      teammates: rows.map((row) => ({
+      contacts: contacts.map((row) => ({
         id: row.id,
         displayName: row.displayName,
+        isDeveloper: isDeveloper(row),
         online: row.lastSeenAt.getTime() > Date.now() - 90_000,
         lastSeenAt: row.lastSeenAt.toISOString(),
       })),
     });
   } catch (error) {
-    logger.error({ err: error }, "Unable to read Odonto team presence");
-    res.status(503).json({ error: "Não foi possível carregar a presença da equipe." });
+    logger.error({ err: error }, "Unable to read Odonto chat contacts");
+    res
+      .status(503)
+      .json({ error: "Não foi possível carregar os contatos do chat." });
   }
 });
 

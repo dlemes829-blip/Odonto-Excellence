@@ -40,6 +40,7 @@ import {
   LockKeyhole,
   Megaphone,
   MoreHorizontal,
+  Moon,
   Pencil,
   Phone,
   Play,
@@ -54,6 +55,7 @@ import {
   Shield,
   Smile,
   Sparkles,
+  Sun,
   Paperclip,
   Target,
   Trash2,
@@ -186,6 +188,7 @@ type PortalPreferences = {
   privacyMode: boolean;
   dailyTips: boolean;
   autoRefresh: boolean;
+  theme: "light" | "dark";
 };
 type Store = {
   collaborators: Collaborator[];
@@ -248,6 +251,13 @@ const SyncStatusContext = createContext<SyncStatus>({
   lastSyncedAt: null,
   syncing: false,
   syncError: false,
+});
+const ThemeContext = createContext<{
+  theme: "light" | "dark";
+  toggleTheme: () => void;
+}>({
+  theme: "light",
+  toggleTheme: () => undefined,
 });
 
 /* ─── HELPERS ─── */
@@ -673,6 +683,7 @@ function normalizeStore(value: Partial<Store>): Store {
         privacyMode: false,
         dailyTips: true,
         autoRefresh: true,
+        theme: "light",
       },
     };
   }
@@ -690,6 +701,7 @@ function normalizeStore(value: Partial<Store>): Store {
       privacyMode: false,
       dailyTips: true,
       autoRefresh: true,
+      theme: "light",
     },
   };
 }
@@ -714,6 +726,7 @@ function readStore(): Store {
       privacyMode: false,
       dailyTips: true,
       autoRefresh: true,
+      theme: "light",
     },
   };
 }
@@ -740,6 +753,7 @@ function personalStore(user: PortalUser): Store {
       privacyMode: false,
       dailyTips: true,
       autoRefresh: true,
+      theme: "light",
     },
   };
 }
@@ -942,6 +956,7 @@ function AppShell({
   const portalUser = useContext(PortalAuthContext);
   const notificationCenter = useContext(NotificationContext);
   const syncStatus = useContext(SyncStatusContext);
+  const { theme, toggleTheme } = useContext(ThemeContext);
   const [, setLocation] = useLocation();
   const active =
     store.collaborators.find((p) => p.id === store.activeId) ??
@@ -998,6 +1013,23 @@ function AppShell({
             <span>Odonto Excellence</span>
           </div>
           <div className="flex items-center gap-3 ml-auto">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="button-ghost button-icon"
+              aria-label={
+                theme === "dark"
+                  ? "Mudar para modo claro"
+                  : "Mudar para modo escuro"
+              }
+              title={
+                theme === "dark"
+                  ? "Mudar para modo claro"
+                  : "Mudar para modo escuro"
+              }
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <span
               className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted-foreground"
               title={
@@ -3520,43 +3552,50 @@ function ReadReceipt({ status }: { status: "sent" | "delivered" | "read" }) {
   );
 }
 
-type TeammatePresence = { id: string; displayName: string; online: boolean; lastSeenAt: string };
+type ChatContact = {
+  id: string;
+  displayName: string;
+  isDeveloper: boolean;
+  online: boolean;
+  lastSeenAt: string;
+};
 
 function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKind) => void }) {
-  const [activeContactId, setActiveContactId] = useState<string | null>(
-    store.collaborators[0]?.id ?? null,
-  );
-  const [presence, setPresence] = useState<Record<string, TeammatePresence>>({});
+  const [contacts, setContacts] = useState<ChatContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [showTypingDemo, setShowTypingDemo] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadPresence() {
+    async function loadContacts() {
       try {
         const response = await fetch(
-          `${PORTAL_API_URL}/odonto-portal/team/presence`,
+          `${PORTAL_API_URL}/odonto-portal/team/chat-contacts`,
           { credentials: "include", cache: "no-store" },
         );
         if (!response.ok || cancelled) return;
-        const body = (await response.json()) as { teammates: TeammatePresence[] };
+        const body = (await response.json()) as { contacts: ChatContact[] };
         if (cancelled) return;
-        setPresence(
-          Object.fromEntries(body.teammates.map((t) => [t.id, t])),
-        );
+        setContacts(body.contacts);
+        setActiveContactId((current) => current ?? body.contacts[0]?.id ?? null);
       } catch {
-        // Presence is a nice-to-have; a failed fetch shouldn't break the screen.
+        // Contact visibility still enforced by the server; a failed
+        // fetch just leaves the list empty rather than breaking the screen.
+      } finally {
+        if (!cancelled) setLoadingContacts(false);
       }
     }
-    void loadPresence();
-    const timer = window.setInterval(() => void loadPresence(), 30_000);
+    void loadContacts();
+    const timer = window.setInterval(() => void loadContacts(), 30_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
   }, []);
 
-  // Illustrative only: cycles a "digitando..." indicator every few seconds so
-  // people can see what the real thing will look like. No real typing signal
+  // Illustrative only: cycles a typing bubble every few seconds so people
+  // can see what the real thing will look like. No real typing signal
   // exists yet, since sending messages is still locked.
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -3566,16 +3605,14 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
   }, [activeContactId]);
 
   const activeContact =
-    store.collaborators.find((c) => c.id === activeContactId) ??
-    store.collaborators[0];
-  const activePresence = activeContact ? presence[activeContact.id] : undefined;
+    contacts.find((c) => c.id === activeContactId) ?? contacts[0];
 
   const previewMessages = activeContact
     ? [
         {
           id: "m1",
           fromMe: false,
-          text: `Oi! Aqui é a pré-visualização da conversa com ${activeContact.name}.`,
+          text: `Oi! Aqui é a pré-visualização da conversa com ${activeContact.displayName}.`,
           time: "09:12",
           status: null as "sent" | "delivered" | "read" | null,
         },
@@ -3605,14 +3642,8 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
 
         <Alert className="mt-6 !border-destructive/30 bg-destructive/5">
           <LockKeyhole className="text-destructive" size={18} />
-          <AlertTitle>Envio de mensagens indisponível no momento</AlertTitle>
-          <AlertDescription>
-            O envio de mensagens, imagens e anexos está em desenvolvimento e
-            não funciona ainda — nada digitado ou anexado aqui é entregue,
-            armazenado ou visível para outra pessoa. Já está funcionando de
-            verdade, porém, o status de presença da equipe: quem está online
-            agora e o horário do último acesso de cada pessoa.
-          </AlertDescription>
+          <AlertTitle>Em desenvolvimento</AlertTitle>
+          <AlertDescription>Disponível em breve.</AlertDescription>
         </Alert>
 
         <div className="panel mt-9 overflow-hidden">
@@ -3621,12 +3652,19 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
             <div className="border-r border-border overflow-y-auto">
               <div className="p-4 border-b border-border">
                 <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wide">
-                  <UsersRound size={14} /> Equipe
+                  <UsersRound size={14} /> Contatos
                 </div>
               </div>
-              {store.collaborators.map((person) => {
-                const p = presence[person.id];
-                return (
+              {loadingContacts ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  Carregando contatos...
+                </div>
+              ) : contacts.length === 0 ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  Nenhum contato disponível para o seu tipo de conta.
+                </div>
+              ) : (
+                contacts.map((person) => (
                   <button
                     key={person.id}
                     onClick={() => setActiveContactId(person.id)}
@@ -3638,30 +3676,33 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
                   >
                     <span className="relative shrink-0">
                       <span className="w-9 h-9 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-sm">
-                        {person.name.charAt(0).toUpperCase()}
+                        {person.displayName.charAt(0).toUpperCase()}
                       </span>
                       <span
                         className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background ${
-                          p?.online ? "bg-emerald-500" : "bg-muted-foreground/40"
+                          person.online ? "bg-emerald-500" : "bg-muted-foreground/40"
                         }`}
-                        aria-label={p?.online ? "Online" : "Offline"}
+                        aria-label={person.online ? "Online" : "Offline"}
                       />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-bold truncate">
-                        {person.name}
+                      <span className="flex items-center gap-1.5 text-sm font-bold truncate">
+                        {person.displayName}
+                        {person.isDeveloper && (
+                          <span className="chip !text-[9px] !py-0 !px-1.5">
+                            Dev
+                          </span>
+                        )}
                       </span>
                       <span className="block text-[11px] text-muted-foreground truncate">
-                        {p?.online
+                        {person.online
                           ? "Online agora"
-                          : p?.lastSeenAt
-                            ? `Visto por último ${formatLastSeen(p.lastSeenAt)}`
-                            : person.role}
+                          : `Visto por último ${formatLastSeen(person.lastSeenAt)}`}
                       </span>
                     </span>
                   </button>
-                );
-              })}
+                ))
+              )}
             </div>
 
             {/* Thread */}
@@ -3671,26 +3712,29 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
                   <>
                     <span className="relative shrink-0">
                       <span className="w-8 h-8 rounded-full bg-primary/15 text-primary grid place-items-center font-bold text-xs">
-                        {activeContact.name.charAt(0).toUpperCase()}
+                        {activeContact.displayName.charAt(0).toUpperCase()}
                       </span>
                       <span
                         className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border-2 border-background ${
-                          activePresence?.online
+                          activeContact.online
                             ? "bg-emerald-500"
                             : "bg-muted-foreground/40"
                         }`}
                       />
                     </span>
                     <div className="min-w-0">
-                      <span className="block font-bold text-sm truncate">
-                        {activeContact.name}
+                      <span className="flex items-center gap-1.5 font-bold text-sm truncate">
+                        {activeContact.displayName}
+                        {activeContact.isDeveloper && (
+                          <span className="chip !text-[9px] !py-0 !px-1.5">
+                            Dev
+                          </span>
+                        )}
                       </span>
                       <span className="block text-[11px] text-muted-foreground">
-                        {activePresence?.online
+                        {activeContact.online
                           ? "online agora"
-                          : activePresence?.lastSeenAt
-                            ? `visto por último ${formatLastSeen(activePresence.lastSeenAt)}`
-                            : "presença indisponível"}
+                          : `visto por último ${formatLastSeen(activeContact.lastSeenAt)}`}
                       </span>
                     </div>
                   </>
@@ -3701,14 +3745,8 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
                 )}
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
-                <div className="flex flex-col items-center gap-1">
-                  <span className="chip !text-[10px]">
-                    Mensagens abaixo: pré-visualização de layout, nada é
-                    enviado de fato
-                  </span>
-                  <span className="chip !text-[10px] !bg-emerald-500/10 !text-emerald-700 !border-emerald-500/25">
-                    Status online/offline e "visto por último": dados reais
-                  </span>
+                <div className="flex justify-center">
+                  <span className="chip !text-[10px]">Em breve</span>
                 </div>
                 {previewMessages.map((m) => (
                   <div
@@ -3736,14 +3774,11 @@ function Chat({ store, notify }: { store: Store; notify: (m: string, k?: ToastKi
                 ))}
                 {showTypingDemo && activeContact && (
                   <div className="flex justify-start">
-                    <div className="bg-background border border-border rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-2">
+                    <div className="bg-background border border-border rounded-2xl rounded-bl-sm px-4 py-2.5">
                       <span className="flex gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.3s]" />
                         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.15s]" />
                         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" />
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        exemplo: indicador de digitação
                       </span>
                     </div>
                   </div>
@@ -3789,6 +3824,7 @@ function Settings({
         privacyMode: false,
         dailyTips: true,
         autoRefresh: true,
+        theme: "light",
       },
     });
     setConfirmReset(false);
@@ -3859,6 +3895,52 @@ function Settings({
                 </p>
               </div>
             </div>
+            <div className="preference-row">
+              <span>
+                <b>Aparência</b>
+                <small>Escolha entre modo claro ou escuro.</small>
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={
+                    store.preferences.theme === "dark"
+                      ? "button-secondary !px-3 !py-1.5 text-xs"
+                      : "button-primary !px-3 !py-1.5 text-xs"
+                  }
+                  onClick={() => {
+                    if (store.preferences.theme === "dark") {
+                      setStore({
+                        ...store,
+                        preferences: { ...store.preferences, theme: "light" },
+                      });
+                      notify("Modo claro ativado.");
+                    }
+                  }}
+                >
+                  <Sun size={13} /> Claro
+                </button>
+                <button
+                  type="button"
+                  className={
+                    store.preferences.theme === "dark"
+                      ? "button-primary !px-3 !py-1.5 text-xs"
+                      : "button-secondary !px-3 !py-1.5 text-xs"
+                  }
+                  onClick={() => {
+                    if (store.preferences.theme !== "dark") {
+                      setStore({
+                        ...store,
+                        preferences: { ...store.preferences, theme: "dark" },
+                      });
+                      notify("Modo escuro ativado.");
+                    }
+                  }}
+                >
+                  <Moon size={13} /> Escuro
+                </button>
+              </div>
+            </div>
             <div className="space-y-3 mt-6">
               {(
                 [
@@ -3882,7 +3964,7 @@ function Settings({
                     "Modo de privacidade",
                     "Oculta informações sensíveis em áreas compartilhadas.",
                   ],
-                ] as [keyof PortalPreferences, string, string][]
+                ] as [keyof Omit<PortalPreferences, "theme">, string, string][]
               ).map(([key, label, copy]) => (
                 <label key={key} className="preference-row">
                   <span>
@@ -4688,10 +4770,11 @@ function Admin({
               <label className="admin-search relative">
                 <Search size={14} />
                 <input
+                  type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar nome ou usuário"
-                  autoComplete="off"
+                  autoComplete="new-password"
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}
@@ -5514,6 +5597,13 @@ export default function App() {
     document.title = "Odonto Excellence · Gestão Clínica";
   }, []);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      "dark",
+      store.preferences.theme === "dark",
+    );
+  }, [store.preferences.theme]);
+
   if (!authReady)
     return (
       <div
@@ -5553,20 +5643,37 @@ export default function App() {
             <SyncStatusContext.Provider
               value={{ lastSyncedAt, syncing, syncError }}
             >
-              <AppRouter
-                store={store}
-                setStore={setStore}
-                notify={notify}
-                user={user}
-                onAuthenticated={onAuthenticated}
-              />
-              {user?.mustChangePassword && (
-                <PasswordChangeModal
-                  required
-                  onChanged={onAuthenticated}
+              <ThemeContext.Provider
+                value={{
+                  theme: store.preferences.theme === "dark" ? "dark" : "light",
+                  toggleTheme: () =>
+                    setStore({
+                      ...store,
+                      preferences: {
+                        ...store.preferences,
+                        theme:
+                          store.preferences.theme === "dark"
+                            ? "light"
+                            : "dark",
+                      },
+                    }),
+                }}
+              >
+                <AppRouter
+                  store={store}
+                  setStore={setStore}
                   notify={notify}
+                  user={user}
+                  onAuthenticated={onAuthenticated}
                 />
-              )}
+                {user?.mustChangePassword && (
+                  <PasswordChangeModal
+                    required
+                    onChanged={onAuthenticated}
+                    notify={notify}
+                  />
+                )}
+              </ThemeContext.Provider>
             </SyncStatusContext.Provider>
           </NotificationContext.Provider>
         </PortalAuthContext.Provider>

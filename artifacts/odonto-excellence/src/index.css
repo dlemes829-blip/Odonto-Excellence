@@ -95,6 +95,63 @@
   --shadow-soft: 0 18px 45px rgba(90, 8, 8, 0.08);
 }
 
+/* ─── DARK MODE — VERMELHO SOBRE FUNDO ESCURO ─── */
+.dark {
+  /* Backgrounds */
+  --background: 0 8% 9%;
+  --foreground: 0 10% 92%;
+  --border: 0 10% 20%;
+  --input: 0 10% 24%;
+  --ring: 2 70% 52%;
+
+  /* Cards */
+  --card: 0 8% 13%;
+  --card-foreground: 0 10% 92%;
+  --card-border: 0 10% 20%;
+  --popover: 0 8% 13%;
+  --popover-foreground: 0 10% 92%;
+  --popover-border: 0 10% 20%;
+
+  /* Primary — VERMELHO (mais claro para contraste no escuro) */
+  --primary: 2 72% 54%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Secondary */
+  --secondary: 0 10% 18%;
+  --secondary-foreground: 0 10% 90%;
+
+  /* Muted */
+  --muted: 0 8% 17%;
+  --muted-foreground: 0 8% 62%;
+
+  /* Accent — Coral quente */
+  --accent: 14 75% 58%;
+  --accent-foreground: 0 10% 10%;
+
+  /* Destructive */
+  --destructive: 2 72% 54%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Charts */
+  --chart-1: 2 72% 54%;
+  --chart-2: 14 75% 58%;
+  --chart-3: 38 85% 58%;
+  --chart-4: 207 55% 58%;
+  --chart-5: 156 40% 48%;
+
+  /* Sidebar — VERMELHO BEM ESCURO */
+  --sidebar: 2 45% 7%;
+  --sidebar-foreground: 0 15% 93%;
+  --sidebar-border: 2 35% 16%;
+  --sidebar-primary: 2 82% 62%;
+  --sidebar-primary-foreground: 2 45% 7%;
+  --sidebar-accent: 2 30% 14%;
+  --sidebar-accent-foreground: 0 15% 93%;
+  --sidebar-ring: 2 82% 62%;
+
+  --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.4);
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -1120,6 +1177,11 @@
   outline: none;
   font-size: 11px;
   background: transparent;
+}
+.admin-search input[type="search"]::-webkit-search-cancel-button,
+.admin-search input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }
 .admin-request-strip {
   padding: 16px;

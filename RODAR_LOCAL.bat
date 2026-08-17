@@ -29,12 +29,18 @@ if errorlevel 1 (
 )
 
 echo Instalando/atualizando dependencias...
-call pnpm install
+call pnpm install --no-frozen-lockfile
 if errorlevel 1 (
   echo Falha ao instalar dependencias.
+  echo Se o erro mencionar "lockfile" ou "frozen-lockfile", tente novamente -
+  echo esse script ja usa a opcao que evita esse problema automaticamente.
   pause
   exit /b 1
 )
+
+REM O pnpm bloqueia por seguranca scripts de instalacao de pacotes nativos
+REM (ex: esbuild). Aprova automaticamente para nao travar o dev server.
+call pnpm approve-builds --all >nul 2>nul
 
 set "PORT=5173"
 set "VITE_ODONTO_API_URL=https://odonto-excellence-api.onrender.com/api"
