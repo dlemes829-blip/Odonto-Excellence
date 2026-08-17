@@ -4,6 +4,7 @@ import App from './App';
 import applicationStyles from './index.css?inline';
 import { installRuntimeEnhancements } from './runtimeEnhancements';
 import { installHierarchyEnhancements } from './hierarchyEnhancements';
+import { installAdminRoleEnhancements } from './adminRoleEnhancements';
 
 // Keep the application shell self-contained for static hosts. Some providers
 // can publish the JavaScript bundle while dropping a separately emitted CSS asset.
@@ -17,4 +18,5 @@ if (!document.getElementById(styleId)) {
 
 installRuntimeEnhancements();
 installHierarchyEnhancements();
+installAdminRoleEnhancements();
 createRoot(document.getElementById('root')!).render(<App />);
