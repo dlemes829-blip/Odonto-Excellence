@@ -79,7 +79,7 @@ function installFetchStability() {
     const originalUrl = input instanceof Request ? input.url : String(input);
     let url = new URL(originalUrl, window.location.href);
     let requestInput: RequestInfo | URL = input;
-    let nextInit: RequestInit = { ...init };
+    const nextInit: RequestInit = { ...init };
 
     if (url.pathname.endsWith("/odonto-portal/auth/login")) {
       url = new URL(url.toString());
@@ -115,13 +115,12 @@ function installFetchStability() {
     if (!response) throw lastError instanceof Error ? lastError : new Error("Falha de conexão");
 
     if (url.pathname.endsWith("/odonto-portal/auth/login-stable") && response.ok) {
-      void response
-        .clone()
-        .json()
-        .then((body: LoginEnvelope) => {
-          if (body.sessionToken) storeFallbackToken(body.sessionToken, body.expiresAt);
-        })
-        .catch(() => undefined);
+      try {
+        const body = (await response.clone().json()) as LoginEnvelope;
+        if (body.sessionToken) storeFallbackToken(body.sessionToken, body.expiresAt);
+      } catch {
+        // The login response itself remains authoritative even if fallback storage fails.
+      }
     }
 
     if (url.pathname.endsWith("/odonto-portal/auth/logout") && response.ok) clearFallbackToken();
