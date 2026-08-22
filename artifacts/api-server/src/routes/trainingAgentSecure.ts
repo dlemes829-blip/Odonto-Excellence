@@ -1,5 +1,6 @@
 import { db, odontoPortalStates, odontoPortalUserStates } from "@workspace/db";
 import { like } from "drizzle-orm";
+import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type NextFunction, type Request } from "express";
 import type { Response as ExpressResponse } from "express";
 import { logger } from "../lib/logger";
@@ -132,6 +133,42 @@ function buildContext(items: CorpusItem[], queryTokens: string[]) {
   }
   return lines.join("\n");
 }
+
+function authorizedKnowledgeRequest(req: Request): boolean {
+  const configured = process.env.ODONTO_KYRON_KNOWLEDGE_TOKEN?.trim();
+  const provided = req.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (!configured || !provided) return false;
+  const expected = Buffer.from(configured);
+  const actual = Buffer.from(provided);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+router.get("/internal/kyron-knowledge", async (req, res) => {
+  if (!authorizedKnowledgeRequest(req)) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  const query = cleanText(req.query.q, 1_000);
+  if (!query) {
+    res.status(400).json({ error: "query_required" });
+    return;
+  }
+
+  try {
+    const corpus = await loadCorpus();
+    const context = buildContext(corpus.items, tokens(query));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({
+      source: "Odonto Excellence",
+      context,
+      recordsConsidered: corpus.items.length,
+    });
+  } catch (error) {
+    logger.error({ err: error }, "Unable to serve Kyron knowledge context");
+    res.status(503).json({ error: "knowledge_unavailable" });
+  }
+});
 
 router.post("/odonto-portal/training-agent", agentRateLimit, async (req, res) => {
   const user = requirePortalUser(req as PortalRequest, res);
