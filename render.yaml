@@ -21,6 +21,8 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         sync: false
+      - key: ODONTO_KYRON_KNOWLEDGE_TOKEN
+        sync: false
       - key: PORTAL_PUBLIC_URL
         value: https://odonto-excellence-portal.onrender.com
       - key: NODE_ENV
