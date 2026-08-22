@@ -157,7 +157,9 @@ router.get("/internal/kyron-knowledge", async (req, res) => {
 
   try {
     const corpus = await loadCorpus();
-    const context = buildContext(corpus.items, tokens(query));
+    const queryTokens = tokens(query);
+    const relevant = corpus.items.filter(item => scoreRecord(item.record, item.meta, queryTokens) > 0);
+    const context = buildContext(relevant, queryTokens);
     res.setHeader("Cache-Control", "private, no-store");
     res.json({
       source: "Odonto Excellence",
