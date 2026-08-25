@@ -1,6 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft,
   CalendarClock,
   Check,
   ChevronRight,
@@ -60,6 +59,8 @@ type PresenceEnvelope = {
   self?: { device_id: string; avatar_code: string };
 };
 
+type StreetFilter = 'all' | 'pending' | 'scheduled' | 'new' | 'closed';
+
 const EMPTY: Bootstrap = {
   actions: [],
   leads: [],
@@ -100,6 +101,16 @@ function shortDate(value: string) {
   );
 }
 
+function longDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+  }).format(new Date(year, month - 1, day));
+}
+
 function dayName(value: string) {
   const [year, month, day] = value.split('-').map(Number);
   return new Intl.DateTimeFormat('pt-BR', { weekday: 'short' })
@@ -116,6 +127,13 @@ function normalize(value: unknown) {
 
 function phoneDigits(value?: string | null) {
   return String(value ?? '').replace(/\D/g, '');
+}
+
+function displayPhone(value?: string | null) {
+  const digits = phoneDigits(value);
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return value?.trim() || 'Sem telefone';
 }
 
 function appointmentLabel(date: string, time: string) {
@@ -171,9 +189,23 @@ function mobileStatus(lead: LeadRow) {
   if (lead.status === 'Agendado Sistema') return 'Agendado';
   if (lead.status === 'Não tem interesse') return 'Sem interesse';
   if (lead.status === 'Número incorreto') return 'Número incorreto';
-  if (lead.appointment_note && lead.status === 'Aguardando') return 'Pendente de agendamento';
-  if (lead.status === 'Aguardando') return 'Aguardando contato';
+  if (lead.appointment_note && lead.status === 'Aguardando') return 'Pendente';
+  if (lead.status === 'Aguardando') return 'Aguardando';
   return lead.status || 'Novo';
+}
+
+function isClosed(lead: LeadRow) {
+  return lead.status === 'Não tem interesse' || lead.status === 'Número incorreto';
+}
+
+function matchesFilter(lead: LeadRow, filter: StreetFilter) {
+  if (filter === 'pending') return lead.status === 'Aguardando' && Boolean(lead.appointment_note);
+  if (filter === 'scheduled') return lead.status === 'Agendado Sistema' || lead.outcome === 'Efetivado';
+  if (filter === 'closed') return isClosed(lead);
+  if (filter === 'new') {
+    return !lead.appointment_note && lead.status !== 'Agendado Sistema' && !lead.outcome && !isClosed(lead);
+  }
+  return true;
 }
 
 function pickInitialDate(actions: ActionRow[]) {
@@ -214,6 +246,8 @@ export default function StreetMobileControl() {
   const [selfEmoji, setSelfEmoji] = useState('👤');
   const [selectedDate, setSelectedDate] = useState(localDateKey());
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<StreetFilter>('all');
+  const [expandedLeadId, setExpandedLeadId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -270,28 +304,53 @@ export default function StreetMobileControl() {
     window.setTimeout(() => setNotice(''), 2600);
   }
 
+  const actionById = useMemo(() => new Map(data.actions.map((action) => [action.id, action])), [data.actions]);
+
   const dates = useMemo(() => {
     const grouped = new Map<string, number>();
     for (const action of data.actions) grouped.set(action.date, grouped.get(action.date) || 0);
     for (const lead of data.leads) {
-      const action = data.actions.find((item) => item.id === lead.action_id);
+      const action = actionById.get(lead.action_id);
       if (action) grouped.set(action.date, (grouped.get(action.date) || 0) + 1);
     }
     return Array.from(grouped.entries()).sort(([a], [b]) => b.localeCompare(a));
-  }, [data.actions, data.leads]);
+  }, [actionById, data.actions, data.leads]);
 
   const actionsForDay = useMemo(() => data.actions.filter((action) => action.date === selectedDate), [data.actions, selectedDate]);
   const actionIds = useMemo(() => new Set(actionsForDay.map((action) => action.id)), [actionsForDay]);
   const leadsForDay = useMemo(() => data.leads.filter((lead) => actionIds.has(lead.action_id)), [actionIds, data.leads]);
+
+  const counts = useMemo(() => {
+    const pending = leadsForDay.filter((lead) => matchesFilter(lead, 'pending')).length;
+    const scheduled = leadsForDay.filter((lead) => matchesFilter(lead, 'scheduled')).length;
+    const fresh = leadsForDay.filter((lead) => matchesFilter(lead, 'new')).length;
+    const closed = leadsForDay.filter((lead) => matchesFilter(lead, 'closed')).length;
+    return { total: leadsForDay.length, pending, scheduled, fresh, closed };
+  }, [leadsForDay]);
+
   const visibleLeads = useMemo(() => {
     const needle = normalize(query);
     return leadsForDay
+      .filter((lead) => matchesFilter(lead, filter))
       .filter((lead) => !needle || normalize(`${lead.name} ${lead.phone_raw} ${lead.captured_by} ${lead.status} ${lead.appointment_note}`).includes(needle))
-      .sort((a, b) => Number(Boolean(b.appointment_note)) - Number(Boolean(a.appointment_note)) || (b.updated_at || '').localeCompare(a.updated_at || ''));
-  }, [leadsForDay, query]);
+      .sort((a, b) => {
+        const rank = (lead: LeadRow) => {
+          if (matchesFilter(lead, 'pending')) return 0;
+          if (matchesFilter(lead, 'scheduled')) return 1;
+          if (matchesFilter(lead, 'new')) return 2;
+          return 3;
+        };
+        const rankDifference = rank(a) - rank(b);
+        if (rankDifference) return rankDifference;
+        const aAppointment = parseAppointment(a.appointment_note);
+        const bAppointment = parseAppointment(b.appointment_note);
+        const aKey = aAppointment ? `${aAppointment.date}T${aAppointment.time}` : '';
+        const bKey = bAppointment ? `${bAppointment.date}T${bAppointment.time}` : '';
+        if (aKey && bKey && aKey !== bKey) return aKey.localeCompare(bKey);
+        return (b.updated_at || '').localeCompare(a.updated_at || '');
+      });
+  }, [filter, leadsForDay, query]);
 
-  const pendingCount = leadsForDay.filter((lead) => lead.status === 'Aguardando' && Boolean(lead.appointment_note)).length;
-  const scheduledCount = leadsForDay.filter((lead) => lead.status === 'Agendado Sistema').length;
   const activeAction = actionsForDay[0] || null;
 
   async function saveNew(payload: Record<string, unknown>) {
@@ -302,6 +361,7 @@ export default function StreetMobileControl() {
       });
       setData((current) => ({ ...current, leads: [created, ...current.leads], auditCount: current.auditCount + 1 }));
       setNewOpen(false);
+      setFilter('pending');
       flash('Avaliação salva como pendente.');
       navigator.vibrate?.(35);
       void heartbeat(`Cadastrou ${created.name}`);
@@ -324,6 +384,7 @@ export default function StreetMobileControl() {
       });
       setData((current) => ({ ...current, leads: current.leads.map((item) => item.id === lead.id ? updated : item) }));
       setScheduleLead(null);
+      setFilter('pending');
       flash('Horário salvo como pendente.');
       navigator.vibrate?.(35);
       void heartbeat(`Atualizou ${lead.name}`);
@@ -332,6 +393,14 @@ export default function StreetMobileControl() {
       setError(reason instanceof Error ? reason.message : 'Não foi possível salvar o horário.');
     }
   }
+
+  const filters: Array<{ id: StreetFilter; label: string; count: number }> = [
+    { id: 'all', label: 'Todos', count: counts.total },
+    { id: 'pending', label: 'Pendentes', count: counts.pending },
+    { id: 'scheduled', label: 'Agendados', count: counts.scheduled },
+    { id: 'new', label: 'Novos', count: counts.fresh },
+    { id: 'closed', label: 'Encerrados', count: counts.closed },
+  ];
 
   return (
     <main className="street-app">
@@ -355,6 +424,8 @@ export default function StreetMobileControl() {
             onClick={() => {
               setSelectedDate(date);
               setQuery('');
+              setFilter('all');
+              setExpandedLeadId(null);
             }}
           >
             <span>{dayName(date)}</span>
@@ -366,26 +437,53 @@ export default function StreetMobileControl() {
 
       <section className="street-context">
         <div className="street-context-copy">
-          <span><MapPin size={14} /> {activeAction?.location || 'Ação externa'}</span>
-          <h2>{shortDate(selectedDate)}</h2>
-          <small>{leadsForDay.length} contatos · {pendingCount} pendentes · {scheduledCount} agendados</small>
+          <span><MapPin size={13} /> {activeAction?.location || 'Ação externa'}</span>
+          <h2>{longDate(selectedDate)}</h2>
         </div>
         <button type="button" className="street-refresh" onClick={() => void load(true)} aria-label="Atualizar" disabled={refreshing}>
-          <RefreshCw size={18} className={refreshing ? 'spin' : ''} />
+          <RefreshCw size={17} className={refreshing ? 'spin' : ''} />
+        </button>
+      </section>
+
+      <section className="street-summary" aria-label="Resumo do dia">
+        <button type="button" className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
+          <strong>{counts.total}</strong><span>Total</span>
+        </button>
+        <button type="button" className={`pending ${filter === 'pending' ? 'active' : ''}`} onClick={() => setFilter('pending')}>
+          <strong>{counts.pending}</strong><span>Pendentes</span>
+        </button>
+        <button type="button" className={`scheduled ${filter === 'scheduled' ? 'active' : ''}`} onClick={() => setFilter('scheduled')}>
+          <strong>{counts.scheduled}</strong><span>Agendados</span>
+        </button>
+        <button type="button" className={filter === 'new' ? 'active' : ''} onClick={() => setFilter('new')}>
+          <strong>{counts.fresh}</strong><span>Novos</span>
         </button>
       </section>
 
       <section className="street-search-wrap">
-        <Search size={18} />
+        <Search size={17} />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar nome ou telefone"
+          placeholder="Buscar nome, telefone ou responsável"
           inputMode="search"
           enterKeyHint="search"
           aria-label="Buscar registros"
         />
         {query ? <button type="button" onClick={() => setQuery('')} aria-label="Limpar busca"><X size={17} /></button> : null}
+      </section>
+
+      <section className="street-filters" aria-label="Filtrar registros">
+        {filters.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className={filter === item.id ? 'active' : ''}
+            onClick={() => setFilter(item.id)}
+          >
+            {item.label}<span>{item.count}</span>
+          </button>
+        ))}
       </section>
 
       {error ? <div className="street-error" role="alert">{error}<button type="button" onClick={() => setError('')}><X size={16} /></button></div> : null}
@@ -401,45 +499,79 @@ export default function StreetMobileControl() {
           <a href="/?view=desktop">Abrir gestão completa <ChevronRight size={16} /></a>
         </div>
       ) : (
-        <section className="street-list" aria-label="Avaliações do dia">
-          {visibleLeads.length ? visibleLeads.map((lead) => {
-            const tone = statusTone(lead);
-            const digits = phoneDigits(lead.phone_raw);
-            return (
-              <article key={lead.id} className={`street-lead-card tone-${tone}`}>
-                <div className="street-lead-main">
-                  <div className="street-lead-avatar"><UserRound size={18} /></div>
-                  <div className="street-lead-copy">
-                    <h3>{lead.name}</h3>
-                    <span className="street-status">{mobileStatus(lead)}</span>
-                    {lead.appointment_note ? <p><Clock3 size={13} /> {lead.appointment_note}</p> : null}
-                    <small>{lead.captured_by ? `Abordado por ${lead.captured_by}` : 'Responsável não informado'}</small>
-                  </div>
-                </div>
-                <div className="street-lead-actions">
-                  {digits ? (
-                    <a href={`tel:${digits}`} className="street-call" aria-label={`Ligar para ${lead.name}`}><Phone size={17} /> Ligar</a>
-                  ) : null}
-                  <button type="button" onClick={() => setScheduleLead(lead)}>
-                    <CalendarClock size={17} /> {lead.appointment_note ? 'Alterar horário' : 'Marcar horário'}
+        <>
+          <div className="street-list-heading">
+            <span><b>{visibleLeads.length}</b> exibidos</span>
+            {filter !== 'all' ? <button type="button" onClick={() => setFilter('all')}>Limpar filtro</button> : null}
+          </div>
+          <section className="street-list" aria-label="Avaliações do dia">
+            {visibleLeads.length ? visibleLeads.map((lead) => {
+              const tone = statusTone(lead);
+              const digits = phoneDigits(lead.phone_raw);
+              const appointment = parseAppointment(lead.appointment_note);
+              const expanded = expandedLeadId === lead.id;
+              return (
+                <article key={lead.id} className={`street-lead-card tone-${tone} ${expanded ? 'expanded' : ''}`}>
+                  <button
+                    type="button"
+                    className="street-card-toggle"
+                    onClick={() => setExpandedLeadId((current) => current === lead.id ? null : lead.id)}
+                    aria-expanded={expanded}
+                  >
+                    <div className="street-lead-avatar"><UserRound size={17} /></div>
+                    <div className="street-lead-copy">
+                      <div className="street-title-line">
+                        <h3>{lead.name}</h3>
+                        <span className="street-status">{mobileStatus(lead)}</span>
+                      </div>
+                      <div className="street-meta-line">
+                        <span><Phone size={11} /> {displayPhone(lead.phone_raw)}</span>
+                        <span><UserRound size={11} /> {lead.captured_by || 'Sem responsável'}</span>
+                      </div>
+                    </div>
+                    {appointment ? (
+                      <div className="street-time-pill">
+                        <b>{appointment.time}</b>
+                        <span>{shortDate(appointment.date)}</span>
+                      </div>
+                    ) : null}
+                    <ChevronRight size={16} className="street-expand-icon" />
                   </button>
-                </div>
-              </article>
-            );
-          }) : (
-            <div className="street-empty compact">
-              <UsersRound size={25} />
-              <h3>{query ? 'Nenhum resultado' : 'Nenhum contato neste dia'}</h3>
-              <p>{query ? 'Tente outro nome ou telefone.' : 'Cadastre a primeira avaliação da ação.'}</p>
-            </div>
-          )}
-        </section>
+
+                  {expanded ? (
+                    <div className="street-expanded-details">
+                      <div><span>Status</span><b>{mobileStatus(lead)}</b></div>
+                      <div><span>Telefone</span><b>{displayPhone(lead.phone_raw)}</b></div>
+                      <div><span>Abordagem</span><b>{lead.captured_by || 'Não informado'}</b></div>
+                      {lead.appointment_note ? <p><Clock3 size={13} /> {lead.appointment_note}</p> : <p className="muted">Nenhum horário definido.</p>}
+                    </div>
+                  ) : null}
+
+                  <div className="street-lead-actions">
+                    {digits ? (
+                      <a href={`tel:${digits}`} className="street-call" aria-label={`Ligar para ${lead.name}`}><Phone size={15} /> Ligar</a>
+                    ) : <span className="street-no-phone">Sem telefone</span>}
+                    <button type="button" onClick={() => setScheduleLead(lead)}>
+                      <CalendarClock size={15} /> {lead.appointment_note ? 'Alterar horário' : 'Marcar horário'}
+                    </button>
+                  </div>
+                </article>
+              );
+            }) : (
+              <div className="street-empty compact">
+                <UsersRound size={25} />
+                <h3>{query || filter !== 'all' ? 'Nenhum resultado' : 'Nenhum contato neste dia'}</h3>
+                <p>{query || filter !== 'all' ? 'Mude a busca ou o filtro para ver outros registros.' : 'Cadastre a primeira avaliação da ação.'}</p>
+              </div>
+            )}
+          </section>
+        </>
       )}
 
       <div className="street-bottom-space" />
       <div className="street-bottom-bar">
         <button type="button" className="street-primary" onClick={() => setNewOpen(true)} disabled={!activeAction}>
-          <Plus size={21} /> Nova avaliação
+          <Plus size={20} /> Nova avaliação
         </button>
         <a href="/?view=desktop" className="street-full-view">Gestão completa</a>
       </div>
