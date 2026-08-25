@@ -447,7 +447,6 @@ export default function StreetMobileControl() {
       {newOpen && activeAction ? (
         <NewEvaluationSheet
           action={activeAction}
-          teamMembers={data.teamMembers}
           onClose={() => setNewOpen(false)}
           onSubmit={saveNew}
         />
@@ -466,12 +465,10 @@ export default function StreetMobileControl() {
 
 function NewEvaluationSheet({
   action,
-  teamMembers,
   onClose,
   onSubmit,
 }: {
   action: ActionRow;
-  teamMembers: string[];
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => Promise<void>;
 }) {
@@ -489,14 +486,15 @@ function NewEvaluationSheet({
     if (!name.trim() || !date || !time || saving) return;
     setSaving(true);
     try {
-      if (capturedBy) {
-        try { localStorage.setItem(CAPTURED_BY_KEY, capturedBy); } catch { /* no-op */ }
+      const promoter = capturedBy.trim();
+      if (promoter) {
+        try { localStorage.setItem(CAPTURED_BY_KEY, promoter); } catch { /* no-op */ }
       }
       await onSubmit({
         action_id: action.id,
         name: name.trim(),
         phone_raw: phone.trim() || null,
-        captured_by: capturedBy || null,
+        captured_by: promoter || null,
         appointment_note: appointmentLabel(date, time),
         status: 'Aguardando',
         scheduled_by: null,
@@ -526,10 +524,13 @@ function NewEvaluationSheet({
 
         <label>
           <span>Quem abordou</span>
-          <select value={capturedBy} onChange={(event) => setCapturedBy(event.target.value)}>
-            <option value="">Não informar</option>
-            {teamMembers.map((member) => <option key={member} value={member}>{member}</option>)}
-          </select>
+          <input
+            value={capturedBy}
+            onChange={(event) => setCapturedBy(event.target.value)}
+            placeholder="Digite o nome"
+            autoComplete="off"
+            enterKeyHint="next"
+          />
         </label>
 
         <div className="street-date-grid">
