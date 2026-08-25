@@ -9,6 +9,10 @@ import realtimePresenceStyles from './realtimePresence.css?inline';
 import privateBrandingStyles from './privateBranding.css?inline';
 import accessIsolationStyles from './accessIsolation.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
+import {
+  installPrivateAccessNetworkEnhancements,
+  prewarmPrivateSession,
+} from './privateAccessNetwork';
 
 const PRIVATE_API_HEALTH = 'https://odonto-excellence-api.onrender.com/api/healthz';
 let privateAppPromise: Promise<typeof import('./App')> | null = null;
@@ -36,8 +40,10 @@ installInlineStyle('controle-gestao-private-branding', privateBrandingStyles);
 installInlineStyle('controle-gestao-access-isolation', accessIsolationStyles);
 
 // Fetch/session stability must exist before the private application starts its
-// auth and state effects.
+// auth and state effects. The access wrapper is installed after it so it can
+// cache the final stabilized auth response instead of bypassing the safeguards.
 installStabilityEnhancements();
+installPrivateAccessNetworkEnhancements();
 
 let runtimeInstalled = false;
 let trainingInstalled = false;
@@ -114,11 +120,17 @@ function installPrivateAccessNavigation() {
   };
 
   document.addEventListener('pointerover', (event) => {
-    if (eligibleAnchor(event.target)) void preloadPrivateApp();
+    if (eligibleAnchor(event.target)) {
+      void preloadPrivateApp();
+      void prewarmPrivateSession();
+    }
   }, { passive: true });
 
   document.addEventListener('focusin', (event) => {
-    if (eligibleAnchor(event.target)) void preloadPrivateApp();
+    if (eligibleAnchor(event.target)) {
+      void preloadPrivateApp();
+      void prewarmPrivateSession();
+    }
   });
 
   document.addEventListener('click', (event) => {
@@ -130,6 +142,7 @@ function installPrivateAccessNavigation() {
     ) return;
     event.preventDefault();
     void preloadPrivateApp();
+    void prewarmPrivateSession();
     navigateSpa('/acesso');
   });
 }
@@ -140,6 +153,7 @@ function warmPrivateApi() {
     cache: 'no-store',
     mode: 'cors',
   }).catch(() => undefined);
+  void prewarmPrivateSession();
 }
 
 installHistorySignal();
