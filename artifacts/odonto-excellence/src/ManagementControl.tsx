@@ -5,8 +5,6 @@ import {
   BarChart3,
   CalendarDays,
   CheckCircle2,
-  ChevronRight,
-  Clock3,
   ExternalLink,
   FileClock,
   History,
@@ -15,12 +13,13 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   TrendingUp,
   UsersRound,
   X,
 } from 'lucide-react';
 
-const API = 'https://odonto-excellence-acoes.onrender.com/api/public';
+const API = 'https://odonto-excellence-api.onrender.com/api/management';
 const DEVICE_KEY = 'controle-gestao-device-v1';
 const STATUS_OPTIONS = [
   'Novo',
@@ -249,6 +248,8 @@ export default function ManagementControl() {
   const [newLeadOpen, setNewLeadOpen] = useState(false);
   const [newActionOpen, setNewActionOpen] = useState(false);
   const [newConversionOpen, setNewConversionOpen] = useState(false);
+  const [deleteDayOpen, setDeleteDayOpen] = useState(false);
+  const [deletingDay, setDeletingDay] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -256,7 +257,7 @@ export default function ManagementControl() {
     try {
       const next = await request<Bootstrap>('/bootstrap', deviceId);
       setData(next);
-      setSelectedDate((current) => current || next.actions[0]?.date || '');
+      setSelectedDate((current) => next.actions.some((action) => action.date === current) ? current : next.actions[0]?.date || '');
       setError('');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Falha ao carregar os dados.');
@@ -301,9 +302,10 @@ export default function ManagementControl() {
     else if (newLeadOpen) void heartbeat('editing', 'Cadastrando novo lead', 'lead');
     else if (newActionOpen) void heartbeat('editing', 'Criando nova ação', 'action');
     else if (newConversionOpen) void heartbeat('editing', 'Registrando conversão', 'conversion');
+    else if (deleteDayOpen) void heartbeat('editing', `Revisando exclusão de ${shortDate(selectedDate)}`, 'action_day', selectedDate);
     else if (tab === 'conversions') void heartbeat('viewing', 'Consultando conversões', 'conversion');
     else void heartbeat('viewing', selectedDate ? `Consultando ${shortDate(selectedDate)}` : 'Consultando ações', 'action');
-  }, [editingLead, heartbeat, newActionOpen, newConversionOpen, newLeadOpen, selectedDate, tab]);
+  }, [deleteDayOpen, editingLead, heartbeat, newActionOpen, newConversionOpen, newLeadOpen, selectedDate, tab]);
 
   useEffect(() => {
     if (!query.trim()) return;
@@ -377,6 +379,33 @@ export default function ManagementControl() {
     }
   }
 
+  async function archiveSelectedDay() {
+    if (!selectedDate || deletingDay) return;
+    setDeletingDay(true);
+    try {
+      await request(`/days/${selectedDate}`, deviceId, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmation: selectedDate }),
+      });
+      const hiddenActionIds = new Set(actionsForDay.map((action) => action.id));
+      const nextDate = dates.find(([date]) => date !== selectedDate)?.[0] || '';
+      setData((current) => ({
+        ...current,
+        actions: current.actions.filter((action) => action.date !== selectedDate),
+        leads: current.leads.filter((lead) => !hiddenActionIds.has(lead.action_id)),
+        auditCount: current.auditCount + 1,
+      }));
+      setSelectedDate(nextDate);
+      setDeleteDayOpen(false);
+      flash(`Dia ${shortDate(selectedDate)} excluído do controle.`);
+      void load(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível excluir o dia.');
+    } finally {
+      setDeletingDay(false);
+    }
+  }
+
   return (
     <main className="mg-root">
       <header className="mg-header">
@@ -416,7 +445,10 @@ export default function ManagementControl() {
             <span className="mg-eyebrow">{shortDate(selectedDate)}</span>
             <h2>{actionsForDay.map((item) => item.location || item.name).filter(Boolean).join(' · ') || 'Sem ação selecionada'}</h2>
           </div>
-          <button type="button" className="mg-refresh" onClick={() => void load(true)} disabled={refreshing}><RefreshCw size={14} className={refreshing ? 'mg-spin' : ''} /> {refreshing ? 'Atualizando' : 'Atualizar'}</button>
+          <div className="mg-day-actions">
+            {selectedDate && actionsForDay.length ? <button type="button" className="mg-button danger" onClick={() => setDeleteDayOpen(true)}><Trash2 size={13} /> Excluir dia</button> : null}
+            <button type="button" className="mg-refresh" onClick={() => void load(true)} disabled={refreshing}><RefreshCw size={14} className={refreshing ? 'mg-spin' : ''} /> {refreshing ? 'Atualizando' : 'Atualizar'}</button>
+          </div>
         </section>
 
         <div className="mg-metrics">
@@ -480,6 +512,20 @@ export default function ManagementControl() {
         )}
       </section>
 
+      {deleteDayOpen ? (
+        <Modal eyebrow="Excluir dia de ação" title={`Ação de ${shortDate(selectedDate)}`} onClose={() => !deletingDay && setDeleteDayOpen(false)}>
+          <div className="mg-delete-day">
+            <div className="mg-delete-icon"><Trash2 size={20} /></div>
+            <div>
+              <h3>Remover este dia do Controle de Gestão?</h3>
+              <p>O dia tem <b>{actionsForDay.length} {actionsForDay.length === 1 ? 'ação' : 'ações'}</b> e <b>{dayLeads.length} leads</b>. Eles deixarão de aparecer na operação, mas serão preservados no banco e no histórico para recuperação administrativa.</p>
+              {dayConversions.length ? <p className="mg-delete-note">As {dayConversions.length} conversões registradas nesta data não serão apagadas.</p> : null}
+            </div>
+          </div>
+          <div className="mg-form-actions mg-delete-actions"><button type="button" className="mg-button secondary" onClick={() => setDeleteDayOpen(false)} disabled={deletingDay}>Cancelar</button><button type="button" className="mg-button danger solid" onClick={() => void archiveSelectedDay()} disabled={deletingDay}>{deletingDay ? 'Excluindo...' : 'Confirmar exclusão'}</button></div>
+        </Modal>
+      ) : null}
+
       {editingLead ? (
         <Modal eyebrow="Editar registro" title={editingLead.name} onClose={() => setEditingLead(null)}>
           <LeadForm
@@ -530,6 +576,7 @@ export default function ManagementControl() {
               setSelectedDate(created.date);
               setNewActionOpen(false);
               flash('Ação criada.');
+              void load(true);
             } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível criar a ação.'); }
           }} />
         </Modal>
