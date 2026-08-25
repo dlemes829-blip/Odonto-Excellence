@@ -8,6 +8,8 @@ import privateBrandingStyles from './privateBranding.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
 
 const PrivateApp = lazy(() => import('./App'));
+const LEGACY_MANAGEMENT_API = 'https://odonto-excellence-acoes.onrender.com/api/public';
+const MAIN_MANAGEMENT_API = 'https://odonto-excellence-api.onrender.com/api/management';
 
 function installInlineStyle(id: string, css: string) {
   if (document.getElementById(id)) return;
@@ -17,9 +19,24 @@ function installInlineStyle(id: string, css: string) {
   document.head.append(style);
 }
 
+function installManagementApiConsolidation() {
+  const marker = window as typeof window & { __controleManagementApi?: boolean };
+  if (marker.__controleManagementApi) return;
+  marker.__controleManagementApi = true;
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const raw = input instanceof Request ? input.url : String(input);
+    if (!raw.startsWith(LEGACY_MANAGEMENT_API)) return nativeFetch(input, init);
+    const nextUrl = `${MAIN_MANAGEMENT_API}${raw.slice(LEGACY_MANAGEMENT_API.length)}`;
+    if (input instanceof Request) return nativeFetch(new Request(nextUrl, input), init);
+    return nativeFetch(nextUrl, init);
+  };
+}
+
 installInlineStyle('controle-gestao-core-styles', applicationStyles);
 installInlineStyle('controle-gestao-public-styles', managementControlStyles);
 installInlineStyle('controle-gestao-private-branding', privateBrandingStyles);
+installManagementApiConsolidation();
 
 // Fetch/session stability must exist before the private application starts its
 // auth and state effects. It also warms the private API while the public control
