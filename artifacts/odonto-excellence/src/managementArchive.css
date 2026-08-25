@@ -1,0 +1,85 @@
+.mg-day-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mg-button.danger {
+  border-color: #e3c2c2;
+  background: #fffafa;
+  color: #914444;
+}
+
+.mg-button.danger:hover {
+  border-color: #d6a4a4;
+  background: #fbeeee;
+}
+
+.mg-button.danger.solid {
+  border-color: #914444;
+  background: #914444;
+  color: #fff;
+}
+
+.mg-button.danger.solid:hover {
+  border-color: #753535;
+  background: #753535;
+}
+
+.mg-delete-day {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  padding: 22px 22px 4px;
+}
+
+.mg-delete-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #f8eaea;
+  color: #914444;
+}
+
+.mg-delete-day h3 {
+  margin: 1px 0 8px;
+  font-size: 15px;
+  letter-spacing: -.015em;
+}
+
+.mg-delete-day p {
+  margin: 0;
+  color: var(--mg-muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.mg-delete-day p + p {
+  margin-top: 9px;
+}
+
+.mg-delete-note {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #f5f7f8;
+  border: 1px solid var(--mg-line);
+}
+
+.mg-delete-actions {
+  padding: 16px 22px 22px;
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .mg-day-heading {
+    align-items: flex-start;
+  }
+
+  .mg-day-actions {
+    justify-content: flex-start;
+  }
+}
