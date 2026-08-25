@@ -1,16 +1,13 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import App from './App';
-import PublicControl from './PublicControl';
+import ManagementControl from './ManagementControl';
 import applicationStyles from './index.css?inline';
-import publicControlStyles from './publicControl.css?inline';
+import managementControlStyles from './managementControl.css?inline';
+import privateBrandingStyles from './privateBranding.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
-import { installTrainingProgressEnhancements } from './trainingProgressEnhancements';
-import { installRuntimeEnhancements } from './runtimeEnhancements';
-import { installHierarchyEnhancements } from './hierarchyEnhancements';
-import { installAdminRoleEnhancements } from './adminRoleEnhancements';
-import { installAdminStructureIntegration } from './adminStructureIntegration';
+
+const PrivateApp = lazy(() => import('./App'));
 
 function installInlineStyle(id: string, css: string) {
   if (document.getElementById(id)) return;
@@ -20,82 +17,111 @@ function installInlineStyle(id: string, css: string) {
   document.head.append(style);
 }
 
-// Keep the application shell self-contained for static hosts. The second sheet
-// contains the new public control and the neutral/personal visual identity.
-installInlineStyle('controle-pessoal-core-styles', applicationStyles);
-installInlineStyle('controle-pessoal-public-styles', publicControlStyles);
+installInlineStyle('controle-gestao-core-styles', applicationStyles);
+installInlineStyle('controle-gestao-public-styles', managementControlStyles);
+installInlineStyle('controle-gestao-private-branding', privateBrandingStyles);
 
-function neutralCopy(value: string) {
-  return value
-    .replace(/ODONTO EXCELLENCE/g, 'CONTROLE PESSOAL')
-    .replace(/Odonto Excellence/g, 'Controle Pessoal')
-    .replace(/Portal do Colaborador/gi, 'Ambiente Privado')
-    .replace(/REDE NACIONAL/g, 'AMBIENTE PRIVADO');
-}
-
-function neutralizeTextNode(node: Text) {
-  const tag = node.parentElement?.tagName;
-  if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEXTAREA' || tag === 'NOSCRIPT') return;
-  const current = node.nodeValue ?? '';
-  const next = neutralCopy(current);
-  if (next !== current) node.nodeValue = next;
-}
-
-function neutralizeSubtree(root: Node) {
-  if (root.nodeType === Node.TEXT_NODE) {
-    neutralizeTextNode(root as Text);
-    return;
-  }
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let current = walker.nextNode();
-  while (current) {
-    neutralizeTextNode(current as Text);
-    current = walker.nextNode();
-  }
-}
-
-function installNeutralBranding() {
-  const fixTitle = () => {
-    const next = neutralCopy(document.title);
-    if (next !== document.title) document.title = next;
-  };
-  neutralizeSubtree(document.body);
-  fixTitle();
-  const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      if (record.type === 'characterData') neutralizeTextNode(record.target as Text);
-      for (const node of record.addedNodes) neutralizeSubtree(node);
-    }
-    fixTitle();
-  });
-  observer.observe(document.documentElement, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-  });
-}
-
-installNeutralBranding();
-
-// Session/fetch/timer stability must be installed before React effects issue
-// the first auth and synchronization requests.
+// Fetch/session stability must exist before the private application starts its
+// auth and state effects. It also warms the private API while the public control
+// is being used, reducing the first authenticated navigation delay.
 installStabilityEnhancements();
-installTrainingProgressEnhancements();
-installRuntimeEnhancements();
-installHierarchyEnhancements();
-installAdminRoleEnhancements();
-installAdminStructureIntegration();
 
-// Wouter changes history without a full reload. Mirror those changes so this
-// outer boundary can swap the public, loginless control for the authenticated
-// application whenever the path changes.
-for (const method of ['pushState', 'replaceState'] as const) {
-  const original = window.history[method];
-  window.history[method] = function (...args: Parameters<History[typeof method]>) {
-    const result = original.apply(this, args);
-    window.dispatchEvent(new Event('controle-location-change'));
-    return result;
-  } as History[typeof method];
+let runtimeInstalled = false;
+let trainingInstalled = false;
+let hierarchyInstalled = false;
+let adminRoleInstalled = false;
+let adminStructureInstalled = false;
+
+async function installPrivateEnhancements(path: string) {
+  if (path.includes('/treinamento')) {
+    if (!trainingInstalled) {
+      const module = await import('./trainingProgressEnhancements');
+      module.installTrainingProgressEnhancements();
+      trainingInstalled = true;
+    }
+    if (!runtimeInstalled) {
+      const module = await import('./runtimeEnhancements');
+      module.installRuntimeEnhancements();
+      runtimeInstalled = true;
+    }
+  }
+
+  if (path.includes('/admin')) {
+    if (!runtimeInstalled) {
+      const module = await import('./runtimeEnhancements');
+      module.installRuntimeEnhancements();
+      runtimeInstalled = true;
+    }
+    if (!hierarchyInstalled) {
+      const module = await import('./hierarchyEnhancements');
+      module.installHierarchyEnhancements();
+      hierarchyInstalled = true;
+    }
+    if (!adminRoleInstalled) {
+      const module = await import('./adminRoleEnhancements');
+      module.installAdminRoleEnhancements();
+      adminRoleInstalled = true;
+    }
+    if (!adminStructureInstalled) {
+      const module = await import('./adminStructureIntegration');
+      module.installAdminStructureIntegration();
+      adminStructureInstalled = true;
+    }
+  }
+}
+
+function installHistorySignal() {
+  const marker = window as typeof window & { __controleHistorySignal?: boolean };
+  if (marker.__controleHistorySignal) return;
+  marker.__controleHistorySignal = true;
+  for (const method of ['pushState', 'replaceState'] as const) {
+    const original = window.history[method];
+    window.history[method] = function (...args: Parameters<History[typeof method]>) {
+      const result = original.apply(this, args);
+      window.dispatchEvent(new Event('controle-location-change'));
+      return result;
+    } as History[typeof method];
+  }
+}
+
+installHistorySignal();
+
+function PrivateLoading() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f6f7f8' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#66717a', fontSize: 12 }}>
+        <span style={{ width: 18, height: 18, border: '2px solid #d8dee2', borderTopColor: '#245c6e', borderRadius: '50%', animation: 'controle-spin .7s linear infinite' }} />
+        Abrindo ambiente privado
+        <style>{'@keyframes controle-spin { to { transform: rotate(360deg); } }'}</style>
+      </div>
+    </div>
+  );
+}
+
+function PrivateExperience({ path }: { path: string }) {
+  useEffect(() => {
+    void installPrivateEnhancements(path);
+  }, [path]);
+
+  useEffect(() => {
+    const title = document.querySelector('title');
+    if (!title) return;
+    const enforce = () => {
+      if (document.title !== 'Ambiente Privado · Controle de Gestão') {
+        document.title = 'Ambiente Privado · Controle de Gestão';
+      }
+    };
+    enforce();
+    const observer = new MutationObserver(enforce);
+    observer.observe(title, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <Suspense fallback={<PrivateLoading />}>
+      <PrivateApp />
+    </Suspense>
+  );
 }
 
 function RootExperience() {
@@ -112,12 +138,12 @@ function RootExperience() {
   }, []);
 
   useEffect(() => {
-    document.title = path === '/'
-      ? 'Controle Pessoal · Ações e Conversões'
-      : 'Controle Pessoal · Área Administrativa';
+    if (path === '/') document.title = 'Controle de Gestão · Ações e Conversões';
   }, [path]);
 
-  return path === '/' ? <PublicControl /> : <App />;
+  return path === '/'
+    ? <ManagementControl />
+    : <PrivateExperience path={path} />;
 }
 
 createRoot(document.getElementById('root')!).render(<RootExperience />);
