@@ -5,6 +5,7 @@ const API_URL = (
 
 const AUTH_ME = `${API_URL}/odonto-portal/auth/me`;
 const CACHE_TTL_MS = 90_000;
+const CACHE_REFRESH_MS = 60_000;
 
 type CachedResponse = {
   body: string;
@@ -61,7 +62,10 @@ function emptyNotifications() {
 }
 
 export function installPrivateAccessNetworkEnhancements() {
-  const marker = window as typeof window & { __controleAccessNetwork?: boolean };
+  const marker = window as typeof window & {
+    __controleAccessNetwork?: boolean;
+    __controleAccessWarmTimer?: number;
+  };
   if (marker.__controleAccessNetwork) return;
   marker.__controleAccessNetwork = true;
 
@@ -105,6 +109,10 @@ export function installPrivateAccessNetworkEnhancements() {
 
     return response;
   };
+
+  marker.__controleAccessWarmTimer = window.setInterval(() => {
+    if (window.location.pathname === '/') void prewarmPrivateSession();
+  }, CACHE_REFRESH_MS);
 }
 
 export function prewarmPrivateSession() {
