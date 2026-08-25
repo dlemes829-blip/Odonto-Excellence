@@ -1,0 +1,136 @@
+.mg-presence {
+  position: relative;
+  min-width: 285px;
+  padding: 8px 10px;
+  border: 1px solid rgba(31,95,116,.13);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(247,250,251,.96));
+  box-shadow: 0 5px 18px rgba(20,38,48,.045);
+}
+
+.mg-presence::before {
+  content: "AO VIVO";
+  position: absolute;
+  top: -7px;
+  right: 8px;
+  padding: 2px 6px;
+  border: 1px solid rgba(52,168,115,.2);
+  border-radius: 999px;
+  background: #f6fbf8;
+  color: #27815a;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.mg-presence-title {
+  color: #5f6c73;
+  font-weight: 750;
+}
+
+.mg-presence-title b {
+  color: #26343b;
+  font-size: 11px;
+}
+
+.mg-online-dot {
+  animation: mg-live-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes mg-live-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(52,168,115,.10); }
+  50% { box-shadow: 0 0 0 6px rgba(52,168,115,.02); }
+}
+
+.mg-presence-avatars {
+  padding-right: 2px;
+}
+
+.mg-avatar {
+  width: 35px;
+  height: 35px;
+  background: #f2f6f7;
+  border-width: 2px;
+  font-size: 18px;
+  transition: transform .14s ease, box-shadow .14s ease, margin .14s ease;
+}
+
+.mg-avatar:hover {
+  z-index: 4;
+  transform: translateY(-2px) scale(1.08);
+  box-shadow: 0 6px 14px rgba(24,45,56,.14);
+}
+
+.mg-avatar.self {
+  background: #e3eef1;
+  box-shadow: 0 0 0 2px rgba(31,95,116,.13);
+}
+
+.mg-avatar.self::before {
+  content: "você";
+  position: absolute;
+  left: 50%;
+  top: -17px;
+  transform: translateX(-50%);
+  color: #66757d;
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  opacity: 0;
+  transition: opacity .12s ease;
+  pointer-events: none;
+}
+
+.mg-avatar.self:hover::before {
+  opacity: 1;
+}
+
+.mg-presence-activity {
+  position: relative;
+  margin-top: 3px;
+  padding-left: 15px;
+  color: #617079;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.mg-presence-activity::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 8px;
+  height: 3px;
+  border-radius: 999px;
+  background: #8ba1ab;
+  box-shadow: 4px 0 0 #b3c1c7, 8px 0 0 #d0d9dd;
+  animation: mg-typing 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes mg-typing {
+  from { opacity: .35; transform: translateY(0); }
+  to { opacity: .9; transform: translateY(-1px); }
+}
+
+.mg-header-right {
+  align-items: stretch;
+}
+
+@media (max-width: 760px) {
+  .mg-presence {
+    min-width: 0;
+    padding: 5px 7px;
+    border-radius: 10px;
+  }
+
+  .mg-presence::before {
+    display: none;
+  }
+
+  .mg-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+}
