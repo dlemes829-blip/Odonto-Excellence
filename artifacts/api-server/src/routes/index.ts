@@ -7,6 +7,7 @@ import organizationalHierarchyRouter from "./organizationalHierarchy";
 import dataDurabilityRouter from "./dataDurability";
 import odontoPortalAuthRouter from "./odontoPortalAuth";
 import appointmentOperationsRouter from "./appointmentOperations";
+import managementDayArchiveRouter from "./managementDayArchive";
 import managementControlRouter from "./managementControl";
 import trainingMetadataFastRouter from "./trainingMetadataFast";
 import trainingAgentSecureRouter from "./trainingAgentSecure";
@@ -16,6 +17,9 @@ import trainingAgentRouter from "./trainingAgent";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+// Day archival overrides bootstrap/action handling before the generic public
+// management routes so excluded dates disappear without destroying stored data.
+router.use(managementDayArchiveRouter);
 // Public, loginless management control is intentionally mounted before the
 // portal-authenticated routes and uses its own origin/rate controls.
 router.use(managementControlRouter);
