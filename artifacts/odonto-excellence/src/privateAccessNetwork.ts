@@ -4,7 +4,7 @@ const API_URL = (
 ).replace(/\/$/, '');
 
 const AUTH_ME = `${API_URL}/odonto-portal/auth/me`;
-const CACHE_TTL_MS = 20_000;
+const CACHE_TTL_MS = 90_000;
 
 type CachedResponse = {
   body: string;
