@@ -5,10 +5,20 @@ import ManagementControl from './ManagementControl';
 import applicationStyles from './index.css?inline';
 import managementControlStyles from './managementControl.css?inline';
 import managementArchiveStyles from './managementArchive.css?inline';
+import realtimePresenceStyles from './realtimePresence.css?inline';
 import privateBrandingStyles from './privateBranding.css?inline';
+import accessIsolationStyles from './accessIsolation.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
 
-const PrivateApp = lazy(() => import('./App'));
+const PRIVATE_API_HEALTH = 'https://odonto-excellence-api.onrender.com/api/healthz';
+let privateAppPromise: Promise<typeof import('./App')> | null = null;
+
+function preloadPrivateApp() {
+  privateAppPromise ??= import('./App');
+  return privateAppPromise;
+}
+
+const PrivateApp = lazy(preloadPrivateApp);
 
 function installInlineStyle(id: string, css: string) {
   if (document.getElementById(id)) return;
@@ -21,11 +31,12 @@ function installInlineStyle(id: string, css: string) {
 installInlineStyle('controle-gestao-core-styles', applicationStyles);
 installInlineStyle('controle-gestao-public-styles', managementControlStyles);
 installInlineStyle('controle-gestao-archive-styles', managementArchiveStyles);
+installInlineStyle('controle-gestao-realtime-styles', realtimePresenceStyles);
 installInlineStyle('controle-gestao-private-branding', privateBrandingStyles);
+installInlineStyle('controle-gestao-access-isolation', accessIsolationStyles);
 
 // Fetch/session stability must exist before the private application starts its
-// auth and state effects. It also warms the private API while the public control
-// is being used, reducing the first authenticated navigation delay.
+// auth and state effects.
 installStabilityEnhancements();
 
 let runtimeInstalled = false;
@@ -86,43 +97,101 @@ function installHistorySignal() {
   }
 }
 
+function navigateSpa(path: string) {
+  if (window.location.pathname === path) return;
+  window.history.pushState({}, '', path);
+}
+
+function installPrivateAccessNavigation() {
+  const marker = window as typeof window & { __controlePrivateNavigation?: boolean };
+  if (marker.__controlePrivateNavigation) return;
+  marker.__controlePrivateNavigation = true;
+
+  const eligibleAnchor = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return null;
+    const anchor = target.closest('a[href="/acesso"]');
+    return anchor instanceof HTMLAnchorElement ? anchor : null;
+  };
+
+  document.addEventListener('pointerover', (event) => {
+    if (eligibleAnchor(event.target)) void preloadPrivateApp();
+  }, { passive: true });
+
+  document.addEventListener('focusin', (event) => {
+    if (eligibleAnchor(event.target)) void preloadPrivateApp();
+  });
+
+  document.addEventListener('click', (event) => {
+    const anchor = eligibleAnchor(event.target);
+    if (!anchor) return;
+    if (
+      event instanceof MouseEvent &&
+      (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+    ) return;
+    event.preventDefault();
+    void preloadPrivateApp();
+    navigateSpa('/acesso');
+  });
+}
+
+function warmPrivateApi() {
+  void fetch(PRIVATE_API_HEALTH, {
+    method: 'GET',
+    cache: 'no-store',
+    mode: 'cors',
+  }).catch(() => undefined);
+}
+
 installHistorySignal();
+installPrivateAccessNavigation();
 
 function PrivateLoading() {
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f6f7f8' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#66717a', fontSize: 12 }}>
-        <span style={{ width: 18, height: 18, border: '2px solid #d8dee2', borderTopColor: '#245c6e', borderRadius: '50%', animation: 'controle-spin .7s linear infinite' }} />
-        Abrindo ambiente privado
-        <style>{'@keyframes controle-spin { to { transform: rotate(360deg); } }'}</style>
+    <div className="private-entry-loader" aria-live="polite" aria-busy="true">
+      <div className="private-entry-loader-card">
+        <span className="private-entry-spinner" />
+        <div>
+          <b>Abrindo ambiente privado</b>
+          <small>Preparando acesso seguro</small>
+        </div>
       </div>
     </div>
   );
 }
 
 function PrivateExperience({ path }: { path: string }) {
+  const isAccess = path === '/acesso';
+
   useEffect(() => {
     void installPrivateEnhancements(path);
   }, [path]);
 
   useEffect(() => {
+    document.documentElement.classList.toggle('controle-access-route', isAccess);
+    return () => document.documentElement.classList.remove('controle-access-route');
+  }, [isAccess]);
+
+  useEffect(() => {
     const title = document.querySelector('title');
     if (!title) return;
     const enforce = () => {
-      if (document.title !== 'Ambiente Privado · Controle de Gestão') {
-        document.title = 'Ambiente Privado · Controle de Gestão';
-      }
+      const next = isAccess
+        ? 'Acesso · Controle de Gestão'
+        : 'Ambiente Privado · Controle de Gestão';
+      if (document.title !== next) document.title = next;
     };
     enforce();
     const observer = new MutationObserver(enforce);
     observer.observe(title, { childList: true, subtree: true, characterData: true });
     return () => observer.disconnect();
-  }, []);
+  }, [isAccess]);
 
   return (
-    <Suspense fallback={<PrivateLoading />}>
-      <PrivateApp />
-    </Suspense>
+    <div className={isAccess ? 'private-access-route' : 'private-app-route'}>
+      <Suspense fallback={<PrivateLoading />}>
+        <PrivateApp />
+      </Suspense>
+    </div>
   );
 }
 
@@ -140,7 +209,29 @@ function RootExperience() {
   }, []);
 
   useEffect(() => {
-    if (path === '/') document.title = 'Controle de Gestão · Ações e Conversões';
+    if (path !== '/') return;
+    document.title = 'Controle de Gestão · Ações e Conversões';
+
+    warmPrivateApi();
+    const warmTimer = window.setInterval(warmPrivateApi, 4 * 60_000);
+
+    const browser = window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleId: number | null = null;
+    let fallbackId: number | null = null;
+    if (browser.requestIdleCallback) {
+      idleId = browser.requestIdleCallback(() => void preloadPrivateApp(), { timeout: 1200 });
+    } else {
+      fallbackId = window.setTimeout(() => void preloadPrivateApp(), 650);
+    }
+
+    return () => {
+      window.clearInterval(warmTimer);
+      if (idleId !== null) browser.cancelIdleCallback?.(idleId);
+      if (fallbackId !== null) window.clearTimeout(fallbackId);
+    };
   }, [path]);
 
   return path === '/'
