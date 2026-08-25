@@ -25,6 +25,58 @@ function installInlineStyle(id: string, css: string) {
 installInlineStyle('controle-pessoal-core-styles', applicationStyles);
 installInlineStyle('controle-pessoal-public-styles', publicControlStyles);
 
+function neutralCopy(value: string) {
+  return value
+    .replace(/ODONTO EXCELLENCE/g, 'CONTROLE PESSOAL')
+    .replace(/Odonto Excellence/g, 'Controle Pessoal')
+    .replace(/Portal do Colaborador/gi, 'Ambiente Privado')
+    .replace(/REDE NACIONAL/g, 'AMBIENTE PRIVADO');
+}
+
+function neutralizeTextNode(node: Text) {
+  const tag = node.parentElement?.tagName;
+  if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEXTAREA' || tag === 'NOSCRIPT') return;
+  const current = node.nodeValue ?? '';
+  const next = neutralCopy(current);
+  if (next !== current) node.nodeValue = next;
+}
+
+function neutralizeSubtree(root: Node) {
+  if (root.nodeType === Node.TEXT_NODE) {
+    neutralizeTextNode(root as Text);
+    return;
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let current = walker.nextNode();
+  while (current) {
+    neutralizeTextNode(current as Text);
+    current = walker.nextNode();
+  }
+}
+
+function installNeutralBranding() {
+  const fixTitle = () => {
+    const next = neutralCopy(document.title);
+    if (next !== document.title) document.title = next;
+  };
+  neutralizeSubtree(document.body);
+  fixTitle();
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === 'characterData') neutralizeTextNode(record.target as Text);
+      for (const node of record.addedNodes) neutralizeSubtree(node);
+    }
+    fixTitle();
+  });
+  observer.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+  });
+}
+
+installNeutralBranding();
+
 // Session/fetch/timer stability must be installed before React effects issue
 // the first auth and synchronization requests.
 installStabilityEnhancements();
