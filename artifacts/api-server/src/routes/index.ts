@@ -6,6 +6,7 @@ import hierarchyCompatibilityRouter from "./hierarchyCompatibility";
 import organizationalHierarchyRouter from "./organizationalHierarchy";
 import dataDurabilityRouter from "./dataDurability";
 import odontoPortalAuthRouter from "./odontoPortalAuth";
+import appointmentOperationsRouter from "./appointmentOperations";
 import trainingMetadataFastRouter from "./trainingMetadataFast";
 import trainingAgentSecureRouter from "./trainingAgentSecure";
 import odontoPortalRouter from "./odontoPortal";
@@ -26,6 +27,9 @@ router.use(organizationalHierarchyRouter);
 // rollover and archive copies are committed server-side first.
 router.use(dataDurabilityRouter);
 router.use(odontoPortalAuthRouter);
+// Evaluation writes are atomic and mounted before the generic document route.
+// This prevents a concurrent state refresh from dropping a newly saved patient.
+router.use(appointmentOperationsRouter);
 // Fast/hardened endpoints intentionally mount before their legacy equivalents.
 // They own the response and avoid the slower full-document implementations.
 router.use(trainingMetadataFastRouter);
