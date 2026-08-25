@@ -1,0 +1,74 @@
+.private-entry-loader {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(31, 95, 116, .08), transparent 30%),
+    #f5f7f8;
+}
+
+.private-entry-loader-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 250px;
+  padding: 14px 16px;
+  border: 1px solid #dfe4e8;
+  border-radius: 12px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 14px 36px rgba(24,39,48,.08);
+  color: #26323a;
+}
+
+.private-entry-loader-card b,
+.private-entry-loader-card small {
+  display: block;
+}
+
+.private-entry-loader-card b {
+  font-size: 12px;
+}
+
+.private-entry-loader-card small {
+  margin-top: 2px;
+  color: #7b858c;
+  font-size: 9px;
+}
+
+.private-entry-spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 2px solid #dbe3e7;
+  border-top-color: #1f5f74;
+  border-radius: 50%;
+  animation: private-entry-spin .65s linear infinite;
+}
+
+@keyframes private-entry-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* /acesso is an authentication surface. Operational notices and toast layers
+   are intentionally suppressed here so authenticated-session noise never
+   appears over login/request-access forms. */
+.controle-access-route [data-radix-toast-viewport],
+.controle-access-route [data-sonner-toaster],
+.controle-access-route .toast-note,
+.controle-access-route .notification-popover,
+.private-access-route [data-radix-toast-viewport],
+.private-access-route [data-sonner-toaster],
+.private-access-route .toast-note,
+.private-access-route .notification-popover,
+.private-access-route .fixed.right-5.bottom-5 {
+  display: none !important;
+}
+
+/* Prevent off-screen notification layers from intercepting taps even if a
+   third-party toaster changes its internal class names. */
+.controle-access-route body > [role="region"][aria-label*="Notifica"],
+.controle-access-route body > [role="region"][aria-label*="Toast"] {
+  display: none !important;
+  pointer-events: none !important;
+}
