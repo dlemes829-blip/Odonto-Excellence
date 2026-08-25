@@ -1,0 +1,60 @@
+.brand-logo-frame,
+.brand-clinic-label,
+.study-brand-card img,
+.hero-clinic-art,
+.hero-brand-badge {
+  display: none !important;
+}
+
+.brand-lockup {
+  min-height: 38px;
+  display: inline-flex !important;
+  align-items: center;
+  text-decoration: none;
+}
+
+.brand-lockup::before {
+  content: "CG";
+  width: 35px;
+  height: 35px;
+  border-radius: 9px;
+  display: inline-grid;
+  place-items: center;
+  margin-right: 10px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .05em;
+}
+
+.brand-lockup::after {
+  content: "AMBIENTE PRIVADO";
+  color: hsl(var(--foreground));
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.brand-lockup-dark::after {
+  color: white;
+}
+
+.sidebar .brand-lockup::after {
+  color: white;
+}
+
+/* The old network/brand breadcrumb added no operational value and cost visual space. */
+.topbar > div.hidden.md\:flex.items-center.gap-2.text-xs.text-muted-foreground {
+  display: none !important;
+}
+
+.study-brand-card {
+  min-height: 30px;
+  justify-content: flex-start !important;
+}
+
+.study-brand-card span {
+  font-weight: 800;
+  letter-spacing: .04em;
+}
