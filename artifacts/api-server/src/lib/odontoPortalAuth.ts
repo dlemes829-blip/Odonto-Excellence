@@ -12,6 +12,7 @@ import { db, odontoPortalSessions, odontoPortalUsers } from "@workspace/db";
 const scrypt = promisify(scryptCallback);
 export const ODONTO_SESSION_COOKIE = "odonto_portal_session";
 const SESSION_DAYS = 7;
+const SESSION_LOOKUP_TTL_MS = 5_000;
 let bootstrapComplete = false;
 
 export type PortalRole = "admin" | "member";
@@ -36,6 +37,14 @@ export type PortalPrincipal = {
   teamMemberLimit: number;
 };
 export type PortalRequest = Request & { portalUser?: PortalPrincipal };
+
+type SessionCacheEntry = {
+  principal: PortalPrincipal | null;
+  expiresAt: number;
+};
+
+const sessionCache = new Map<string, SessionCacheEntry>();
+const sessionLookups = new Map<string, Promise<PortalPrincipal | null>>();
 
 function normalizedUsername(value: string) {
   return value.trim().toLocaleLowerCase("pt-BR");
@@ -76,6 +85,95 @@ export function publicUser(user: PortalPrincipal) {
     isActive: user.isActive,
     teamMemberLimit: user.teamMemberLimit,
   };
+}
+
+function normalizePrincipal(session: {
+  id: string;
+  username: string;
+  displayName: string;
+  role: string;
+  accountType: string;
+  accountStatus: string;
+  managerId: string | null;
+  workspaceOwnerId: string | null;
+  mustChangePassword: boolean;
+  isActive: boolean;
+  teamMemberLimit: number;
+} | undefined): PortalPrincipal | null {
+  if (!session?.isActive || session.accountStatus !== "active") return null;
+  return {
+    ...session,
+    role: session.role === "admin" ? "admin" : "member",
+    accountType: ([
+      "creator",
+      "supervisor",
+      "manager",
+      "member",
+      "individual",
+    ].includes(session.accountType)
+      ? session.accountType
+      : "individual") as PortalAccountType,
+    accountStatus: (["pending", "active", "suspended"].includes(
+      session.accountStatus,
+    )
+      ? session.accountStatus
+      : "active") as PortalAccountStatus,
+    workspaceOwnerId: session.workspaceOwnerId || session.id,
+  };
+}
+
+async function loadPrincipalByTokenHash(hash: string): Promise<PortalPrincipal | null> {
+  const now = Date.now();
+  const cached = sessionCache.get(hash);
+  if (cached && cached.expiresAt > now) return cached.principal;
+  if (cached) sessionCache.delete(hash);
+
+  const inFlight = sessionLookups.get(hash);
+  if (inFlight) return inFlight;
+
+  const lookup = db
+    .select({
+      id: odontoPortalUsers.id,
+      username: odontoPortalUsers.username,
+      displayName: odontoPortalUsers.displayName,
+      role: odontoPortalUsers.role,
+      accountType: odontoPortalUsers.accountType,
+      accountStatus: odontoPortalUsers.accountStatus,
+      managerId: odontoPortalUsers.managerId,
+      workspaceOwnerId: odontoPortalUsers.workspaceOwnerId,
+      mustChangePassword: odontoPortalUsers.mustChangePassword,
+      isActive: odontoPortalUsers.isActive,
+      teamMemberLimit: odontoPortalUsers.teamMemberLimit,
+    })
+    .from(odontoPortalSessions)
+    .innerJoin(
+      odontoPortalUsers,
+      eq(odontoPortalSessions.userId, odontoPortalUsers.id),
+    )
+    .where(
+      and(
+        eq(odontoPortalSessions.tokenHash, hash),
+        gt(odontoPortalSessions.expiresAt, new Date()),
+      ),
+    )
+    .limit(1)
+    .then(([session]) => normalizePrincipal(session))
+    .then((principal) => {
+      sessionCache.set(hash, {
+        principal,
+        expiresAt: Date.now() + SESSION_LOOKUP_TTL_MS,
+      });
+      return principal;
+    })
+    .finally(() => sessionLookups.delete(hash));
+
+  sessionLookups.set(hash, lookup);
+  return lookup;
+}
+
+function invalidateSessionHash(hash: string) {
+  sessionCache.delete(hash);
+  sessionLookups.delete(hash);
 }
 
 export async function bootstrapAdmin() {
@@ -184,52 +282,9 @@ export async function attachPortalUser(
   const rawToken = req.cookies?.[ODONTO_SESSION_COOKIE];
   if (!rawToken || typeof rawToken !== "string") return next();
   try {
-    const [session] = await db
-      .select({
-        id: odontoPortalUsers.id,
-        username: odontoPortalUsers.username,
-        displayName: odontoPortalUsers.displayName,
-        role: odontoPortalUsers.role,
-        accountType: odontoPortalUsers.accountType,
-        accountStatus: odontoPortalUsers.accountStatus,
-        managerId: odontoPortalUsers.managerId,
-        workspaceOwnerId: odontoPortalUsers.workspaceOwnerId,
-        mustChangePassword: odontoPortalUsers.mustChangePassword,
-        isActive: odontoPortalUsers.isActive,
-        teamMemberLimit: odontoPortalUsers.teamMemberLimit,
-      })
-      .from(odontoPortalSessions)
-      .innerJoin(
-        odontoPortalUsers,
-        eq(odontoPortalSessions.userId, odontoPortalUsers.id),
-      )
-      .where(
-        and(
-          eq(odontoPortalSessions.tokenHash, tokenHash(rawToken)),
-          gt(odontoPortalSessions.expiresAt, new Date()),
-        ),
-      )
-      .limit(1);
-    if (session?.isActive && session.accountStatus === "active")
-      req.portalUser = {
-        ...session,
-        role: session.role === "admin" ? "admin" : "member",
-        accountType: ([
-          "creator",
-          "supervisor",
-          "manager",
-          "member",
-          "individual",
-        ].includes(session.accountType)
-          ? session.accountType
-          : "individual") as PortalAccountType,
-        accountStatus: (["pending", "active", "suspended"].includes(
-          session.accountStatus,
-        )
-          ? session.accountStatus
-          : "active") as PortalAccountStatus,
-        workspaceOwnerId: session.workspaceOwnerId || session.id,
-      };
+    const hash = tokenHash(rawToken);
+    const principal = await loadPrincipalByTokenHash(hash);
+    if (principal) req.portalUser = principal;
   } catch {
     // Authentication outages are handled by protected endpoints rather than leaking database detail.
   }
@@ -291,9 +346,11 @@ export async function beginPortalSession(res: Response, user: PortalPrincipal) {
 export async function endPortalSession(req: PortalRequest, res: Response) {
   const rawToken = req.cookies?.[ODONTO_SESSION_COOKIE];
   if (typeof rawToken === "string") {
+    const hash = tokenHash(rawToken);
+    invalidateSessionHash(hash);
     await db
       .delete(odontoPortalSessions)
-      .where(eq(odontoPortalSessions.tokenHash, tokenHash(rawToken)));
+      .where(eq(odontoPortalSessions.tokenHash, hash));
   }
   res.clearCookie(ODONTO_SESSION_COOKIE, {
     httpOnly: true,
