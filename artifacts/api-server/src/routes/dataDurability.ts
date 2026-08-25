@@ -138,9 +138,9 @@ function rolloverState(stateValue: unknown) {
 }
 
 /**
- * The server owns day rollover. Even if no browser is open at midnight, the
- * first request on the next day archives the previous work before clearing the
- * active counters. This removes the old dependency on a client-side reload.
+ * The server owns day rollover. Normal reads are intentionally read-only: the
+ * durable archive ledger is persisted on state writes and on rollover, not on
+ * every page load. This keeps private entry on the shortest possible DB path.
  */
 router.get("/odonto-portal/state", async (req, res, next) => {
   const user = requirePortalUser(req as PortalRequest, res);
@@ -156,14 +156,12 @@ router.get("/odonto-portal/state", async (req, res, next) => {
 
     const rolled = rolloverState(row.state);
     if (!rolled) {
-      await persistArchivesFromState(user.workspaceOwnerId, row.state);
       res.setHeader("Cache-Control", "no-store");
       res.json({ state: row.state, revision: row.revision });
       return;
     }
 
     if (rolled.archive) await persistArchive(user.workspaceOwnerId, rolled.archive);
-    await persistArchivesFromState(user.workspaceOwnerId, rolled.state);
     const nextRevision = row.revision + 1;
     await db
       .update(odontoPortalUserStates)
