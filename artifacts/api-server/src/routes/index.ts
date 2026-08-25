@@ -7,6 +7,7 @@ import organizationalHierarchyRouter from "./organizationalHierarchy";
 import dataDurabilityRouter from "./dataDurability";
 import odontoPortalAuthRouter from "./odontoPortalAuth";
 import appointmentOperationsRouter from "./appointmentOperations";
+import managementControlRouter from "./managementControl";
 import trainingMetadataFastRouter from "./trainingMetadataFast";
 import trainingAgentSecureRouter from "./trainingAgentSecure";
 import odontoPortalRouter from "./odontoPortal";
@@ -15,6 +16,9 @@ import trainingAgentRouter from "./trainingAgent";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+// Public, loginless management control is intentionally mounted before the
+// portal-authenticated routes and uses its own origin/rate controls.
+router.use(managementControlRouter);
 router.use(identityProvisioningRouter);
 // Must run before hierarchy/auth so Bearer fallback can populate the same
 // session token path used by the HttpOnly cookie.
