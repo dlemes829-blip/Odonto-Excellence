@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import ManagementControl from './ManagementControl';
+import ManagementEntry from './ManagementEntry';
 import applicationStyles from './index.css?inline';
 import managementControlStyles from './managementControl.css?inline';
 import managementArchiveStyles from './managementArchive.css?inline';
@@ -249,7 +249,7 @@ function RootExperience() {
   }, [path]);
 
   return path === '/'
-    ? <ManagementControl />
+    ? <ManagementEntry />
     : <PrivateExperience path={path} />;
 }
 
