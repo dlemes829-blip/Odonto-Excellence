@@ -1,0 +1,42 @@
+.mg-row-meta-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px dashed #e2e8ea;
+  color: #7d8a90;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+.mg-row-meta-inline span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.mg-row-meta-inline b {
+  display: inline !important;
+  color: #4b6068;
+  font-size: 8px !important;
+  font-weight: 800;
+}
+
+.mg-row-meta-inline .mg-row-meta-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #a9b5ba;
+}
+
+.mg-note {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .mg-row-meta-inline { font-size: 7.5px; }
+  .mg-row-meta-inline b { font-size: 7.5px !important; }
+}
