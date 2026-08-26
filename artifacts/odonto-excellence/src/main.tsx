@@ -12,6 +12,7 @@ import { installStabilityEnhancements } from './stabilityEnhancements';
 import { installContactStatusEnhancements } from './contactStatusEnhancements';
 import { installManagementPerformanceEnhancements } from './managementPerformanceEnhancements';
 import { installManagementDesktopOperations } from './managementDesktopOperations';
+import { installManagementGlobalSearch } from './managementGlobalSearch';
 import { installManagementLastModified } from './managementLastModified';
 import {
   installPrivateAccessNetworkEnhancements,
@@ -50,6 +51,7 @@ installStabilityEnhancements();
 installPrivateAccessNetworkEnhancements();
 installManagementPerformanceEnhancements();
 installManagementDesktopOperations();
+installManagementGlobalSearch();
 installManagementLastModified();
 installContactStatusEnhancements();
 
