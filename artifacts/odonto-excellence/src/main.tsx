@@ -11,6 +11,7 @@ import accessIsolationStyles from './accessIsolation.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
 import { installContactStatusEnhancements } from './contactStatusEnhancements';
 import { installManagementPerformanceEnhancements } from './managementPerformanceEnhancements';
+import { installManagementDesktopOperations } from './managementDesktopOperations';
 import {
   installPrivateAccessNetworkEnhancements,
   prewarmPrivateSession,
@@ -47,6 +48,7 @@ installInlineStyle('controle-gestao-access-isolation', accessIsolationStyles);
 installStabilityEnhancements();
 installPrivateAccessNetworkEnhancements();
 installManagementPerformanceEnhancements();
+installManagementDesktopOperations();
 installContactStatusEnhancements();
 
 let runtimeInstalled = false;
