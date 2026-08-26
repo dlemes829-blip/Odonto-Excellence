@@ -1,0 +1,48 @@
+.mg-last-modified {
+  margin-top: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid #dfe6e8;
+  border-radius: 9px;
+  background: #f8fafb;
+  color: #64747a;
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.mg-last-modified svg {
+  width: 13px;
+  height: 13px;
+  color: #4d7482;
+  flex: 0 0 auto;
+}
+
+.mg-last-modified b {
+  color: #31474f;
+  font-weight: 850;
+}
+
+.mg-last-modified time {
+  color: #1f5668;
+  font-weight: 900;
+}
+
+.mg-last-modified.is-loading {
+  opacity: .72;
+}
+
+.mg-last-modified .mg-last-modified-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7eaa8b;
+  box-shadow: 0 0 0 3px rgba(126,170,139,.12);
+}
+
+@media (max-width: 760px) {
+  .mg-last-modified { display: none; }
+}
