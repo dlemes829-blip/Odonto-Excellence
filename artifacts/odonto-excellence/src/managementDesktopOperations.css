@@ -1,0 +1,283 @@
+.mg-import-button {
+  border-color: #7fa6b4 !important;
+  background: #eef7fa !important;
+  color: #174f63 !important;
+  font-weight: 850 !important;
+  box-shadow: inset 0 0 0 1px rgba(23,79,99,.04);
+}
+
+.mg-import-button:hover {
+  background: #e3f1f5 !important;
+  border-color: #5f8f9f !important;
+}
+
+.mg-import-button svg { width: 14px; height: 14px; }
+
+.mg-import-input { display: none !important; }
+
+.mg-import-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(18,28,34,.52);
+  backdrop-filter: blur(5px);
+}
+
+.mg-import-modal {
+  width: min(680px, 100%);
+  max-height: min(780px, calc(100dvh - 40px));
+  overflow: auto;
+  border: 1px solid #d9e0e3;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(16,29,37,.25);
+}
+
+.mg-import-head {
+  padding: 20px 22px 17px;
+  border-bottom: 1px solid #e3e8ea;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mg-import-head small {
+  display: block;
+  color: #1f5f74;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.mg-import-head h2 {
+  margin: 4px 0 0;
+  color: #18272d;
+  font-size: 21px;
+  letter-spacing: -.025em;
+}
+
+.mg-import-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #dbe2e5;
+  border-radius: 9px;
+  background: #f8fafb;
+  color: #64737a;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.mg-import-body { padding: 20px 22px 22px; }
+
+.mg-import-file {
+  padding: 12px 13px;
+  border: 1px solid #dbe4e7;
+  border-radius: 11px;
+  background: #f8fafb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mg-import-file b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #2a383d;
+  font-size: 11px;
+}
+
+.mg-import-file span { flex: 0 0 auto; color: #718087; font-size: 9px; }
+
+.mg-import-preview,
+.mg-import-result {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 9px;
+}
+
+.mg-import-stat {
+  padding: 13px;
+  border: 1px solid #dfe5e7;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.mg-import-stat strong {
+  display: block;
+  color: #173f4d;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.mg-import-stat span {
+  display: block;
+  margin-top: 5px;
+  color: #6b787d;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.mg-import-explain {
+  margin-top: 14px;
+  padding: 12px 13px;
+  border-left: 4px solid #8fb4d1;
+  border-radius: 9px;
+  background: #f2f8fb;
+  color: #40535b;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.mg-import-explain b { color: #24475a; }
+
+.mg-import-warning {
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid #e5df95;
+  border-radius: 9px;
+  background: #fffde3;
+  color: #5d5913;
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+.mg-import-error {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid #e6bcbc;
+  border-radius: 9px;
+  background: #fbecec;
+  color: #7a3030;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mg-import-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mg-import-actions button {
+  min-height: 39px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.mg-import-cancel { border: 1px solid #d8e0e3; background: #fff; color: #617078; }
+.mg-import-confirm { border: 1px solid #1f5f74; background: #1f5f74; color: #fff; }
+.mg-import-confirm:disabled { opacity: .55; }
+
+.mg-import-progress {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #65747a;
+  text-align: center;
+  font-size: 10px;
+}
+
+.mg-import-spinner {
+  width: 25px;
+  height: 25px;
+  border: 3px solid #dce4e7;
+  border-top-color: #1f5f74;
+  border-radius: 50%;
+  animation: mg-import-spin .7s linear infinite;
+}
+
+@keyframes mg-import-spin { to { transform: rotate(360deg); } }
+
+.mg-finance-clarity {
+  margin-top: 9px;
+  padding: 13px 14px;
+  border: 1px solid #dce3e5;
+  border-radius: 12px;
+  background: #fbfcfc;
+  box-shadow: 0 2px 10px rgba(30,47,55,.025);
+}
+
+.mg-finance-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.mg-finance-head b { display: block; color: #26363c; font-size: 11px; }
+.mg-finance-head span { display: block; margin-top: 2px; color: #7a878c; font-size: 8.5px; }
+.mg-finance-badge { flex: 0 0 auto; margin: 0 !important; padding: 4px 7px; border-radius: 999px; background: #edf4f6; color: #42606a !important; font-size: 7.5px !important; font-weight: 900; text-transform: uppercase; }
+
+.mg-finance-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px;
+}
+
+.mg-finance-item {
+  padding: 9px 10px;
+  border: 1px solid #e1e6e8;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.mg-finance-item small { display: block; color: #7a878c; font-size: 7.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.mg-finance-item strong { display: block; margin-top: 4px; color: #25353b; font-size: 14px; }
+.mg-finance-item em { display: block; margin-top: 3px; color: #899397; font-size: 7.5px; font-style: normal; line-height: 1.25; }
+
+/* Make WhatsApp an unmistakable desktop action while keeping it compact. */
+.cg-whatsapp-desktop {
+  width: auto !important;
+  min-width: 86px;
+  height: 30px;
+  padding: 0 8px !important;
+  border-color: #9dceb1 !important;
+  background: #eaf8ef !important;
+  color: #176c3e !important;
+  font-size: 9px;
+  font-weight: 900 !important;
+}
+
+.cg-whatsapp-desktop::after { content: 'WhatsApp'; }
+.cg-whatsapp-desktop:hover { background: #ddf3e6 !important; border-color: #72b38e !important; }
+
+.mg-table-head,
+.mg-table-row {
+  grid-template-columns: 42px minmax(150px,1.1fr) 125px 110px minmax(190px,1.3fr) 150px 115px 92px 132px !important;
+}
+
+.mg-table-row { min-width: 1190px !important; }
+.mg-row-actions { min-width: 128px; align-items: center; }
+
+@media (max-width: 1050px) {
+  .mg-finance-grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+@media (max-width: 760px) {
+  .mg-import-button { display: none !important; }
+  .mg-finance-clarity { display: none; }
+  .cg-whatsapp-desktop::after { content: ''; }
+}
+
+@media (max-width: 560px) {
+  .mg-import-preview,
+  .mg-import-result,
+  .mg-finance-grid { grid-template-columns: 1fr; }
+}
