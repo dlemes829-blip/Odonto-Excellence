@@ -8,6 +8,7 @@ import dataDurabilityRouter from "./dataDurability";
 import odontoPortalAuthRouter from "./odontoPortalAuth";
 import appointmentOperationsRouter from "./appointmentOperations";
 import managementDayArchiveRouter from "./managementDayArchive";
+import managementSpreadsheetImportRouter from "./managementSpreadsheetImport";
 import managementControlRouter from "./managementControl";
 import trainingMetadataFastRouter from "./trainingMetadataFast";
 import trainingAgentSecureRouter from "./trainingAgentSecure";
@@ -20,6 +21,9 @@ router.use(healthRouter);
 // Day archival overrides bootstrap/action handling before the generic public
 // management routes so excluded dates disappear without destroying stored data.
 router.use(managementDayArchiveRouter);
+// Spreadsheet import has a dedicated validated route and runs before the
+// generic management router so large reconciliations remain isolated.
+router.use(managementSpreadsheetImportRouter);
 // Public, loginless management control is intentionally mounted before the
 // portal-authenticated routes and uses its own origin/rate controls.
 router.use(managementControlRouter);
