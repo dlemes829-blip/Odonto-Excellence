@@ -1,43 +1,44 @@
 .mg-global-search-wrap {
   position: relative;
-  margin: 14px 0 12px;
+  width: min(620px, 100%);
+  margin: 10px 0 10px;
   z-index: 28;
 }
 
 .mg-global-search-box {
-  min-height: 46px;
+  min-height: 38px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  gap: 8px;
+  padding: 0 10px;
   border: 1px solid #cfdadd;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
-  box-shadow: 0 3px 14px rgba(30,47,55,.045);
+  box-shadow: 0 2px 9px rgba(30,47,55,.035);
   transition: border-color .16s ease, box-shadow .16s ease;
 }
 
 .mg-global-search-box:focus-within {
   border-color: #6d9faf;
-  box-shadow: 0 0 0 3px rgba(73,132,151,.10), 0 4px 18px rgba(30,47,55,.055);
+  box-shadow: 0 0 0 2px rgba(73,132,151,.09), 0 3px 12px rgba(30,47,55,.045);
 }
 
 .mg-global-search-box svg {
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   color: #52717c;
 }
 
 .mg-global-search-box input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 44px;
+  height: 36px;
   border: 0;
   outline: 0;
   background: transparent;
   color: #1f3037;
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 650;
 }
 
@@ -45,11 +46,11 @@
 
 .mg-global-search-scope {
   flex: 0 0 auto;
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: 999px;
   background: #edf4f6;
   color: #42616d;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 900;
   letter-spacing: .035em;
   text-transform: uppercase;
@@ -57,13 +58,13 @@
 
 .mg-global-search-clear {
   flex: 0 0 auto;
-  width: 29px;
-  height: 29px;
+  width: 25px;
+  height: 25px;
   display: none;
   place-items: center;
   padding: 0;
   border: 1px solid #d8e0e3;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #f8fafb;
   color: #67777e;
   cursor: pointer;
@@ -73,7 +74,7 @@
 
 .mg-global-search-results {
   position: absolute;
-  top: calc(100% + 7px);
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
   max-height: min(520px, calc(100dvh - 170px));
@@ -186,9 +187,9 @@
 }
 
 .mg-global-search-hint {
-  margin-top: 5px;
+  margin-top: 4px;
   color: #8b969a;
-  font-size: 8px;
+  font-size: 7.5px;
 }
 
 @media (max-width: 760px) {
