@@ -209,6 +209,19 @@ router.patch("/management/leads/:id", async (req, res) => {
   }
 });
 
+router.delete("/management/leads/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ error: "Lead inválido." });
+    return;
+  }
+  try {
+    res.json(await rpc("oe_acoes_delete_lead", "delete_lead", { id, actor: actor(req) }));
+  } catch {
+    res.status(503).json({ error: "Não foi possível excluir o registro." });
+  }
+});
+
 router.get("/management/leads/:id/history", async (req, res) => {
   try {
     res.json(await db("lead_history", { id: Number(req.params.id) }));
