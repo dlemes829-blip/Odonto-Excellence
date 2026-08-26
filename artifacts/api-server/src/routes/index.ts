@@ -9,6 +9,7 @@ import odontoPortalAuthRouter from "./odontoPortalAuth";
 import appointmentOperationsRouter from "./appointmentOperations";
 import managementDayArchiveRouter from "./managementDayArchive";
 import managementSpreadsheetImportRouter from "./managementSpreadsheetImport";
+import managementLastModifiedRouter from "./managementLastModified";
 import managementControlRouter from "./managementControl";
 import trainingMetadataFastRouter from "./trainingMetadataFast";
 import trainingAgentSecureRouter from "./trainingAgentSecure";
@@ -24,6 +25,9 @@ router.use(managementDayArchiveRouter);
 // Spreadsheet import has a dedicated validated route and runs before the
 // generic management router so large reconciliations remain isolated.
 router.use(managementSpreadsheetImportRouter);
+// Per-day modification metadata is isolated so clients can refresh it cheaply
+// without reloading the full management bootstrap.
+router.use(managementLastModifiedRouter);
 // Public, loginless management control is intentionally mounted before the
 // portal-authenticated routes and uses its own origin/rate controls.
 router.use(managementControlRouter);
