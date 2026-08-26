@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 
 const DesktopManagementControl = lazy(() => import('./ManagementControl'));
-const StreetMobileControl = lazy(() => import('./StreetMobileControl'));
+const StreetMobileControl = lazy(() => import('./StreetMobileControlV2'));
 
 const MOBILE_QUERY = '(max-width: 760px)';
 
