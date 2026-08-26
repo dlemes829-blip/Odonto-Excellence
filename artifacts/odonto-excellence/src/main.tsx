@@ -14,6 +14,7 @@ import { installManagementPerformanceEnhancements } from './managementPerformanc
 import { installManagementDesktopOperations } from './managementDesktopOperations';
 import { installManagementGlobalSearch } from './managementGlobalSearch';
 import { installManagementLastModified } from './managementLastModified';
+import { installManagementRowMetadata } from './managementRowMetadata';
 import {
   installPrivateAccessNetworkEnhancements,
   prewarmPrivateSession,
@@ -53,6 +54,7 @@ installManagementPerformanceEnhancements();
 installManagementDesktopOperations();
 installManagementGlobalSearch();
 installManagementLastModified();
+installManagementRowMetadata();
 installContactStatusEnhancements();
 
 let runtimeInstalled = false;
