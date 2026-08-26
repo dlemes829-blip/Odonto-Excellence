@@ -12,6 +12,7 @@ import { installStabilityEnhancements } from './stabilityEnhancements';
 import { installContactStatusEnhancements } from './contactStatusEnhancements';
 import { installManagementPerformanceEnhancements } from './managementPerformanceEnhancements';
 import { installManagementDesktopOperations } from './managementDesktopOperations';
+import { installManagementLastModified } from './managementLastModified';
 import {
   installPrivateAccessNetworkEnhancements,
   prewarmPrivateSession,
@@ -49,6 +50,7 @@ installStabilityEnhancements();
 installPrivateAccessNetworkEnhancements();
 installManagementPerformanceEnhancements();
 installManagementDesktopOperations();
+installManagementLastModified();
 installContactStatusEnhancements();
 
 let runtimeInstalled = false;
