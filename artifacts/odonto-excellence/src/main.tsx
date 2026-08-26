@@ -10,6 +10,7 @@ import privateBrandingStyles from './privateBranding.css?inline';
 import accessIsolationStyles from './accessIsolation.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
 import { installContactStatusEnhancements } from './contactStatusEnhancements';
+import { installManagementPerformanceEnhancements } from './managementPerformanceEnhancements';
 import {
   installPrivateAccessNetworkEnhancements,
   prewarmPrivateSession,
@@ -41,10 +42,11 @@ installInlineStyle('controle-gestao-private-branding', privateBrandingStyles);
 installInlineStyle('controle-gestao-access-isolation', accessIsolationStyles);
 
 // Fetch/session stability must exist before the private application starts its
-// auth and state effects. The access wrapper is installed after it so it can
-// cache the final stabilized auth response instead of bypassing the safeguards.
+// auth and state effects. Public management performance wraps the stabilized
+// fetch last so cached reads and optimistic writes never bypass the safeguards.
 installStabilityEnhancements();
 installPrivateAccessNetworkEnhancements();
+installManagementPerformanceEnhancements();
 installContactStatusEnhancements();
 
 let runtimeInstalled = false;
