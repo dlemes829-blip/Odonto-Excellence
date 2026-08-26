@@ -9,6 +9,7 @@ import realtimePresenceStyles from './realtimePresence.css?inline';
 import privateBrandingStyles from './privateBranding.css?inline';
 import accessIsolationStyles from './accessIsolation.css?inline';
 import { installStabilityEnhancements } from './stabilityEnhancements';
+import { installContactStatusEnhancements } from './contactStatusEnhancements';
 import {
   installPrivateAccessNetworkEnhancements,
   prewarmPrivateSession,
@@ -44,6 +45,7 @@ installInlineStyle('controle-gestao-access-isolation', accessIsolationStyles);
 // cache the final stabilized auth response instead of bypassing the safeguards.
 installStabilityEnhancements();
 installPrivateAccessNetworkEnhancements();
+installContactStatusEnhancements();
 
 let runtimeInstalled = false;
 let trainingInstalled = false;
