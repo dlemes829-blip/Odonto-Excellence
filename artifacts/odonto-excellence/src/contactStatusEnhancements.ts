@@ -28,15 +28,19 @@ function normalizeWhatsAppPhone(raw: string) {
 }
 
 function messageFor(name: string, status: string, outcome = '') {
-  const firstName = name.trim().split(/\s+/)[0] || 'tudo bem';
+  const firstName = name.trim().split(/\s+/)[0] || '';
+  const greetingName = firstName ? `, ${firstName}` : '';
   const state = normalize(`${status} ${outcome}`);
+
   if (state.includes('efetivado')) {
-    return `Olá, ${firstName}! Tudo bem? Aqui é da clínica. Estou entrando em contato para dar continuidade ao seu atendimento. Se precisar falar com a equipe, pode responder por aqui.`;
+    return `Olá${greetingName}! Tudo bem? Aqui é da Odonto Excellence. Estou entrando em contato para dar continuidade ao seu atendimento. Se precisar falar com a nossa equipe ou tiver alguma dúvida, pode responder por aqui.`;
   }
+
   if (state.includes('agendado')) {
-    return `Olá, ${firstName}! Tudo bem? Aqui é da clínica. Estou passando para confirmar sua avaliação. Se precisar ajustar o horário, pode me avisar por aqui.`;
+    return `Olá${greetingName}! Tudo bem? Aqui é da Odonto Excellence. Estou passando para confirmar sua avaliação odontológica. Se precisar ajustar o horário ou tiver alguma dúvida antes da avaliação, pode falar com a gente por aqui.`;
   }
-  return `Olá, ${firstName}! Tudo bem? Aqui é da clínica. Você participou de uma de nossas ações e estou entrando em contato para confirmar o melhor horário para sua avaliação. Qual período fica melhor para você?`;
+
+  return `Bom dia${greetingName}, tudo bem?\n\nAqui é da Odonto Excellence. Você participou de uma ação externa da nossa clínica e deixou seu contato para agendarmos uma avaliação odontológica gratuita e sem compromisso.\n\nÉ uma ótima oportunidade para verificar como está sua saúde bucal, tirar dúvidas e conhecer melhor nossa clínica e nossos profissionais.\n\nAtendemos de segunda a sexta, das 09h às 20h, e aos sábados, das 09h às 17h.\n\nPara eu já separar as melhores opções para você, me diga: fica melhor pela manhã, à tarde ou à noite? Assim já te envio os horários disponíveis e deixamos sua avaliação agendada.`;
 }
 
 function whatsappIcon() {
