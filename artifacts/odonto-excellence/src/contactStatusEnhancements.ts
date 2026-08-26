@@ -3,6 +3,7 @@ import './contactStatusEnhancements.css';
 type Tone = 'green' | 'red' | 'yellow' | 'blue';
 
 const TONE_CLASSES = ['cg-tone-green', 'cg-tone-red', 'cg-tone-yellow', 'cg-tone-blue'];
+const WHATSAPP_WEB_TARGET = 'odonto-excellence-whatsapp-web';
 
 function normalize(value: unknown) {
   return String(value ?? '')
@@ -50,14 +51,27 @@ function whatsappIcon() {
 function buildWhatsAppLink(phoneRaw: string, name: string, status: string, outcome = '', mobile = false) {
   const phone = normalizeWhatsAppPhone(phoneRaw);
   if (!phone || normalize(status).includes('numero incorreto')) return null;
+  const message = encodeURIComponent(messageFor(name, status, outcome));
   const link = document.createElement('a');
   link.className = `cg-whatsapp-button ${mobile ? 'cg-whatsapp-mobile' : 'cg-whatsapp-desktop'}`;
-  link.href = `https://wa.me/${phone}?text=${encodeURIComponent(messageFor(name, status, outcome))}`;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.title = `Abrir WhatsApp de ${name}`;
+  link.href = mobile
+    ? `https://wa.me/${phone}?text=${message}`
+    : `https://web.whatsapp.com/send?phone=${phone}&text=${message}`;
+  link.target = mobile ? '_blank' : WHATSAPP_WEB_TARGET;
+  if (mobile) link.rel = 'noopener noreferrer';
+  link.title = mobile
+    ? `Abrir WhatsApp de ${name}`
+    : `Abrir ${name} no WhatsApp Web reutilizando a mesma aba`;
   link.setAttribute('aria-label', `Abrir WhatsApp de ${name} com mensagem pronta`);
   link.innerHTML = `${whatsappIcon()}${mobile ? '<span>WhatsApp</span>' : ''}`;
+  if (!mobile) {
+    link.addEventListener('click', (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      const whatsappTab = window.open(link.href, WHATSAPP_WEB_TARGET);
+      whatsappTab?.focus();
+    });
+  }
   return link;
 }
 
