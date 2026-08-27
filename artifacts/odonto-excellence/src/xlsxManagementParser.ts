@@ -6,7 +6,7 @@ type ParsedLead = {
   action_name: string;
   location: string;
   campaign: string;
-  sheet_number: number;
+  sheet_number: number | null;
   name: string;
   phone_raw: string | null;
   phone_normalized: string | null;
@@ -247,14 +247,23 @@ function parseActionSheet(rows: Array<{ rowNumber: number; cells: CellMap }>) {
     }
     if (!currentDate) continue;
 
-    const sheetNumber = Number(numericText(row.cells.get(1)) || 0);
+    const rawSheetNumber = Number(numericText(row.cells.get(1)) || 0);
+    const sheetNumber = Number.isInteger(rawSheetNumber) && rawSheetNumber > 0 ? rawSheetNumber : null;
     const name = nullable(row.cells.get(2));
-    if (!Number.isInteger(sheetNumber) || sheetNumber < 1 || !name) continue;
+    if (!name) continue;
     if (normalize(name).includes('nome avaliacao')) continue;
 
     const phoneData = phone(row.cells.get(3));
-    const rawStatus = nullable(row.cells.get(6));
+    const capturedBy = nullable(row.cells.get(4));
     const appointmentNote = nullable(row.cells.get(5));
+    const rawStatus = nullable(row.cells.get(6));
+    const scheduledBy = nullable(row.cells.get(7));
+    const outcome = normalizeOutcome(row.cells.get(8));
+
+    // New spreadsheet blocks may contain valid contacts without a sequence
+    // number in column A. Treat the physical XLSX row as the stable source key
+    // and accept the row when it contains real contact/operational data.
+    if (!sheetNumber && !phoneData.raw && !capturedBy && !appointmentNote && !rawStatus && !scheduledBy && !outcome) continue;
     const [year, month, day] = currentDate.split('-');
     leads.push({
       source_key: `xlsx-row-${row.rowNumber}`,
@@ -266,12 +275,12 @@ function parseActionSheet(rows: Array<{ rowNumber: number; cells: CellMap }>) {
       name,
       phone_raw: phoneData.raw,
       phone_normalized: phoneData.normalized,
-      captured_by: nullable(row.cells.get(4)),
+      captured_by: capturedBy,
       appointment_note: appointmentNote,
       status: normalizeStatus(rawStatus || undefined, appointmentNote || undefined),
       status_raw: rawStatus,
-      scheduled_by: nullable(row.cells.get(7)),
-      outcome: normalizeOutcome(row.cells.get(8)),
+      scheduled_by: scheduledBy,
+      outcome,
       outcome_date: excelDate(row.cells.get(9)),
       value: money(row.cells.get(10)),
     });
