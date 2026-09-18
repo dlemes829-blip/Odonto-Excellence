@@ -13,7 +13,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'alterar-em-producao';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false });
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '12mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const clinics = [
@@ -87,6 +87,19 @@ async function initDb() {
       completed_status text, pending text, status text, collection_message text, franchise_message text,
       created_at timestamptz default now()
     );
+    create table if not exists central_return_screenshots (
+      id bigserial primary key,
+      capture_date date not null default current_date,
+      clinic_id integer references clinics(id) on delete cascade,
+      return_type integer not null check(return_type in (1,2)),
+      file_name text, mime_type text not null default 'image/png',
+      image_data bytea not null,
+      message text,
+      message_status text not null default 'pending',
+      created_at timestamptz default now(),
+      analyzed_at timestamptz
+    );
+    create index if not exists idx_central_returns_day on central_return_screenshots(capture_date,clinic_id,return_type,created_at);
     create table if not exists history (
       id bigserial primary key, event_date date not null default current_date,
       clinic_id integer references clinics(id) on delete set null,
@@ -171,6 +184,32 @@ app.get('/api/export',auth,async(req,res)=>{
   const out={};
   for(const t of ['clinics','settings','metrics','daily_plans','assignments','daily_returns','history']) out[t]=(await pool.query(`select * from ${t}`)).rows;
   res.json(out);
+});
+
+
+function centralAuth(req,res,next){
+  const supplied=String(req.headers['x-central-password']||req.query.p||'');
+  if(!supplied || supplied!==ADMIN_PASSWORD) return res.status(401).json({error:'Senha administrativa do servidor não confere'});
+  next();
+}
+app.get('/central-returns/today',centralAuth,async(req,res)=>{
+  const clinicId=Number(req.query.clinic_id),type=Number(req.query.return_type);
+  const out=await pool.query("select id,clinic_id,return_type,file_name,mime_type,message,message_status,created_at,analyzed_at from central_return_screenshots where capture_date=current_date and clinic_id=$1 and return_type=$2 order by created_at,id",[clinicId,type]);
+  res.json({screenshots:out.rows});
+});
+app.post('/central-returns/screenshots',centralAuth,async(req,res)=>{
+  const b=req.body||{}; const m=String(b.data_url||'').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if(!m)return res.status(400).json({error:'Imagem inválida'});
+  const buf=Buffer.from(m[2],'base64'); if(buf.length>8*1024*1024)return res.status(413).json({error:'Imagem acima de 8 MB'});
+  const out=await pool.query("insert into central_return_screenshots(clinic_id,return_type,file_name,mime_type,image_data) values($1,$2,$3,$4,$5) returning id,created_at",[Number(b.clinic_id),Number(b.return_type),String(b.file_name||'print.png').slice(0,180),m[1],buf]);
+  res.json(out.rows[0]);
+});
+app.get('/central-returns/image/:id',centralAuth,async(req,res)=>{
+  const out=await pool.query("select mime_type,image_data from central_return_screenshots where id=$1",[req.params.id]);
+  if(!out.rows[0])return res.sendStatus(404); res.type(out.rows[0].mime_type);res.set('Cache-Control','private, max-age=300');res.send(out.rows[0].image_data);
+});
+app.delete('/central-returns/screenshots/:id',centralAuth,async(req,res)=>{
+  await pool.query("delete from central_return_screenshots where id=$1",[req.params.id]);res.json({ok:true});
 });
 
 app.get('/health',(req,res)=>res.json({ok:true,time:new Date().toISOString()}));
