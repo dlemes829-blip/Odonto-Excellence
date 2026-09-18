@@ -127,7 +127,7 @@ function renderHistory(){
  box.innerHTML=`<div class="section-head"><div><h3>Histórico do segundo retorno</h3><span class="clinic-meta">Cada relatório e cada mensagem ficam registrados por dia.</span></div></div>${Object.entries(groups).map(([day,recs])=>`<div class="card p2-history-row"><div class="section-head"><strong>${new Date(day+'T12:00:00').toLocaleDateString('pt-BR')}</strong><span class="clinic-meta">${recs.length} relatório(s)</span></div>${recs.map(x=>`<div class="p2-mini"><div class="section-head"><b>${esc(x.insight?.title||x.report?.type||'Relatório')}</b><button class="ghost danger" data-p2del="${esc(x.id)}">Excluir</button></div><span>${esc(x.message||'Sem mensagem registrada')}</span><small class="clinic-meta">${esc(x.report?.name||'')} ${x.report?.period?'· '+esc(x.report.period):''}</small></div>`).join('')}</div>`).join('')||'<div class="empty">Nenhum segundo retorno salvo para esta clínica.</div>'}`;
  qa('[data-p2del]').forEach(b=>b.onclick=()=>{if(confirm('Excluir este relatório do histórico?')){saveHistory(history().filter(x=>x.id!==b.dataset.p2del));if(last?.items){last.items=last.items.filter(x=>x.reportId!==b.dataset.p2del);saveSession(last)}renderAnalysis();renderHistory();toast('Registro excluído')}})
 }
-function htmlText(function htmlText(html){const d=document.createElement('div');d.innerHTML=html||'';return d.innerText||d.textContent||''}
+function htmlText(html){const d=document.createElement('div');d.innerHTML=html||'';return d.innerText||d.textContent||''}
 async function readClipboardToPeriod2(){
  if(!navigator.clipboard?.read){toast('Seu navegador não permite leitura direta da área de transferência. Use Ctrl+V na caixa.');return}
  try{
@@ -168,7 +168,7 @@ function render(){
  q('#p2Paste').addEventListener('paste',e=>pasteScreenData(e,false));q('#p2ScreenPaste').addEventListener('paste',e=>pasteScreenData(e,true));q('#p2ClipboardRead').onclick=readClipboardToPeriod2;
  renderAnalysis();renderHistory();
 }
-async function processFiles(async function processFiles(files){
+async function processFiles(files){
  if(busy||!files.length)return;busy=true;const cl=clinicById(Number(q('#p2Clinic').value)),st=q('#p2Status'),list=q('#p2FileList');
  try{
   const f=files[0];st.textContent='Lendo '+f.name+'…';list.innerHTML='';
