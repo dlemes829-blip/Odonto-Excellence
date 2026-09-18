@@ -56,13 +56,34 @@ function showLogin(){if(data.passwordHash){$('.login-card p').textContent='Digit
 $('#loginForm').onsubmit=e=>{e.preventDefault();const p=$('#password').value;sessionStorage.setItem('g12_central_pass',p);if(p.length<6){$('#loginError').textContent='Use pelo menos 6 caracteres.';return}if(!data.passwordHash){data.passwordHash=hash(p);save()}else if(hash(p)!==data.passwordHash){$('#loginError').textContent='Senha inválida.';return}$('#loginError').textContent='';$('#login').classList.add('hidden');$('#app').classList.remove('hidden');renderNav();go('dashboard')};
 $('#logoutBtn').onclick=()=>{$('#app').classList.add('hidden');$('#login').classList.remove('hidden');$('#password').value=''};$('#exportBtn').onclick=exportBackup;$('#menuToggle').onclick=()=>$('.sidebar').classList.toggle('open');showLogin();
 
+const CENTRAL_DB_URL='https://ruzixytmhkduqxoslebu.supabase.co/rest/v1/central_return_screenshots';
+const CENTRAL_DB_KEY='sb_publishable_yBOiTyDqHdx02M2VYHnMRg_xEC7yGxI';
+const CENTRAL_ACCESS_KEY='-xXDgd_wWyzmxEH0cvto_K6stLN3Ho93VmQTswFaFf4';
 async function centralFetch(path,opts={}){
-  const pass=sessionStorage.getItem('g12_central_pass')||'';
-  const headers={...(opts.headers||{}),'x-central-password':pass};
-  if(opts.body && !(opts.body instanceof FormData)) headers['Content-Type']='application/json';
-  const r=await fetch('/central-returns'+path,{...opts,headers});
-  if(!r.ok){let e={};try{e=await r.json()}catch{};throw new Error(e.error||('Erro '+r.status))}
-  return r.json();
+  const headers={...(opts.headers||{}),apikey:CENTRAL_DB_KEY,'x-central-key':CENTRAL_ACCESS_KEY,Prefer:'return=representation'};
+  let url=CENTRAL_DB_URL;
+  if(path.startsWith('/today')){
+    const q=new URLSearchParams(path.split('?')[1]||''); const cid=q.get('clinic_id'),rt=q.get('return_type');
+    url+='?select=id,clinic_id,return_type,file_name,mime_type,image_data,message,message_status,created_at,analyzed_at&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&order=created_at.asc,id.asc';
+  }else if(path==='/screenshots'&&opts.method==='POST'){
+    url=CENTRAL_DB_URL;
+  }else if(path.startsWith('/screenshots/')&&opts.method==='DELETE'){
+    url+='?id=eq.'+path.split('/').pop();
+  }
+  if(opts.body)headers['Content-Type']='application/json';
+  const r=await fetch(url,{...opts,headers});
+  if(!r.ok){let e={};try{e=await r.json()}catch{};throw new Error(e.message||e.error||('Erro '+r.status))}
+  if(opts.method==='DELETE')return {ok:true};
+  const rows=await r.json();
+  return path.startsWith('/today')?{screenshots:rows}:Array.isArray(rows)?rows[0]:rows;
+}
+async function compressCentralImage(file){
+  const src=await fileToDataUrl(file); const img=new Image();
+  await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=src});
+  const max=1600,scale=Math.min(1,max/Math.max(img.width,img.height));
+  const cv=document.createElement('canvas');cv.width=Math.round(img.width*scale);cv.height=Math.round(img.height*scale);
+  cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+  return cv.toDataURL('image/jpeg',.82);
 }
 async function renderCentralReturns(c){
   const cl=clinic(state.selectedClinic||1);
@@ -84,8 +105,8 @@ async function uploadCentralFiles(files){
   try{
     for(const f of files){
       if(f.size>8*1024*1024)throw new Error('Cada imagem deve ter no máximo 8 MB.');
-      const data_url=await fileToDataUrl(f);
-      await centralFetch('/screenshots',{method:'POST',body:JSON.stringify({clinic_id:Number($('#crClinic').value),return_type:Number($('#crType').value),file_name:f.name||'print.png',mime_type:f.type||'image/png',data_url})});
+      const data_url=await compressCentralImage(f);
+      await centralFetch('/screenshots',{method:'POST',body:JSON.stringify({clinic_id:Number($('#crClinic').value),return_type:Number($('#crType').value),file_name:f.name||'print.png',mime_type:'image/jpeg',data_url})});
     }
     toast(files.length+' print(s) salvo(s) no banco');await loadCentralReturns();
   }catch(e){status.textContent=e.message;toast(e.message)}
