@@ -71,7 +71,8 @@ async function centralFetch(path,opts={}){
     url+='?id=eq.'+path.split('/').pop();
   }
   if(opts.body)headers['Content-Type']='application/json';
-  const r=await fetch(url,{...opts,headers});
+  const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),20000);
+  let r; try{r=await fetch(url,{...opts,headers,signal:controller.signal})}catch(e){clearTimeout(timer);throw new Error(e.name==='AbortError'?'Tempo limite ao acessar o banco. Tente novamente.':'Falha de conexão com o banco.')} clearTimeout(timer);
   if(!r.ok){let e={};try{e=await r.json()}catch{};throw new Error(e.message||e.error||('Erro '+r.status))}
   if(opts.method==='DELETE')return {ok:true};
   const rows=await r.json();
@@ -80,21 +81,24 @@ async function centralFetch(path,opts={}){
 async function compressCentralImage(file){
   const src=await fileToDataUrl(file); const img=new Image();
   await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=src});
-  const max=1600,scale=Math.min(1,max/Math.max(img.width,img.height));
+  if(!img.width||!img.height)throw new Error('Não foi possível ler esta imagem.');
+  const max=1400,scale=Math.min(1,max/Math.max(img.width,img.height));
   const cv=document.createElement('canvas');cv.width=Math.round(img.width*scale);cv.height=Math.round(img.height*scale);
   cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-  return cv.toDataURL('image/jpeg',.82);
+  return cv.toDataURL('image/jpeg',.76);
 }
 async function renderCentralReturns(c){
   const cl=clinic(state.selectedClinic||1);
   c.innerHTML='<div class="section-head"><div><h3>Central de Retornos</h3><div class="clinic-meta">Cole os prints com Ctrl+V. As imagens ficam salvas no banco por clínica, data e tipo de retorno.</div></div></div>'+
   '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno 1 · metas do dia</option><option value="2">Retorno 2 · detalhado por print</option></select></div></div></div>'+
   '<div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar prints</strong><span>Pode colar vários, um após o outro. Também funciona pelo botão abaixo.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
-  '<div id="crStatus" class="hint">Carregando registros de hoje…</div><div id="crGrid" class="central-grid"></div>';
+  '<div class="central-progress"><span id="crStatus" class="hint">Carregando registros de hoje…</span><button id="crReload" class="ghost">Atualizar</button></div><div id="crGrid" class="central-grid"></div>';
   $('#crClinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderCentralReturns(c)};
   $('#crType').onchange=()=>loadCentralReturns();
   $('#crPaste').onpaste=async e=>{const files=[...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();await uploadCentralFiles(files)}};
   $('#crFiles').onchange=async e=>{await uploadCentralFiles([...e.target.files]);e.target.value=''};
+  $('#crReload').onclick=()=>loadCentralReturns();
+  $('#crPaste').ondragover=e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}; $('#crPaste').ondragleave=e=>e.currentTarget.classList.remove('drag-over'); $('#crPaste').ondrop=async e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');await uploadCentralFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#crPaste').focus();
   await loadCentralReturns();
 }
