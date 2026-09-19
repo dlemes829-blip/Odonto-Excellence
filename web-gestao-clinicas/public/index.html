@@ -13,13 +13,11 @@
 <body>
   <div id="login" class="login-screen">
     <div class="login-card">
-      <div class="brand-mark">OE</div>
-      <h1>Central de Gestão</h1>
-      <p>Operação diária das 12 clínicas em um só lugar.</p>
+      <div class="login-brand"><div class="brand-mark">OE</div><div><span class="eyebrow">ODONTO EXCELLENCE</span><h1>Central de Gestão</h1></div></div><p class="login-lead">Gestão diária das 12 unidades, metas, retornos e tratativas em um único ambiente.</p><div class="login-trust"><span>12 unidades</span><span>Ambiente administrativo</span><span>Dados centralizados</span></div>
       <form id="loginForm">
-        <label>Senha administrativa</label>
-        <input id="password" type="password" autocomplete="current-password" required placeholder="Digite sua senha" />
-        <button class="btn primary" type="submit">Entrar</button>
+        <label>Acesso administrativo</label>
+        <input id="password" type="password" autocomplete="current-password" required placeholder="Digite sua senha de acesso" />
+        <button class="btn primary login-submit" type="submit">Acessar Central</button>
       </form>
       <div id="loginError" class="error"></div>
     </div>
@@ -27,9 +25,9 @@
 
   <div id="app" class="app hidden">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark small">OE</div><div><strong>Central de Gestão</strong><span>12 clínicas</span></div></div>
+      <div class="brand"><div class="brand-mark small">OE</div><div><strong>Central de Gestão</strong><span>Operação · 12 unidades</span></div></div>
       <nav id="nav"></nav>
-      <div class="sidebar-foot"><button id="exportBtn" class="ghost">Exportar backup</button><button id="logoutBtn" class="ghost">Sair</button></div>
+      <div class="sidebar-foot"><div class="system-state"><i></i><span>Central operacional</span></div><button id="exportBtn" class="ghost">Exportar dados</button><button id="logoutBtn" class="ghost">Encerrar sessão</button></div>
     </aside>
     <main class="main">
       <header class="topbar"><button id="menuToggle" class="icon-btn">☰</button><div><h2 id="pageTitle">Painel</h2><p id="pageHelp">Visão rápida das 12 clínicas.</p></div><div class="today" id="today"></div></header>
