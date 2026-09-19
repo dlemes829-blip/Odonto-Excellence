@@ -106,7 +106,7 @@ async function uploadCentralFiles(files){
     for(const f of files){
       if(f.size>8*1024*1024)throw new Error('Cada imagem deve ter no máximo 8 MB.');
       const data_url=await compressCentralImage(f);
-      await centralFetch('/screenshots',{method:'POST',body:JSON.stringify({clinic_id:Number($('#crClinic').value),return_type:Number($('#crType').value),file_name:f.name||'print.png',mime_type:'image/jpeg',data_url})});
+      await centralFetch('/screenshots',{method:'POST',body:JSON.stringify({clinic_id:Number($('#crClinic').value),return_type:Number($('#crType').value),file_name:f.name||'print.png',mime_type:'image/jpeg',image_data:data_url,message_status:'pending'})});
     }
     toast(files.length+' print(s) salvo(s) no banco');await loadCentralReturns();
   }catch(e){status.textContent=e.message;toast(e.message)}
@@ -118,7 +118,7 @@ async function loadCentralReturns(){
     const d=await centralFetch('/today?clinic_id='+clinic_id+'&return_type='+return_type);
     status.textContent=d.screenshots.length+' print(s) salvo(s) hoje · '+(return_type===1?'Retorno 1: uma mensagem breve por clínica.':'Retorno 2: uma mensagem separada para cada print.');
     if(!d.screenshots.length){grid.innerHTML='<div class="empty">Nenhum print salvo para esta clínica/tipo hoje.</div>';return}
-    grid.innerHTML=d.screenshots.map((x,i)=>'<article class="card print-card"><div class="print-head"><strong>Print '+(i+1)+'</strong><button class="ghost danger" data-cr-del="'+x.id+'">Excluir</button></div><img src="/central-returns/image/'+x.id+'?p='+encodeURIComponent(sessionStorage.getItem('g12_central_pass')||'')+'" alt="Print '+(i+1)+'"><div class="message-box '+(x.message?'':'pending-message')+'">'+esc(x.message||'Aguardando o ChatGPT analisar e gravar a mensagem…')+'</div>'+(x.message?'<button class="ghost" data-cr-copy="'+i+'">Copiar mensagem</button>':'')+'</article>').join('');
+    grid.innerHTML=d.screenshots.map((x,i)=>'<article class="card print-card"><div class="print-head"><strong>Print '+(i+1)+'</strong><button class="ghost danger" data-cr-del="'+x.id+'">Excluir</button></div><img src="'+x.image_data+'" loading="lazy" alt="Print '+(i+1)+'"><div class="message-box '+(x.message?'':'pending-message')+'">'+esc(x.message||'Aguardando o ChatGPT analisar e gravar a mensagem…')+'</div>'+(x.message?'<button class="ghost" data-cr-copy="'+i+'">Copiar mensagem</button>':'')+'</article>').join('');
     $$('[data-cr-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir este print?'))return;await centralFetch('/screenshots/'+b.dataset.crDel,{method:'DELETE'});await loadCentralReturns()});
     $$('[data-cr-copy]').forEach(b=>b.onclick=()=>copyText(d.screenshots[Number(b.dataset.crCopy)].message));
   }catch(e){status.textContent='Não foi possível acessar o banco: '+e.message;grid.innerHTML='<div class="empty">Confira se a senha administrativa do sistema é a mesma configurada no servidor.</div>'}
