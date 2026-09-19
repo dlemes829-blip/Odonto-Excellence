@@ -101,15 +101,16 @@ async function renderCentralReturns(c){
 async function fileToDataUrl(file){return new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(file)})}
 async function uploadCentralFiles(files){
   if(!files.length)return;
-  const status=$('#crStatus');status.textContent='Salvando '+files.length+' print(s)…';
+  const status=$('#crStatus'),zone=$('#crPaste'); status.textContent='Preparando '+files.length+' print(s)…'; if(zone)zone.classList.add('is-uploading');
   try{
     for(const f of files){
-      if(f.size>8*1024*1024)throw new Error('Cada imagem deve ter no máximo 8 MB.');
+      if(!f.type.startsWith('image/'))throw new Error('O arquivo selecionado não é uma imagem.');
+      if(f.size>12*1024*1024)throw new Error('Cada imagem deve ter no máximo 12 MB.');
       const data_url=await compressCentralImage(f);
       await centralFetch('/screenshots',{method:'POST',body:JSON.stringify({clinic_id:Number($('#crClinic').value),return_type:Number($('#crType').value),file_name:f.name||'print.png',mime_type:'image/jpeg',image_data:data_url,message_status:'pending'})});
     }
     toast(files.length+' print(s) salvo(s) no banco');await loadCentralReturns();
-  }catch(e){status.textContent=e.message;toast(e.message)}
+  }catch(e){console.error('Falha no upload de print',e);status.textContent='Falha ao salvar o print: '+e.message;toast('Falha ao salvar: '+e.message)}finally{if(zone)zone.classList.remove('is-uploading')}
 }
 async function loadCentralReturns(){
   const status=$('#crStatus'),grid=$('#crGrid'); if(!status||!grid)return;
