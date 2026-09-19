@@ -79,7 +79,9 @@ async function centralFetch(path,opts={}){
   if(!r.ok){let e={};try{e=await r.json()}catch{};throw new Error(e.message||e.error||('Erro '+r.status))}
   if(opts.method==='DELETE')return {ok:true};
   const rows=await r.json();
-  return path.startsWith('/today')?{screenshots:rows}:Array.isArray(rows)?rows[0]:rows;
+  if(path.startsWith('/today'))return {screenshots:rows};
+  if(path.startsWith('/rest/v1/'))return rows;
+  return Array.isArray(rows)?rows[0]:rows;
 }
 async function compressCentralImage(file){
   const src=await fileToDataUrl(file); const img=new Image();
