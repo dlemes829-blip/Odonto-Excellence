@@ -19,3 +19,17 @@
 
 /* reliability and UX closeout */
 .error-state{max-width:560px;margin:60px auto;padding:28px;background:#fff;border:1px solid #f0cbd1;border-radius:14px;display:grid;gap:10px;text-align:center}.error-state strong{font-size:16px}.error-state span{color:var(--muted);font-size:12px}.error-state .btn{justify-self:center;margin-top:5px}.btn[disabled],.ghost[disabled],button:disabled{opacity:.55;cursor:not-allowed;transform:none!important}.card:focus-within{border-color:#d5dae2}.form-grid textarea{line-height:1.5}.actions{align-items:center}.actions button{white-space:nowrap}.sidebar{overflow-y:auto}.content{min-height:calc(100vh - 70px)}@media(max-width:760px){input,select,textarea{font-size:16px}.actions>.btn,.actions>.ghost{flex:1 1 auto}.topbar p{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.toast{left:12px;right:12px;bottom:12px;text-align:center}.error-state{margin:30px 0}}
+
+/* Retorno 2 · leitura por print */
+.return2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:18px;align-items:start}
+.return2-card{display:flex;flex-direction:column;gap:12px;min-width:0}
+.return2-card .print-head>div{display:flex;flex-direction:column;gap:3px}
+.return2-card img{width:100%;max-height:520px;object-fit:contain;background:#f6f7f9;border:1px solid var(--line);border-radius:12px}
+.return-message-label{font-weight:700;font-size:13px;margin-top:2px}
+.return-message-editor{width:100%;min-height:155px;resize:vertical;line-height:1.5;font-size:14px;background:#fff}
+.return-message-editor.pending-message{border-style:dashed;background:#fafafa}
+.return-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.return-actions .btn.primary{margin-left:auto}
+.central-progress{gap:12px;align-items:center}
+.central-progress .actions{margin-left:auto}
+@media(max-width:760px){.return2-grid{grid-template-columns:1fr}.return-actions .btn.primary{margin-left:0;width:100%}.central-progress{align-items:stretch}.central-progress .actions{margin-left:0}.central-progress .actions>*{flex:1}}
