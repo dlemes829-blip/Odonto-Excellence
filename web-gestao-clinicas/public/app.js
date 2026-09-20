@@ -70,7 +70,7 @@ async function centralFetch(path,opts={}){
     url+='?select=id,clinic_id,return_type,file_name,mime_type,image_data,message,message_status,created_at,analyzed_at&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&order=created_at.asc,id.asc';
   }else if(path==='/screenshots'&&opts.method==='POST'){
     url=CENTRAL_DB_URL;
-  }else if(path.startsWith('/screenshots/')&&opts.method==='DELETE'){
+  }else if(path.startsWith('/screenshots/')&&(opts.method==='DELETE'||opts.method==='PATCH')){
     url+='?id=eq.'+path.split('/').pop();
   }
   if(opts.body)headers['Content-Type']='application/json';
@@ -92,17 +92,101 @@ async function compressCentralImage(file){
   cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
   return cv.toDataURL('image/jpeg',.76);
 }
+async function ensureCentralOcr(){
+  if(window.Tesseract)return;
+  await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';sc.onload=ok;sc.onerror=()=>no(new Error('Não foi possível carregar o leitor de relatórios.'));document.head.appendChild(sc)});
+}
+function centralPct(text,label){
+  const n=String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,' ');
+  const r=new RegExp(label+'[^%\\n]{0,80}?([0-9]{1,3}(?:[,.][0-9]+)?)\\s*%','i'),m=n.match(r);
+  return m?Number(m[1].replace(',','.')):null;
+}
+function centralNum(text,regs){
+  for(const r of regs){const m=String(text||'').match(r);if(m){const n=Number(String(m[1]).replace(/\./g,'').replace(',','.'));if(Number.isFinite(n))return n}}
+  return null;
+}
+function centralMoney(v){return v==null?'':v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function centralHumanMessage(raw,cl,index){
+  const t=String(raw||'').replace(/\s+/g,' ').trim(),u=t.toUpperCase();
+  const acceptance=centralPct(t,'aceita.{0,8}o'),conversion=centralPct(t,'convers.{0,8}o'),app=centralPct(t,'aplicativo');
+  const evals=centralNum(t,[/total de avalia[cç][oõ]es[^0-9]{0,20}(\d+)/i,/avalia[cç][oõ]es[^0-9]{0,15}(\d+)/i]);
+  const eff=centralNum(t,[/efetivadas?[^0-9]{0,15}(\d+)/i,/efetiva[cç][oõ]es[^0-9]{0,15}(\d+)/i]);
+  const paid=centralNum(t,[/pastas pagas[^0-9]{0,15}(\d+)/i]);
+  const paidGoal=centralNum(t,[/meta de pastas pagas[^0-9]{0,15}(\d+)/i]);
+  const charges=centralNum(t,[/cobran[cç]as efetuadas[^0-9]{0,15}(\d+)/i]);
+  const payments=centralNum(t,[/pagamentos realizados[^0-9]{0,15}(\d+)/i]);
+  const procedures=centralNum(t,[/procedimentos vendidos[^0-9]{0,15}(\d+)/i]);
+  const patients=centralNum(t,[/pacientes efetivados[^0-9]{0,15}(\d+)/i]);
+  const sold=centralNum(t,[/valor vendido[^0-9]{0,15}([\d.]+,\d{2})/i]);
+  if(/ORTODONT/.test(u)||paid!=null){
+    let a='Outro ponto que gostaria de trazer para vocês é sobre a Ortodontia. ';
+    if(paid!=null&&paidGoal!=null){const gap=Math.max(0,paidGoal-paid);a+=(gap===0?'Parabéns, a meta de pastas pagas já foi atingida. ':('Estamos com '+paid+' pastas pagas e faltam '+gap+' para atingirmos a meta. É um número totalmente alcançável e que podemos buscar juntos. '))}
+    if(acceptance!=null&&acceptance<70)a+='Por outro lado, nossa aceitação em Ortodontia está abaixo do esperado. Precisamos aproveitar melhor cada avaliação, reforçando a indicação e a apresentação da especialidade ao paciente. ';
+    return a+'Vamos acompanhar esse ponto de perto para transformar as avaliações em mais efetivações e resultado para a clínica.';
+  }
+  if(/INDICA[CÇ][OÕ]ES|INDICA[CÇ][AÃ]O/.test(u)){
+    return 'Continuando o tópico anterior, reparem que a recepção ainda tem oportunidade na indicação das avaliações para Clínico Geral e Ortodontia. Esse é um ponto importante para alinharmos com a equipe, reforçando a necessidade de oferecer e indicar as duas especialidades aos pacientes. Assim conseguimos aproveitar melhor cada oportunidade que já entra na clínica.';
+  }
+  if(/COBRAN[CÇ]A|APROVEITAMENTO DO AGENTE/.test(u)){
+    let a='Outro ponto que podemos analisar é a cobrança. ';
+    if(charges!=null&&payments!=null)a+='Foram '+charges+' cobranças efetuadas e '+payments+' pagamentos realizados. ';
+    const p=centralPct(t,'aproveitamento');
+    if(p!=null&&p>=65)a+='O índice está dentro do saudável e os pagamentos estão sendo recebidos. Parabéns pelo resultado! ';
+    else a+='Ainda temos espaço para aumentar o aproveitamento e converter mais cobranças em pagamentos. ';
+    return a+'Mesmo com um bom resultado, é um processo que precisamos continuar trabalhando para evoluir ainda mais.';
+  }
+  if(/TICKET M[EÉ]DIO|PROCEDIMENTOS VENDIDOS/.test(u)){
+    let a='Agora, quero pontuar sobre o nosso ticket médio, que é muito importante para a saúde da clínica. ';
+    if(procedures!=null&&patients!=null&&patients>0)a+='Temos '+procedures+' procedimentos para '+patients+' pacientes efetivados, uma média de '+(procedures/patients).toFixed(1).replace('.',',')+' procedimentos por paciente. ';
+    if(sold!=null)a+='O valor vendido no período foi de '+centralMoney(sold)+'. ';
+    return a+'Precisamos manter atenção na composição dos planos e evitar procedimentos abaixo do valor, porque isso impacta diretamente o ticket médio e o resultado da clínica.';
+  }
+  if(acceptance!=null||evals!=null||eff!=null){
+    let a=index===0?'Boa tarde, pessoal! Estava analisando os nossos relatórios e quero pontuar alguns números da unidade. ':'Seguindo a análise dos relatórios, ';
+    if(evals!=null)a+='tivemos '+evals+' avaliações';
+    if(eff!=null)a+=(evals!=null?' e ':'tivemos ')+eff+' efetivações';
+    if(evals!=null||eff!=null)a+='. ';
+    if(acceptance!=null)a+='Nossa aceitação está em '+acceptance.toFixed(0)+'%'+(acceptance<80?', abaixo do saudável de 80%. ':' e dentro de um bom caminho. ');
+    if(acceptance!=null&&acceptance<80)a+='Precisamos aumentar o aproveitamento das avaliações e trabalhar as ferramentas disponíveis para gerar novas oportunidades e melhorar esse índice. ';
+    if(conversion!=null&&conversion<30)a+='A conversão também pede atenção, então vale reforçar o acompanhamento das indicações e dos agendamentos. ';
+    if(app!=null&&app<95)a+='O uso do aplicativo também está abaixo da referência e precisa entrar no alinhamento da equipe. ';
+    return a+'Vamos olhar esses dados juntos e direcionar as ações necessárias para melhorar o resultado.';
+  }
+  return 'Pessoal, seguindo a análise deste relatório, temos pontos importantes para acompanhar com a equipe. Quero que olhemos o indicador apresentado e entendamos onde ainda existe oportunidade de evolução. Vamos manter o que está funcionando e agir nos pontos abaixo do esperado, sempre buscando melhorar o resultado da clínica.';
+}
+async function centralGenerateOne(row,index,cl){
+  await ensureCentralOcr();
+  const status=$('#crStatus');if(status)status.textContent='Lendo o print '+(index+1)+' e preparando a mensagem…';
+  const r=await Tesseract.recognize(row.image_data,'por');
+  return centralHumanMessage(r.data?.text||'',cl,index);
+}
+async function centralSaveMessage(id,message){
+  await centralFetch('/screenshots/'+id,{method:'PATCH',body:JSON.stringify({message,message_status:'ready',analyzed_at:new Date().toISOString()})});
+}
+async function copyPrintAndMessage(row){
+  try{
+    const res=await fetch(row.image_data),jpg=await res.blob();
+    const cv=document.createElement('canvas'),img=new Image();img.src=URL.createObjectURL(jpg);await new Promise((ok,no)=>{img.onload=ok;img.onerror=no});
+    cv.width=img.naturalWidth;cv.height=img.naturalHeight;cv.getContext('2d').drawImage(img,0,0);URL.revokeObjectURL(img.src);
+    const png=await new Promise(ok=>cv.toBlob(ok,'image/png'));
+    if(navigator.clipboard?.write&&window.ClipboardItem){
+      const item=new ClipboardItem({'image/png':png,'text/plain':new Blob([row.message||''],{type:'text/plain'})});
+      await navigator.clipboard.write([item]);toast('Print + mensagem copiados. Cole no WhatsApp.');
+    }else{await copyText(row.message||'');toast('Seu navegador copiou a mensagem. Use o botão do print para a imagem.')}
+  }catch(e){console.error(e);await copyText(row.message||'');toast('Mensagem copiada; o navegador bloqueou a cópia conjunta da imagem.')}
+}
 async function renderCentralReturns(c){
   const cl=clinic(state.selectedClinic||1);
-  c.innerHTML='<div class="section-head"><div><h3>Central de Retornos</h3><div class="clinic-meta">Cole os prints com Ctrl+V. As imagens ficam salvas no banco por clínica, data e tipo de retorno.</div></div></div>'+
-  '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno 1 · metas do dia</option><option value="2">Retorno 2 · detalhado por print</option></select></div></div></div>'+
-  '<div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar prints</strong><span>Pode colar vários, um após o outro. Também funciona pelo botão abaixo.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
-  '<div class="central-progress"><span id="crStatus" class="hint">Carregando registros de hoje…</span><button id="crReload" class="ghost">Atualizar</button></div><div id="crGrid" class="central-grid"></div>';
+  c.innerHTML='<div class="section-head"><div><h3>Central de Retornos</h3><div class="clinic-meta">Cole todos os relatórios da unidade. No Retorno 2, cada print fica organizado com sua mensagem pronta para WhatsApp.</div></div></div>'+
+  '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno 1 · breve e direto</option><option value="2" selected>Retorno 2 · análise completa por print</option></select></div></div></div>'+
+  '<div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar os prints da clínica</strong><span>Pode colar até 8 ou mais, um após o outro. Eles ficam salvos e ordenados.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
+  '<div class="central-progress"><span id="crStatus" class="hint">Carregando registros de hoje…</span><div class="actions"><button id="crGenerateAll" class="btn primary">Gerar mensagens dos prints</button><button id="crReload" class="ghost">Atualizar</button></div></div><div id="crGrid" class="central-grid return2-grid"></div>';
   $('#crClinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderCentralReturns(c)};
   $('#crType').onchange=()=>loadCentralReturns();
   $('#crPaste').onpaste=async e=>{const files=[...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();await uploadCentralFiles(files)}};
   $('#crFiles').onchange=async e=>{await uploadCentralFiles([...e.target.files]);e.target.value=''};
   $('#crReload').onclick=()=>loadCentralReturns();
+  $('#crGenerateAll').onclick=()=>generateCentralMessages();
   $('#crPaste').ondragover=e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}; $('#crPaste').ondragleave=e=>e.currentTarget.classList.remove('drag-over'); $('#crPaste').ondrop=async e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');await uploadCentralFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#crPaste').focus();
   await loadCentralReturns();
@@ -121,16 +205,31 @@ async function uploadCentralFiles(files){
     toast(files.length+' print(s) salvo(s) no banco');await loadCentralReturns();
   }catch(e){console.error('Falha no upload de print',e);status.textContent='Falha ao salvar o print: '+e.message;toast('Falha ao salvar: '+e.message)}finally{if(zone)zone.classList.remove('is-uploading')}
 }
+let centralRows=[];
+async function generateCentralMessages(){
+  if(!centralRows.length)return toast('Adicione os prints primeiro.');
+  const cl=clinic(Number($('#crClinic').value)),btn=$('#crGenerateAll');btn.disabled=true;
+  try{
+    for(let i=0;i<centralRows.length;i++){
+      const row=centralRows[i];if(row.message&&row.message_status==='ready')continue;
+      const msg=await centralGenerateOne(row,i,cl);await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
+    }
+    toast('Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
+  }catch(e){console.error(e);toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false}
+}
 async function loadCentralReturns(){
   const status=$('#crStatus'),grid=$('#crGrid'); if(!status||!grid)return;
   try{
     const clinic_id=Number($('#crClinic').value),return_type=Number($('#crType').value);
-    const d=await centralFetch('/today?clinic_id='+clinic_id+'&return_type='+return_type);
-    status.textContent=d.screenshots.length+' print(s) salvo(s) hoje · '+(return_type===1?'Retorno 1: uma mensagem breve por clínica.':'Retorno 2: uma mensagem separada para cada print.');
+    const d=await centralFetch('/today?clinic_id='+clinic_id+'&return_type='+return_type);centralRows=d.screenshots;
+    status.textContent=d.screenshots.length+' print(s) salvo(s) hoje · '+(return_type===1?'Retorno 1: breve e direto.':'Retorno 2: foto por foto, com texto humano pronto para copiar.');
+    $('#crGenerateAll').style.display=return_type===2?'':'none';
     if(!d.screenshots.length){grid.innerHTML='<div class="empty">Nenhum print salvo para esta clínica/tipo hoje.</div>';return}
-    grid.innerHTML=d.screenshots.map((x,i)=>'<article class="card print-card"><div class="print-head"><strong>Print '+(i+1)+'</strong><button class="ghost danger" data-cr-del="'+x.id+'">Excluir</button></div><img src="'+x.image_data+'" loading="lazy" alt="Print '+(i+1)+'"><div class="message-box '+(x.message?'':'pending-message')+'">'+esc(x.message||'Aguardando o ChatGPT analisar e gravar a mensagem…')+'</div>'+(x.message?'<button class="ghost" data-cr-copy="'+i+'">Copiar mensagem</button>':'')+'</article>').join('');
+    grid.innerHTML=d.screenshots.map((x,i)=>'<article class="card print-card return2-card"><div class="print-head"><div><strong>Print '+(i+1)+'</strong><span class="clinic-meta">'+esc(clinic(clinic_id)?.city||'')+'</span></div><button class="ghost danger" data-cr-del="'+x.id+'">Excluir</button></div><img src="'+x.image_data+'" loading="lazy" alt="Print '+(i+1)+'"><label class="return-message-label">Mensagem pronta para o grupo</label><textarea class="return-message-editor '+(x.message?'':'pending-message')+'" data-cr-msg="'+x.id+'" rows="7" placeholder="Clique em Gerar mensagens dos prints…">'+esc(x.message||'')+'</textarea><div class="return-actions"><button class="ghost" data-cr-save="'+x.id+'">Salvar texto</button><button class="ghost" data-cr-copy="'+i+'">Copiar mensagem</button><button class="btn primary" data-cr-pack="'+i+'" '+(x.message?'':'disabled')+'>Copiar print + mensagem</button></div></article>').join('');
     $$('[data-cr-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir este print?'))return;await centralFetch('/screenshots/'+b.dataset.crDel,{method:'DELETE'});await loadCentralReturns()});
-    $$('[data-cr-copy]').forEach(b=>b.onclick=()=>copyText(d.screenshots[Number(b.dataset.crCopy)].message));
+    $$('[data-cr-save]').forEach(b=>b.onclick=async()=>{const msg=$('[data-cr-msg="'+b.dataset.crSave+'"]').value.trim();await centralSaveMessage(b.dataset.crSave,msg);toast('Mensagem salva');await loadCentralReturns()});
+    $$('[data-cr-copy]').forEach(b=>b.onclick=()=>copyText(d.screenshots[Number(b.dataset.crCopy)].message||''));
+    $$('[data-cr-pack]').forEach(b=>b.onclick=()=>copyPrintAndMessage(d.screenshots[Number(b.dataset.crPack)]));
   }catch(e){status.textContent='Não foi possível acessar o banco: '+e.message;grid.innerHTML='<div class="empty">A conexão com o armazenamento não respondeu. Use Atualizar para tentar novamente.</div>'}
 }
 
