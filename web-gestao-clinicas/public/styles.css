@@ -33,3 +33,14 @@
 .central-progress{gap:12px;align-items:center}
 .central-progress .actions{margin-left:auto}
 @media(max-width:760px){.return2-grid{grid-template-columns:1fr}.return-actions .btn.primary{margin-left:0;width:100%}.central-progress{align-items:stretch}.central-progress .actions{margin-left:0}.central-progress .actions>*{flex:1}}
+
+/* clinic intelligence hub */
+.analysis-hub{margin:14px 0 16px;border-color:#dfe4eb;background:linear-gradient(180deg,#fff 0%,#fbfcfd 100%)}
+.analysis-hub .section-head{align-items:flex-start;margin-bottom:14px}
+.analysis-hub .section-head h3{font-size:16px;margin:7px 0 3px}
+.analysis-hub .section-head p{margin:0;color:var(--muted);font-size:11px}
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.analysis-copy{min-height:86px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:12px;font-size:12px;line-height:1.6;color:#303641}
+.analysis-copy.preline{white-space:pre-line}
+.analysis-wait{margin:12px 0}
+@media(max-width:760px){.analysis-hub .section-head{flex-direction:column}.analysis-hub .section-head .actions{width:100%}.analysis-hub .section-head .actions button{flex:1}.analysis-grid{grid-template-columns:1fr}.analysis-grid .span-2{grid-column:auto}}
