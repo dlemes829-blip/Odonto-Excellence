@@ -246,7 +246,7 @@ async function copyAllForWhatsApp(rows){
   }finally{btn.disabled=false}
 }
 
-async function renderCentralReturns(c){
+async async function renderCentralReturns(c){
   const cl=clinic(state.selectedClinic||1);
   c.innerHTML='<div class="section-head"><div><h3>Central de Retornos</h3><div class="clinic-meta">Cole todos os relatórios da unidade. No Retorno 2, cada print fica organizado com sua mensagem pronta para WhatsApp.</div></div></div>'+
   '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno 1 · breve e direto</option><option value="2" selected>Retorno 2 · análise completa por print</option></select></div></div></div>'+
