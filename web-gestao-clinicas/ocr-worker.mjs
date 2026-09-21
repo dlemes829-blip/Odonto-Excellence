@@ -21,7 +21,10 @@ async function run(){
   state.running=true;
   let worker;
   try{
-    const rows=await listRows();state.total=rows.length;
+    const all=await listRows();
+    const minId=Number(process.env.ID_MIN||0),maxId=Number(process.env.ID_MAX||999999);
+    const rows=all.filter(r=>r.id>=minId&&r.id<=maxId);
+    state.total=rows.length;
     worker=await createWorker("por");
     for(const row of rows){
       if(row.ocr_text&&row.ocr_text.trim().length>30){state.done++;continue}
