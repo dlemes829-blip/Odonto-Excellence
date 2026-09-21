@@ -164,28 +164,60 @@ function centralContext(raw,cl){
   const t=String(raw||'').replace(/\s+/g,' ').trim(),n=centralNormalize(t);
   const dates=[...t.matchAll(/\b(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)\b/g)].map(m=>m[1]);
   const times=[...t.matchAll(/\b([01]?\d|2[0-3]):[0-5]\d\b/g)].map(m=>m[0]);
-  const expected=[cl?.city,cl?.name,cl?.code].filter(Boolean).map(centralNormalize);
-  const expectedHit=expected.some(x=>x&&n.includes(x));
-  const other=CLINICS.filter(x=>x.id!==cl?.id).find(x=>[x.city,x.name,x.code].filter(Boolean).map(centralNormalize).some(v=>v.length>=3&&n.includes(v)));
+  const names=[cl?.city,cl?.name].filter(Boolean).map(centralNormalize).filter(x=>x.length>=4);
+  const expectedHit=names.some(x=>n.includes(x));
+  const other=CLINICS.filter(x=>x.id!==cl?.id).find(x=>[x.city,x.name].filter(Boolean).map(centralNormalize).filter(v=>v.length>=5).some(v=>n.includes(v)));
   return {text:t,n,dates:[...new Set(dates)],times:[...new Set(times)],expectedHit,other};
 }
 function centralValidateClinic(raw,cl){
   const c=centralContext(raw,cl);
-  if(c.other&&!c.expectedHit)throw new Error('O relatório parece ser da clínica '+c.other.city+', mas está salvo em '+cl.city+'. Mova/confira o print antes de gerar a mensagem.');
+  if(c.other&&!c.expectedHit)throw new Error('Este print parece ser da clínica '+c.other.city+', mas está selecionada '+cl.city+'. Confira a unidade antes de gerar.');
   return c;
 }
-function centralReturn1Message(raw,cl){
+function centralReturn1Extract(raw,cl){
   const c=centralValidateClinic(raw,cl),t=c.text;
-  const eff=centralNum(t,[/efetiv(?:a[cç][oõ]es|ados?|adas?)[^0-9]{0,30}(\d+)/i,/realizadas?[^0-9]{0,25}(\d+)/i]);
-  const goal=centralNum(t,[/meta(?:\s+(?:do|de|para|efetiva[cç][oõ]es))?[^0-9]{0,30}(\d+)/i,/objetivo[^0-9]{0,30}(\d+)/i]);
-  const h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+  const eff=centralNum(t,[
+    /(?:qtd|quantidade|total)?\s*(?:de\s*)?efetiva[cç][oõ]es?[^0-9]{0,35}(\d{1,3})/i,
+    /tratamentos?\s+efetivados?[^0-9]{0,30}(\d{1,3})/i,
+    /efetivados?[^0-9]{0,30}(\d{1,3})/i,
+    /realizadas?[^0-9]{0,25}(\d{1,3})/i
+  ]);
+  const goal=centralNum(t,[
+    /meta\s*(?:di[aá]ria|de\s+efetiva[cç][oõ]es|efetiva[cç][oõ]es|do\s+per[ií]odo)?[^0-9]{0,35}(\d{1,3})/i,
+    /objetivo[^0-9]{0,30}(\d{1,3})/i,
+    /proporcional[^0-9]{0,30}(\d{1,3})/i
+  ]);
+  return {...c,eff,goal};
+}
+function centralSplitTarget(total,count){
+  if(!Number.isFinite(total)||total<=0||count<=0)return Array(count).fill(0);
+  const base=Math.floor(total/count),rest=total%count;
+  return Array.from({length:count},(_,i)=>base+(i<rest?1:0));
+}
+function centralReturn1Message(raw,cl,people=[]){
+  const c=centralReturn1Extract(raw,cl),h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
   const period=c.dates.length>=2?' de '+c.dates[0]+' a '+c.dates[c.dates.length-1]:(c.dates.length===1?' em '+c.dates[0]:'');
-  if(eff==null||goal==null)throw new Error('Não consegui confirmar com segurança efetivações + meta no Retorno 1. A mensagem não foi criada para evitar número errado.');
-  const gap=Math.max(0,goal-eff),remaining=gap;
-  const team=gap>0
-    ?g+' meninas! Conferi o retorno'+period+': tivemos '+eff+' efetivações e nossa meta era '+goal+'. Ficaram '+gap+' para recuperar. Vamos trabalhar '+remaining+' efetivaç'+(remaining===1?'ão':'ões')+' como meta do próximo acompanhamento, puxando avaliações pendentes, reativações e confirmações. Me atualizem durante o período para a gente ir acompanhando juntas.'
-    :g+' meninas! Conferi o retorno'+period+': tivemos '+eff+' efetivações para meta de '+goal+' e batemos o combinado. Parabéns! Vamos manter o ritmo e não deixar as avaliações pendentes esfriarem.';
-  const docs=g+' Drs. Tudo bem?? No retorno'+period+', tivemos '+eff+' efetivações para meta de '+goal+'. '+(gap>0?'Ficamos '+gap+' abaixo. Já passei essa recuperação para as colaboradoras e vou acompanhar com elas durante o próximo período.':'Meta atingida. Vamos manter esse ritmo no próximo período.');
+  const staff=(people||[]).filter(x=>x&&x.name).slice(0,5);
+  const names=staff.length?staff.map(x=>x.name):['Colaboradora 1','Colaboradora 2','Colaboradora 3'];
+  const gap=c.eff!=null&&c.goal!=null?Math.max(0,c.goal-c.eff):null;
+  const split=centralSplitTarget(gap||0,names.length);
+  const jobs=[
+    'agenda e reagendamento: puxar faltosos, pacientes sem próximo horário e encaixes; confirmar a agenda e ocupar horários vagos com avaliação',
+    'avaliações e captação: trabalhar indicações, reativações e contatos pendentes para colocar novas avaliações na cadeira e acompanhar quem ainda não confirmou',
+    'conversão e início: revisar avaliações que não fecharam, fazer follow-up, apoiar a negociação e garantir que quem efetivar já saia com o início do tratamento organizado',
+    'Ortodontia e indicações internas: aproveitar pacientes em atendimento para gerar avaliação de Orto/Clínico Geral e acompanhar até o agendamento',
+    'confirmação e recuperação: reforçar confirmações do dia, recuperar cancelamentos/faltas e manter a agenda produtiva'
+  ];
+  const assignments=names.map((name,i)=>{
+    const target=gap>0&&split[i]>0?' Meta de contribuição: buscar '+split[i]+' efetivaç'+(split[i]===1?'ão':'ões')+' para a recuperação.':'';
+    return '• '+name+': '+jobs[i%jobs.length]+'.'+target;
+  }).join('\n');
+  let resultLine='';
+  if(c.eff!=null&&c.goal!=null)resultLine='Tivemos '+c.eff+' efetivações para uma meta de '+c.goal+'. '+(gap>0?'Ficaram '+gap+' para recuperar.':'Meta atingida. Agora é manter o ritmo e proteger a agenda.');
+  else if(c.eff!=null)resultLine='Tivemos '+c.eff+' efetivações'+period+'. A meta numérica não ficou legível com segurança no print, então não vou inventar esse número.';
+  else resultLine='O print foi lido, mas o total de efetivações/meta não ficou seguro o suficiente para eu afirmar um número. A divisão operacional abaixo pode ser usada enquanto o dado é conferido.';
+  const team=g+' meninas! Conferi o Retorno 1'+period+'. '+resultLine+'\n\nPra gente buscar cadeira cheia e resultado, vamos dividir assim:\n'+assignments+'\n\nQuero acompanhamento durante o período, sem deixar avaliação, faltoso ou paciente sem agenda parado. O foco é transformar agenda em avaliação, avaliação em efetivação e efetivação em início.';
+  const docs=g+' Drs. Tudo bem?? Conferi o Retorno 1'+period+'. '+(c.eff!=null&&c.goal!=null?(gap>0?'Tivemos '+c.eff+' efetivações para meta de '+c.goal+', ficando '+gap+' abaixo. Já dividi a recuperação entre as colaboradoras com foco em agenda/reagendamento, novas avaliações, follow-up e conversão.':'Tivemos '+c.eff+' efetivações para meta de '+c.goal+' e atingimos o combinado. Vou manter a equipe trabalhando agenda, avaliações e conversão para sustentar o resultado.'):'Já direcionei a equipe para atacar agenda, reagendamento, avaliações, follow-up e conversão enquanto confirmamos o número final do relatório.');
   return 'COLABORADORAS · MENSAGEIRO\n'+team+'\n\nFRANQUEADOS · GRUPO\n'+docs;
 }
 async function centralGenerateOne(row,index,cl){
@@ -283,12 +315,12 @@ async function generateCentralMessages(){
   const cl=clinic(Number($('#crClinic').value)),returnType=Number($('#crType').value),btn=$('#crGenerateAll'),status=$('#crStatus'),title=$('#crStatusTitle'),spin=$('#crSpinner'),bar=$('#crLiveBar');btn.disabled=true;btn.textContent='Analisando…';spin?.classList.add('active');if(title)title.textContent=returnType===1?'Leitura do Retorno 1 em andamento':'Análise estratégica em andamento';if(bar)bar.style.width='2%';
   try{
     for(let i=0;i<centralRows.length;i++){
-      const row=centralRows[i];
-      if(status)status.textContent='Print '+(i+1)+' de '+centralRows.length+' · identificando título, números, metas e oportunidades…';if(bar)bar.style.width=Math.round((i/centralRows.length)*100)+'%';
-      let msg=await centralGenerateOne(row,i,cl);if(returnType===1)msg=centralReturn1Message(row._ocrText||'',cl);if(!msg||msg.trim().length<35)throw new Error('A leitura do print '+(i+1)+' não ficou confiável. A mensagem não foi salva; use Gerar novamente.');await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
+      const row=rowsToProcess[i];
+      if(status)status.textContent='Print '+(i+1)+' de '+rowsToProcess.length+' · identificando título, números, metas e oportunidades…';if(bar)bar.style.width=Math.round((i/rowsToProcess.length)*100)+'%';
+      let msg=await centralGenerateOne(row,i,cl);if(returnType===1)msg=centralReturn1Message(row._ocrText||'',cl,return1People);if(!msg||msg.trim().length<35)throw new Error('A leitura do print '+(i+1)+' não ficou confiável. A mensagem não foi salva; use Gerar novamente.');await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
     }
-    if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints lidos e com mensagem.';if(title)title.textContent='Análise concluída';if(bar)bar.style.width='100%';toast(returnType===1?'Retorno 1 preparado.':'Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
-  }catch(e){console.error(e);if(status)status.textContent='Erro na leitura: '+e.message;toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false;btn.textContent='Gerar mensagens dos prints';spin?.classList.remove('active')}
+    if(status)status.textContent='Análise concluída · '+rowsToProcess.length+' de '+rowsToProcess.length+' print(s) lido(s) e com mensagem.';if(title)title.textContent='Análise concluída';if(bar)bar.style.width='100%';toast(returnType===1?'Retorno 1 preparado.':'Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
+  }catch(e){console.error(e);if(status)status.textContent='Erro na leitura: '+e.message;toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false;btn.textContent=returnType===1?'Gerar Retorno 1':'Gerar mensagens dos prints';spin?.classList.remove('active')}
 }
 async function generateAllClinics(){
   const btn=$('#crGenerateAllClinics'),status=$('#crStatus'),type=Number($('#crType').value),original=Number($('#crClinic').value);
