@@ -246,10 +246,11 @@ async function generateCentralMessages(){
   const cl=clinic(Number($('#crClinic').value)),btn=$('#crGenerateAll'),status=$('#crStatus');btn.disabled=true;btn.textContent='Lendo relatórios…';
   try{
     for(let i=0;i<centralRows.length;i++){
-      const row=centralRows[i];if(row.message&&row.message_status==='ready')continue;
+      const row=centralRows[i];
+      if(status)status.textContent='Analisando print '+(i+1)+' de '+centralRows.length+' · lendo números, metas e indicador…';
       const msg=await centralGenerateOne(row,i,cl);await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
     }
-    toast('Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
+    if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints processados.';toast('Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
   }catch(e){console.error(e);if(status)status.textContent='Erro na leitura: '+e.message;toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false;btn.textContent='Gerar mensagens dos prints'}
 }
 async function loadCentralReturns(){
@@ -261,8 +262,8 @@ async function loadCentralReturns(){
     status.textContent=d.screenshots.length+' print(s) salvo(s) hoje · '+(return_type===1?'Retorno 1: breve e direto.':readyCount===d.screenshots.length&&d.screenshots.length?'Análise concluída · '+readyCount+' mensagem(ns) prontas para copiar.':'Retorno 2: foto por foto, com texto humano pronto para copiar.');
     const genBtn=$('#crGenerateAll');
     genBtn.style.display=return_type===2?'':'none';
-    genBtn.disabled=return_type===2&&d.screenshots.length>0&&readyCount===d.screenshots.length;
-    genBtn.textContent=genBtn.disabled?'Mensagens concluídas':'Gerar mensagens dos prints';
+    genBtn.disabled=false;
+    genBtn.textContent=readyCount===d.screenshots.length&&d.screenshots.length?'Gerar novamente':'Gerar mensagens dos prints';
     const analysisBox=$('#crAnalysis');
     if(return_type===2){
       const rows=await mgmtFetch('central_clinic_analysis?select=*&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+clinic_id+'&return_type=eq.2&limit=1');
