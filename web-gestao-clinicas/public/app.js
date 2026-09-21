@@ -111,53 +111,50 @@ function centralNum(text,regs){
   return null;
 }
 function centralMoney(v){return v==null?'':v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
-function centralHumanMessage(raw,cl,index){
+function centralHumanMessage(raw,cl,index,total=1){
   const t=String(raw||'').replace(/\s+/g,' ').trim(),u=t.toUpperCase();
-  const acceptance=centralPct(t,'aceita.{0,8}o'),conversion=centralPct(t,'convers.{0,8}o'),app=centralPct(t,'aplicativo');
+  const pct=(label)=>centralPct(t,label);
+  const acceptance=pct('aceita.{0,10}o'),conversion=pct('convers.{0,10}o'),app=pct('aplicativo'),collection=pct('aproveitamento');
   const evals=centralNum(t,[/total de avalia[cç][oõ]es[^0-9]{0,20}(\d+)/i,/avalia[cç][oõ]es[^0-9]{0,15}(\d+)/i]);
   const eff=centralNum(t,[/efetivadas?[^0-9]{0,15}(\d+)/i,/efetiva[cç][oõ]es[^0-9]{0,15}(\d+)/i]);
-  const paid=centralNum(t,[/pastas pagas[^0-9]{0,15}(\d+)/i]);
-  const paidGoal=centralNum(t,[/meta de pastas pagas[^0-9]{0,15}(\d+)/i]);
-  const charges=centralNum(t,[/cobran[cç]as efetuadas[^0-9]{0,15}(\d+)/i]);
-  const payments=centralNum(t,[/pagamentos realizados[^0-9]{0,15}(\d+)/i]);
-  const procedures=centralNum(t,[/procedimentos vendidos[^0-9]{0,15}(\d+)/i]);
-  const patients=centralNum(t,[/pacientes efetivados[^0-9]{0,15}(\d+)/i]);
+  const treatments=centralNum(t,[/tratamentos efetivados[^0-9]{0,15}(\d+)/i]);
+  const started=centralNum(t,[/tratamentos iniciados[^0-9]{0,15}(\d+)/i]);
+  const paid=centralNum(t,[/pastas pagas[^0-9]{0,15}(\d+)/i]),paidGoal=centralNum(t,[/meta de pastas pagas[^0-9]{0,15}(\d+)/i]);
+  const charges=centralNum(t,[/cobran[cç]as efetuadas[^0-9]{0,15}(\d+)/i]),payments=centralNum(t,[/pagamentos realizados[^0-9]{0,15}(\d+)/i]);
+  const procedures=centralNum(t,[/procedimentos vendidos[^0-9]{0,15}(\d+)/i]),patients=centralNum(t,[/pacientes efetivados[^0-9]{0,15}(\d+)/i]);
   const sold=centralNum(t,[/valor vendido[^0-9]{0,15}([\d.]+,\d{2})/i]);
-  if(/ORTODONT/.test(u)||paid!=null){
-    let a='Outro ponto que gostaria de trazer para vocês é sobre a Ortodontia. ';
-    if(paid!=null&&paidGoal!=null){const gap=Math.max(0,paidGoal-paid);a+=(gap===0?'Parabéns, a meta de pastas pagas já foi atingida. ':('Estamos com '+paid+' pastas pagas e faltam '+gap+' para atingirmos a meta. É um número totalmente alcançável e que podemos buscar juntos. '))}
-    if(acceptance!=null&&acceptance<70)a+='Por outro lado, nossa aceitação em Ortodontia está abaixo do esperado. Precisamos aproveitar melhor cada avaliação, reforçando a indicação e a apresentação da especialidade ao paciente. ';
-    return a+'Vamos acompanhar esse ponto de perto para transformar as avaliações em mais efetivações e resultado para a clínica.';
+  let msg='';
+  if(/EFETIVAD[OA]S?\s*[Xx×]\s*INICIAD[OA]S?|EFETIVADOS?.{0,20}INICIADOS?/.test(u)){
+    const gap=treatments!=null&&started!=null?Math.max(0,treatments-started):null;
+    msg='Vejam que nas efetivações '+(gap===0&&treatments!=null?'todos os '+treatments+' tratamentos já foram iniciados. Excelente resultado! ':'temos um ponto importante nos tratamentos iniciados. ');
+    if(gap>0)msg+='Foram '+treatments+' tratamentos efetivados e '+started+' iniciados, então ainda temos '+gap+' paciente'+(gap===1?'':'s')+' que precisa'+(gap===1?'':'m')+' iniciar. Precisamos entrar em contato e garantir esse agendamento o quanto antes. ';
+    msg+='A orientação é que o paciente inicie o tratamento no mesmo dia da efetivação ou, no máximo, em até 2 dias.';
+  }else if(/ORTODONT/.test(u)||paid!=null){
+    msg='Sobre a Ortodontia, ';
+    if(paid!=null&&paidGoal!=null){const gap=Math.max(0,paidGoal-paid);msg+=gap===0?'parabéns, já atingimos a meta de pastas pagas. ':('estamos com '+paid+' pastas pagas e faltam apenas '+gap+' para a meta. É um número totalmente alcançável e que podemos buscar juntos. ')}
+    if(acceptance!=null)msg+='Por outro lado, nossa aceitação está em '+Math.round(acceptance)+'%'+(acceptance<80?', abaixo do saudável. Precisamos melhorar a indicação e aproveitar melhor cada avaliação, tanto para Clínico Geral quanto para Ortodontia. ':'. ');
+  }else if(/INDICA[CÇ][OÕ]ES|INDICA[CÇ][AÃ]O/.test(u)){
+    msg='Continuando o tópico anterior, reparem que a recepção ainda tem oportunidade nas indicações. Precisamos reforçar com a equipe a necessidade de oferecer e indicar as avaliações de Clínico Geral e Ortodontia aos pacientes, porque é daí que vamos gerar novas oportunidades e aumentar nossas efetivações.';
+  }else if(/COBRAN[CÇ]A|APROVEITAMENTO DO AGENTE/.test(u)){
+    msg='Agora olhando a cobrança, ';
+    if(charges!=null&&payments!=null)msg+='foram '+charges+' cobranças efetuadas e '+payments+' pagamentos realizados. ';
+    if(collection!=null)msg+='Nosso aproveitamento está em '+Math.round(collection)+'%'+(collection>=65?', dentro do saudável. Parabéns pelo resultado! ':', abaixo do saudável, então precisamos trabalhar mais esse processo para transformar as cobranças em pagamentos. ');
+    msg+='Mesmo quando o número está bom, precisamos continuar acompanhando para melhorar ainda mais o resultado.';
+  }else if(/TICKET M[EÉ]DIO|PROCEDIMENTOS VENDIDOS|PRODUTIVIDADE PROFISSIONAL/.test(u)){
+    msg='Agora quero pontuar sobre o nosso ticket médio, que é muito importante para a saúde da clínica. ';
+    if(procedures!=null&&patients!=null&&patients>0)msg+='Temos '+procedures+' procedimentos para '+patients+' pacientes efetivados, uma média de '+(procedures/patients).toFixed(1).replace('.',',')+' procedimentos por paciente. ';
+    if(sold!=null)msg+='O valor vendido foi de '+centralMoney(sold)+'. ';
+    msg+='Precisamos manter atenção nos planos apresentados e não realizar procedimentos abaixo do valor, porque isso impacta diretamente o ticket médio e o resultado da clínica.';
+  }else if(/[ÍI]NDICE DE ACEITA[CÇ][AÃ]O|ACEITA[CÇ][AÃ]O/.test(u)||acceptance!=null){
+    msg=index===0?'Boa tarde, pessoal! Estava analisando nossos relatórios e quero começar pelo índice de aceitação. ':'Agora olhando nosso índice de aceitação, ';
+    if(evals!=null&&eff!=null)msg+='tivemos '+evals+' avaliações e '+eff+' efetivações. ';
+    if(acceptance!=null)msg+='Estamos com '+Math.round(acceptance)+'% de aceitação'+(acceptance<80?', abaixo do saudável de 80%. Precisamos aumentar o aproveitamento das avaliações e usar as ferramentas disponíveis para gerar novas avaliações e efetivações. ':', dentro do saudável. Vamos manter esse resultado e buscar evoluir ainda mais. ');
+  }else{
+    const title=(t.match(/(?:^|\s)(\d+(?:\.\d+)?\.?\s+[^%]{4,55}?)(?=\s{2,}|\d{1,3}%|Per[ií]odo|$)/i)||[])[1];
+    msg=(title?'Sobre '+title.replace(/[+•]/g,'').trim()+', ':'Sobre este ponto do relatório, ')+'quero que observem os números apresentados e comparem com a meta do indicador. O que estiver abaixo precisamos tratar com a equipe e transformar em ação; o que estiver saudável, vamos manter e buscar evoluir.';
   }
-  if(/INDICA[CÇ][OÕ]ES|INDICA[CÇ][AÃ]O/.test(u)){
-    return 'Continuando o tópico anterior, reparem que a recepção ainda tem oportunidade na indicação das avaliações para Clínico Geral e Ortodontia. Esse é um ponto importante para alinharmos com a equipe, reforçando a necessidade de oferecer e indicar as duas especialidades aos pacientes. Assim conseguimos aproveitar melhor cada oportunidade que já entra na clínica.';
-  }
-  if(/COBRAN[CÇ]A|APROVEITAMENTO DO AGENTE/.test(u)){
-    let a='Outro ponto que podemos analisar é a cobrança. ';
-    if(charges!=null&&payments!=null)a+='Foram '+charges+' cobranças efetuadas e '+payments+' pagamentos realizados. ';
-    const p=centralPct(t,'aproveitamento');
-    if(p!=null&&p>=65)a+='O índice está dentro do saudável e os pagamentos estão sendo recebidos. Parabéns pelo resultado! ';
-    else a+='Ainda temos espaço para aumentar o aproveitamento e converter mais cobranças em pagamentos. ';
-    return a+'Mesmo com um bom resultado, é um processo que precisamos continuar trabalhando para evoluir ainda mais.';
-  }
-  if(/TICKET M[EÉ]DIO|PROCEDIMENTOS VENDIDOS/.test(u)){
-    let a='Agora, quero pontuar sobre o nosso ticket médio, que é muito importante para a saúde da clínica. ';
-    if(procedures!=null&&patients!=null&&patients>0)a+='Temos '+procedures+' procedimentos para '+patients+' pacientes efetivados, uma média de '+(procedures/patients).toFixed(1).replace('.',',')+' procedimentos por paciente. ';
-    if(sold!=null)a+='O valor vendido no período foi de '+centralMoney(sold)+'. ';
-    return a+'Precisamos manter atenção na composição dos planos e evitar procedimentos abaixo do valor, porque isso impacta diretamente o ticket médio e o resultado da clínica.';
-  }
-  if(acceptance!=null||evals!=null||eff!=null){
-    let a=index===0?'Boa tarde, pessoal! Estava analisando os nossos relatórios e quero pontuar alguns números da unidade. ':'Seguindo a análise dos relatórios, ';
-    if(evals!=null)a+='tivemos '+evals+' avaliações';
-    if(eff!=null)a+=(evals!=null?' e ':'tivemos ')+eff+' efetivações';
-    if(evals!=null||eff!=null)a+='. ';
-    if(acceptance!=null)a+='Nossa aceitação está em '+acceptance.toFixed(0)+'%'+(acceptance<80?', abaixo do saudável de 80%. ':' e dentro de um bom caminho. ');
-    if(acceptance!=null&&acceptance<80)a+='Precisamos aumentar o aproveitamento das avaliações e trabalhar as ferramentas disponíveis para gerar novas oportunidades e melhorar esse índice. ';
-    if(conversion!=null&&conversion<30)a+='A conversão também pede atenção, então vale reforçar o acompanhamento das indicações e dos agendamentos. ';
-    if(app!=null&&app<95)a+='O uso do aplicativo também está abaixo da referência e precisa entrar no alinhamento da equipe. ';
-    return a+'Vamos olhar esses dados juntos e direcionar as ações necessárias para melhorar o resultado.';
-  }
-  return 'Pessoal, seguindo a análise deste relatório, temos pontos importantes para acompanhar com a equipe. Quero que olhemos o indicador apresentado e entendamos onde ainda existe oportunidade de evolução. Vamos manter o que está funcionando e agir nos pontos abaixo do esperado, sempre buscando melhorar o resultado da clínica.';
+  if(index===total-1)msg+=' Para finalizar, peço que leiam os pontos que trouxe nos relatórios. Vamos olhar esses dados juntos e trabalhar nas ações necessárias para melhorar ainda mais nossos resultados!';
+  return msg.trim();
 }
 async function centralGenerateOne(row,index,cl){
   await ensureCentralOcr();
@@ -168,7 +165,7 @@ async function centralGenerateOne(row,index,cl){
   ]);
   const text=r.data?.text||'';
   if(text.trim().length<12)throw new Error('Não consegui ler texto suficiente do print '+(index+1)+'.');
-  return centralHumanMessage(text,cl,index);
+  return centralHumanMessage(text,cl,index,centralRows.length);
 }
 async function centralSaveMessage(id,message){
   await centralFetch('/screenshots/'+id,{method:'PATCH',body:JSON.stringify({message,message_status:'ready',analyzed_at:new Date().toISOString()})});
@@ -185,6 +182,29 @@ async function copyPrintAndMessage(row){
     }else{await copyText(row.message||'');toast('Seu navegador copiou a mensagem. Use o botão do print para a imagem.')}
   }catch(e){console.error(e);await copyText(row.message||'');toast('Mensagem copiada; o navegador bloqueou a cópia conjunta da imagem.')}
 }
+async function copyAllForWhatsApp(rows){
+  const btn=$('#crCopyAll'),box=$('#crCopyProgress'),bar=box?.querySelector('i'),label=box?.querySelector('span');
+  if(!rows.length)return toast('Nenhum print para copiar.');
+  btn.disabled=true;if(box)box.classList.remove('hidden');
+  try{
+    const parts=[];
+    for(let i=0;i<rows.length;i++){
+      if(label)label.textContent='Preparando '+(i+1)+' de '+rows.length+'…';
+      if(bar)bar.style.width=Math.round(((i+1)/rows.length)*100)+'%';
+      parts.push('PRINT '+(i+1)+'\n'+(rows[i].message||''));
+      await new Promise(r=>setTimeout(r,40));
+    }
+    await copyText(parts.join('\n\n'));
+    if(label)label.textContent='Mensagens copiadas. As imagens serão abertas em sequência para envio.';
+    // Browsers/WhatsApp do not reliably accept multiple images + independent captions in one clipboard write.
+    // Open a safe send tray so the user can copy each image in order without losing the matching text.
+    const tray=document.createElement('div');tray.className='whatsapp-copy-tray';
+    tray.innerHTML='<div class="copy-tray-head"><strong>Envio para WhatsApp · '+rows.length+' prints</strong><button class="ghost" data-close-tray>Fechar</button></div><p>As mensagens já estão copiadas. Envie os cards abaixo na ordem; cada botão copia a imagem correspondente e mantém a mensagem visível.</p><div class="copy-tray-list">'+rows.map((r,i)=>'<div class="copy-tray-item"><img src="'+r.image_data+'"><div><strong>Print '+(i+1)+'</strong><p>'+esc(r.message||'')+'</p><button class="btn primary" data-copy-image="'+i+'">Copiar imagem '+(i+1)+'</button></div></div>').join('')+'</div>';
+    document.body.appendChild(tray);tray.querySelector('[data-close-tray]').onclick=()=>tray.remove();
+    tray.querySelectorAll('[data-copy-image]').forEach(b=>b.onclick=async()=>{const r=rows[Number(b.dataset.copyImage)];try{const res=await fetch(r.image_data),blob=await res.blob(),cv=document.createElement('canvas'),img=new Image();img.src=URL.createObjectURL(blob);await new Promise((ok,no)=>{img.onload=ok;img.onerror=no});cv.width=img.naturalWidth;cv.height=img.naturalHeight;cv.getContext('2d').drawImage(img,0,0);const png=await new Promise(ok=>cv.toBlob(ok,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':png})]);toast('Imagem '+(Number(b.dataset.copyImage)+1)+' copiada.')}catch(e){toast('O navegador bloqueou a cópia desta imagem.')}});
+  }finally{btn.disabled=false}
+}
+
 async function renderCentralReturns(c){
   const cl=clinic(state.selectedClinic||1);
   c.innerHTML='<div class="section-head"><div><h3>Central de Retornos</h3><div class="clinic-meta">Cole todos os relatórios da unidade. No Retorno 2, cada print fica organizado com sua mensagem pronta para WhatsApp.</div></div></div>'+
@@ -244,8 +264,8 @@ async function loadCentralReturns(){
       const a=rows[0]||null;
       const fallbackBundle=d.screenshots.filter(x=>x.message).map(x=>x.message).join('\n\n');
       if(a){
-        analysisBox.innerHTML='<section class="analysis-hub card"><div class="section-head"><div><span class="badge green">ANÁLISE CONCLUÍDA</span><h3>Leitura da clínica + plano de ataque</h3><p>'+esc(clinic(clinic_id)?.name||'')+'</p></div><div class="actions"><button id="crCopyAll" class="btn primary">Copiar todas as mensagens</button><button id="crCopyPlan" class="ghost">Copiar plano de ataque</button></div></div><div class="analysis-grid"><div><label>Leitura objetiva</label><div class="analysis-copy">'+esc(a.summary||'')+'</div></div><div><label>Plano de ataque</label><div class="analysis-copy preline">'+esc(a.attack_plan||'')+'</div></div><div class="span-2"><label>Distribuição de tarefas</label><div class="analysis-copy preline">'+esc(a.team_tasks||'')+'</div></div></div></section>';
-        $('#crCopyAll').onclick=()=>copyText(a.whatsapp_bundle||fallbackBundle);
+        analysisBox.innerHTML='<section class="analysis-hub card"><div class="section-head"><div><span class="badge green">ANÁLISE CONCLUÍDA</span><h3>Leitura da clínica + plano de ataque</h3><p>'+esc(clinic(clinic_id)?.name||'')+'</p></div><div class="actions"><button id="crCopyAll" class="btn primary">Copiar todos · WhatsApp</button><button id="crCopyPlan" class="ghost">Copiar plano de ataque</button></div><div id="crCopyProgress" class="copy-progress hidden"><div class="copy-progress-bar"><i></i></div><span></span></div></div><div class="analysis-grid"><div><label>Leitura objetiva</label><div class="analysis-copy">'+esc(a.summary||'')+'</div></div><div><label>Plano de ataque</label><div class="analysis-copy preline">'+esc(a.attack_plan||'')+'</div></div><div class="span-2"><label>Distribuição de tarefas</label><div class="analysis-copy preline">'+esc(a.team_tasks||'')+'</div></div></div></section>';
+        $('#crCopyAll').onclick=()=>copyAllForWhatsApp(d.screenshots);
         $('#crCopyPlan').onclick=()=>copyText((a.attack_plan||'')+'\n\n'+(a.team_tasks||''));
       }else analysisBox.innerHTML='<div class="hint analysis-wait">Os prints estão salvos. A leitura estratégica desta clínica ainda não foi registrada.</div>';
     }else analysisBox.innerHTML='';
