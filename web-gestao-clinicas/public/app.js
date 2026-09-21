@@ -190,7 +190,7 @@ async function renderCentralReturns(c){
   c.innerHTML='<div class="section-head"><div><h3>Central de Retornos</h3><div class="clinic-meta">Cole todos os relatórios da unidade. No Retorno 2, cada print fica organizado com sua mensagem pronta para WhatsApp.</div></div></div>'+
   '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno 1 · breve e direto</option><option value="2" selected>Retorno 2 · análise completa por print</option></select></div></div></div>'+
   '<div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar os prints da clínica</strong><span>Pode colar até 8 ou mais, um após o outro. Eles ficam salvos e ordenados.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
-  '<div class="central-progress"><span id="crStatus" class="hint">Carregando registros de hoje…</span><div class="actions"><button id="crGenerateAll" class="btn primary">Gerar mensagens dos prints</button><button id="crReload" class="ghost">Atualizar</button></div></div><div id="crGrid" class="central-grid return2-grid"></div>';
+  '<div class="central-progress"><span id="crStatus" class="hint">Carregando registros de hoje…</span><div class="actions"><button id="crGenerateAll" class="btn primary">Gerar mensagens dos prints</button><button id="crReload" class="ghost">Atualizar</button></div></div><div id="crAnalysis"></div><div id="crGrid" class="central-grid return2-grid"></div>';
   $('#crClinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderCentralReturns(c)};
   $('#crType').onchange=()=>loadCentralReturns();
   $('#crPaste').onpaste=async e=>{const files=[...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();await uploadCentralFiles(files)}};
@@ -232,8 +232,23 @@ async function loadCentralReturns(){
   try{
     const clinic_id=Number($('#crClinic').value),return_type=Number($('#crType').value);
     const d=await centralFetch('/today?clinic_id='+clinic_id+'&return_type='+return_type);centralRows=d.screenshots;
-    status.textContent=d.screenshots.length+' print(s) salvo(s) hoje · '+(return_type===1?'Retorno 1: breve e direto.':'Retorno 2: foto por foto, com texto humano pronto para copiar.');
-    $('#crGenerateAll').style.display=return_type===2?'':'none';
+    const readyCount=d.screenshots.filter(x=>x.message&&x.message_status==='ready').length;
+    status.textContent=d.screenshots.length+' print(s) salvo(s) hoje · '+(return_type===1?'Retorno 1: breve e direto.':readyCount===d.screenshots.length&&d.screenshots.length?'Análise concluída · '+readyCount+' mensagem(ns) prontas para copiar.':'Retorno 2: foto por foto, com texto humano pronto para copiar.');
+    const genBtn=$('#crGenerateAll');
+    genBtn.style.display=return_type===2?'':'none';
+    genBtn.disabled=return_type===2&&d.screenshots.length>0&&readyCount===d.screenshots.length;
+    genBtn.textContent=genBtn.disabled?'Mensagens concluídas':'Gerar mensagens dos prints';
+    const analysisBox=$('#crAnalysis');
+    if(return_type===2){
+      const rows=await mgmtFetch('central_clinic_analysis?select=*&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+clinic_id+'&return_type=eq.2&limit=1');
+      const a=rows[0]||null;
+      const fallbackBundle=d.screenshots.filter(x=>x.message).map(x=>x.message).join('\n\n');
+      if(a){
+        analysisBox.innerHTML='<section class="analysis-hub card"><div class="section-head"><div><span class="badge green">ANÁLISE CONCLUÍDA</span><h3>Leitura da clínica + plano de ataque</h3><p>'+esc(clinic(clinic_id)?.name||'')+'</p></div><div class="actions"><button id="crCopyAll" class="btn primary">Copiar todas as mensagens</button><button id="crCopyPlan" class="ghost">Copiar plano de ataque</button></div></div><div class="analysis-grid"><div><label>Leitura objetiva</label><div class="analysis-copy">'+esc(a.summary||'')+'</div></div><div><label>Plano de ataque</label><div class="analysis-copy preline">'+esc(a.attack_plan||'')+'</div></div><div class="span-2"><label>Distribuição de tarefas</label><div class="analysis-copy preline">'+esc(a.team_tasks||'')+'</div></div></div></section>';
+        $('#crCopyAll').onclick=()=>copyText(a.whatsapp_bundle||fallbackBundle);
+        $('#crCopyPlan').onclick=()=>copyText((a.attack_plan||'')+'\n\n'+(a.team_tasks||''));
+      }else analysisBox.innerHTML='<div class="hint analysis-wait">Os prints estão salvos. A leitura estratégica desta clínica ainda não foi registrada.</div>';
+    }else analysisBox.innerHTML='';
     if(!d.screenshots.length){grid.innerHTML='<div class="empty">Nenhum print salvo para esta clínica/tipo hoje.</div>';return}
     grid.innerHTML=d.screenshots.map((x,i)=>'<article class="card print-card return2-card"><div class="print-head"><div><strong>Print '+(i+1)+'</strong><span class="clinic-meta">'+esc(clinic(clinic_id)?.city||'')+'</span></div><button class="ghost danger" data-cr-del="'+x.id+'">Excluir</button></div><img src="'+x.image_data+'" loading="lazy" alt="Print '+(i+1)+'"><label class="return-message-label">Mensagem pronta para o grupo</label><textarea class="return-message-editor '+(x.message?'':'pending-message')+'" data-cr-msg="'+x.id+'" rows="7" placeholder="Clique em Gerar mensagens dos prints…">'+esc(x.message||'')+'</textarea><div class="return-actions"><button class="ghost" data-cr-save="'+x.id+'">Salvar texto</button><button class="ghost" data-cr-copy="'+i+'">Copiar mensagem</button><button class="btn primary" data-cr-pack="'+i+'" '+(x.message?'':'disabled')+'>Copiar print + mensagem</button></div></article>').join('');
     $$('[data-cr-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir este print?'))return;await centralFetch('/screenshots/'+b.dataset.crDel,{method:'DELETE'});await loadCentralReturns()});
