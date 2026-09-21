@@ -94,7 +94,12 @@ async function compressCentralImage(file){
 }
 async function ensureCentralOcr(){
   if(window.Tesseract)return;
-  await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';sc.onload=ok;sc.onerror=()=>no(new Error('Não foi possível carregar o leitor de relatórios.'));document.head.appendChild(sc)});
+  const sources=['https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'];
+  let last=null;
+  for(const src of sources){
+    try{await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=()=>no(new Error('CDN indisponível'));document.head.appendChild(sc)});if(window.Tesseract)return}catch(e){last=e}
+  }
+  throw last||new Error('Não foi possível carregar o leitor de relatórios.');
 }
 function centralPct(text,label){
   const n=String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,' ');
@@ -157,8 +162,13 @@ function centralHumanMessage(raw,cl,index){
 async function centralGenerateOne(row,index,cl){
   await ensureCentralOcr();
   const status=$('#crStatus');if(status)status.textContent='Lendo o print '+(index+1)+' e preparando a mensagem…';
-  const r=await Tesseract.recognize(row.image_data,'por');
-  return centralHumanMessage(r.data?.text||'',cl,index);
+  const r=await Promise.race([
+    Tesseract.recognize(row.image_data,'eng',{logger:m=>{if(m.status==='recognizing text'&&status)status.textContent='Lendo print '+(index+1)+' · '+Math.round((m.progress||0)*100)+'%…'}}),
+    new Promise((_,no)=>setTimeout(()=>no(new Error('A leitura demorou demais. Tente novamente.')),90000))
+  ]);
+  const text=r.data?.text||'';
+  if(text.trim().length<12)throw new Error('Não consegui ler texto suficiente do print '+(index+1)+'.');
+  return centralHumanMessage(text,cl,index);
 }
 async function centralSaveMessage(id,message){
   await centralFetch('/screenshots/'+id,{method:'PATCH',body:JSON.stringify({message,message_status:'ready',analyzed_at:new Date().toISOString()})});
@@ -208,14 +218,14 @@ async function uploadCentralFiles(files){
 let centralRows=[];
 async function generateCentralMessages(){
   if(!centralRows.length)return toast('Adicione os prints primeiro.');
-  const cl=clinic(Number($('#crClinic').value)),btn=$('#crGenerateAll');btn.disabled=true;
+  const cl=clinic(Number($('#crClinic').value)),btn=$('#crGenerateAll'),status=$('#crStatus');btn.disabled=true;btn.textContent='Lendo relatórios…';
   try{
     for(let i=0;i<centralRows.length;i++){
       const row=centralRows[i];if(row.message&&row.message_status==='ready')continue;
       const msg=await centralGenerateOne(row,i,cl);await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
     }
     toast('Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
-  }catch(e){console.error(e);toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false}
+  }catch(e){console.error(e);if(status)status.textContent='Erro na leitura: '+e.message;toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false;btn.textContent='Gerar mensagens dos prints'}
 }
 async function loadCentralReturns(){
   const status=$('#crStatus'),grid=$('#crGrid'); if(!status||!grid)return;
