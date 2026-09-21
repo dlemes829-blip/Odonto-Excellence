@@ -123,35 +123,36 @@ function centralHumanMessage(raw,cl,index,total=1){
   const charges=centralNum(t,[/cobran[cç]as efetuadas[^0-9]{0,15}(\d+)/i]),payments=centralNum(t,[/pagamentos realizados[^0-9]{0,15}(\d+)/i]);
   const procedures=centralNum(t,[/procedimentos vendidos[^0-9]{0,15}(\d+)/i]),patients=centralNum(t,[/pacientes efetivados[^0-9]{0,15}(\d+)/i]);
   const sold=centralNum(t,[/valor vendido[^0-9]{0,15}([\d.]+,\d{2})/i]);
+  const h=new Date().getHours(),greeting=h<12?'Bom dia':(h<18?'Boa tarde':'Boa noite');
   let msg='';
   if(/EFETIVAD[OA]S?\s*[Xx×]\s*INICIAD[OA]S?|EFETIVADOS?.{0,20}INICIADOS?/.test(u)){
     const gap=treatments!=null&&started!=null?Math.max(0,treatments-started):null;
-    msg='Vejam que nas efetivações '+(gap===0&&treatments!=null?'todos os '+treatments+' tratamentos já foram iniciados. Excelente resultado! ':'temos um ponto importante nos tratamentos iniciados. ');
+    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Vejam que nas efetivações '+(gap===0&&treatments!=null?'todos os '+treatments+' tratamentos já foram iniciados. Excelente resultado! ':'temos um ponto importante nos tratamentos iniciados. ');
     if(gap>0)msg+='Foram '+treatments+' tratamentos efetivados e '+started+' iniciados, então ainda temos '+gap+' paciente'+(gap===1?'':'s')+' que precisa'+(gap===1?'':'m')+' iniciar. Precisamos entrar em contato e garantir esse agendamento o quanto antes. ';
     msg+='A orientação é que o paciente inicie o tratamento no mesmo dia da efetivação ou, no máximo, em até 2 dias.';
   }else if(/ORTODONT/.test(u)||paid!=null){
-    msg='Sobre a Ortodontia, ';
+    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Vejam que na Ortodontia, ';
     if(paid!=null&&paidGoal!=null){const gap=Math.max(0,paidGoal-paid);msg+=gap===0?'parabéns, já atingimos a meta de pastas pagas. ':('estamos com '+paid+' pastas pagas e faltam apenas '+gap+' para a meta. É um número totalmente alcançável e que podemos buscar juntos. ')}
     if(acceptance!=null)msg+='Por outro lado, nossa aceitação está em '+Math.round(acceptance)+'%'+(acceptance<80?', abaixo do saudável. Precisamos melhorar a indicação e aproveitar melhor cada avaliação, tanto para Clínico Geral quanto para Ortodontia. ':'. ');
   }else if(/INDICA[CÇ][OÕ]ES|INDICA[CÇ][AÃ]O/.test(u)){
-    msg='Continuando o tópico anterior, reparem que a recepção ainda tem oportunidade nas indicações. Precisamos reforçar com a equipe a necessidade de oferecer e indicar as avaliações de Clínico Geral e Ortodontia aos pacientes, porque é daí que vamos gerar novas oportunidades e aumentar nossas efetivações.';
+    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Observei também que a recepção ainda tem oportunidade nas indicações. Precisamos reforçar com a equipe a necessidade de oferecer e indicar as avaliações de Clínico Geral e Ortodontia aos pacientes, porque é daí que vamos gerar novas oportunidades e aumentar nossas efetivações.';
   }else if(/COBRAN[CÇ]A|APROVEITAMENTO DO AGENTE/.test(u)){
-    msg='Agora olhando a cobrança, ';
+    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Na cobrança, outro ponto que observei foi que ';
     if(charges!=null&&payments!=null)msg+='foram '+charges+' cobranças efetuadas e '+payments+' pagamentos realizados. ';
     if(collection!=null)msg+='Nosso aproveitamento está em '+Math.round(collection)+'%'+(collection>=65?', dentro do saudável. Parabéns pelo resultado! ':', abaixo do saudável, então precisamos trabalhar mais esse processo para transformar as cobranças em pagamentos. ');
     msg+='Mesmo quando o número está bom, precisamos continuar acompanhando para melhorar ainda mais o resultado.';
   }else if(/TICKET M[EÉ]DIO|PROCEDIMENTOS VENDIDOS|PRODUTIVIDADE PROFISSIONAL/.test(u)){
-    msg='Agora quero pontuar sobre o nosso ticket médio, que é muito importante para a saúde da clínica. ';
+    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Sobre o ticket médio, quero chamar a atenção para esse número porque ele impacta diretamente a saúde da clínica. ';
     if(procedures!=null&&patients!=null&&patients>0)msg+='Temos '+procedures+' procedimentos para '+patients+' pacientes efetivados, uma média de '+(procedures/patients).toFixed(1).replace('.',',')+' procedimentos por paciente. ';
     if(sold!=null)msg+='O valor vendido foi de '+centralMoney(sold)+'. ';
     msg+='Precisamos manter atenção nos planos apresentados e não realizar procedimentos abaixo do valor, porque isso impacta diretamente o ticket médio e o resultado da clínica.';
   }else if(/[ÍI]NDICE DE ACEITA[CÇ][AÃ]O|ACEITA[CÇ][AÃ]O/.test(u)||acceptance!=null){
-    msg=index===0?'Boa tarde, pessoal! Estava analisando nossos relatórios e quero começar pelo índice de aceitação. ':'Agora olhando nosso índice de aceitação, ';
+    msg=index===0?greeting+' Drs. Tudo bem?? Estava olhando os relatórios da unidade e quero começar pelo nosso índice de aceitação. ':'Olhando agora nosso índice de aceitação, ';
     if(evals!=null&&eff!=null)msg+='tivemos '+evals+' avaliações e '+eff+' efetivações. ';
     if(acceptance!=null)msg+='Estamos com '+Math.round(acceptance)+'% de aceitação'+(acceptance<80?', abaixo do saudável de 80%. Precisamos aumentar o aproveitamento das avaliações e usar as ferramentas disponíveis para gerar novas avaliações e efetivações. ':', dentro do saudável. Vamos manter esse resultado e buscar evoluir ainda mais. ');
   }else{
     const title=(t.match(/(?:^|\s)(\d+(?:\.\d+)?\.?\s+[^%]{4,55}?)(?=\s{2,}|\d{1,3}%|Per[ií]odo|$)/i)||[])[1];
-    msg=(title?'Sobre '+title.replace(/[+•]/g,'').trim()+', ':'Sobre este ponto do relatório, ')+'quero que observem os números apresentados e comparem com a meta do indicador. O que estiver abaixo precisamos tratar com a equipe e transformar em ação; o que estiver saudável, vamos manter e buscar evoluir.';
+    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+(title?'Olhando '+title.replace(/[+•]/g,'').trim()+', ':'Nesse próximo indicador, ')+'o que me chamou atenção foram os números apresentados em relação à meta. Vamos atacar especificamente o que ficou abaixo e manter o que já está saudável.';
   }
   if(index===total-1)msg+=' Para finalizar, peço que leiam os pontos que trouxe nos relatórios. Vamos olhar esses dados juntos e trabalhar nas ações necessárias para melhorar ainda mais nossos resultados!';
   return msg.trim();
@@ -177,9 +178,13 @@ async function copyPrintAndMessage(row){
     cv.width=img.naturalWidth;cv.height=img.naturalHeight;cv.getContext('2d').drawImage(img,0,0);URL.revokeObjectURL(img.src);
     const png=await new Promise(ok=>cv.toBlob(ok,'image/png'));
     if(navigator.clipboard?.write&&window.ClipboardItem){
-      const item=new ClipboardItem({'image/png':png,'text/plain':new Blob([row.message||''],{type:'text/plain'})});
-      await navigator.clipboard.write([item]);toast('Print + mensagem copiados. Cole no WhatsApp.');
-    }else{await copyText(row.message||'');toast('Seu navegador copiou a mensagem. Use o botão do print para a imagem.')}
+      // Clipboard/WhatsApp normally pastes either the image or the text flavor, not both as image + caption.
+      // Copy the image first, then show a tiny guided step for the matching caption.
+      await navigator.clipboard.write([new ClipboardItem({'image/png':png})]);
+      const guide=document.createElement('div');guide.className='copy-guide';guide.innerHTML='<strong>Print copiado ✓</strong><span>1. Cole a imagem no WhatsApp.<br>2. Volte aqui e clique abaixo para copiar a mensagem deste mesmo print.</span><button class="btn primary">Copiar mensagem agora</button>';
+      document.body.appendChild(guide);guide.querySelector('button').onclick=async()=>{await copyText(row.message||'');guide.remove();toast('Mensagem copiada. Volte ao WhatsApp e cole como legenda/mensagem.')};
+      setTimeout(()=>guide.remove(),30000);toast('Imagem copiada. Cole no WhatsApp e depois copie a mensagem.');
+    }else{await copyText(row.message||'');toast('O navegador não permite copiar imagem pela área de transferência; mensagem copiada.')}
   }catch(e){console.error(e);await copyText(row.message||'');toast('Mensagem copiada; o navegador bloqueou a cópia conjunta da imagem.')}
 }
 async function copyAllForWhatsApp(rows){
