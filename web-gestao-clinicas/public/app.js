@@ -67,7 +67,7 @@ async function centralFetch(path,opts={}){
   if(path.startsWith('/rest/v1/')){url=CENTRAL_DB_ROOT+'/'+path.slice('/rest/v1/'.length);
   }else if(path.startsWith('/today')){
     const q=new URLSearchParams(path.split('?')[1]||''); const cid=q.get('clinic_id'),rt=q.get('return_type');
-    url+='?select=id,clinic_id,return_type,file_name,mime_type,image_data,message,message_status,created_at,analyzed_at&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&order=created_at.asc,id.asc';
+    url+='?select=id,capture_date,clinic_id,return_type,file_name,mime_type,image_data,message,message_status,created_at,analyzed_at&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&order=created_at.asc,id.asc';
   }else if(path==='/screenshots'&&opts.method==='POST'){
     url=CENTRAL_DB_URL;
   }else if(path.startsWith('/screenshots/')&&(opts.method==='DELETE'||opts.method==='PATCH')){
@@ -258,16 +258,27 @@ async function loadCentralReturns(){
   const status=$('#crStatus'),grid=$('#crGrid'); if(!status||!grid)return;
   try{
     const clinic_id=Number($('#crClinic').value),return_type=Number($('#crType').value);
-    const d=await centralFetch('/today?clinic_id='+clinic_id+'&return_type='+return_type);centralRows=d.screenshots;
+    let d=await centralFetch('/today?clinic_id='+clinic_id+'&return_type='+return_type);
+    let analysisDate=isoDay(),showingLatest=false;
+    if(!d.screenshots.length){
+      const latest=await mgmtFetch('central_return_screenshots?select=id,capture_date,clinic_id,return_type,file_name,mime_type,image_data,message,message_status,created_at,analyzed_at&clinic_id=eq.'+clinic_id+'&return_type=eq.'+return_type+'&order=capture_date.desc,created_at.asc,id.asc&limit=100');
+      if(latest.length){
+        analysisDate=latest[0].capture_date;
+        d={screenshots:latest.filter(x=>x.capture_date===analysisDate)};
+        showingLatest=analysisDate!==isoDay();
+      }
+    }else analysisDate=d.screenshots[0]?.capture_date||isoDay();
+    centralRows=d.screenshots;
     const readyCount=d.screenshots.filter(x=>x.message&&x.message_status==='ready').length;
-    status.textContent=d.screenshots.length+' print(s) salvo(s) hoje · '+(return_type===1?'Retorno 1: breve e direto.':readyCount===d.screenshots.length&&d.screenshots.length?'Análise concluída · '+readyCount+' mensagem(ns) prontas para copiar.':'Retorno 2: foto por foto, com texto humano pronto para copiar.');
+    const when=showingLatest?'última análise de '+brDate(analysisDate):'hoje';
+    status.textContent=d.screenshots.length+' print(s) salvo(s) '+when+' · '+(return_type===1?'Retorno 1: breve e direto.':readyCount===d.screenshots.length&&d.screenshots.length?'Análise concluída · '+readyCount+' mensagem(ns) prontas para copiar.':'Retorno 2: foto por foto, com texto humano pronto para copiar.');
     const genBtn=$('#crGenerateAll');
     genBtn.style.display=return_type===2?'':'none';
     genBtn.disabled=false;
     genBtn.textContent=readyCount===d.screenshots.length&&d.screenshots.length?'Gerar novamente':'Gerar mensagens dos prints';
     const analysisBox=$('#crAnalysis');
     if(return_type===2){
-      const rows=await mgmtFetch('central_clinic_analysis?select=*&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+clinic_id+'&return_type=eq.2&limit=1');
+      const rows=await mgmtFetch('central_clinic_analysis?select=*&capture_date=eq.'+analysisDate+'&clinic_id=eq.'+clinic_id+'&return_type=eq.2&limit=1');
       const a=rows[0]||null;
       const fallbackBundle=d.screenshots.filter(x=>x.message).map(x=>x.message).join('\n\n');
       if(a){
