@@ -220,6 +220,26 @@ function centralReturn1Message(raw,cl,people=[]){
   const docs=g+' Drs. Tudo bem?? Conferi o Retorno 1'+period+'. '+(c.eff!=null&&c.goal!=null?(gap>0?'Tivemos '+c.eff+' efetivações para meta de '+c.goal+', ficando '+gap+' abaixo. Já dividi a recuperação entre as colaboradoras com foco em agenda/reagendamento, novas avaliações, follow-up e conversão.':'Tivemos '+c.eff+' efetivações para meta de '+c.goal+' e atingimos o combinado. Vou manter a equipe trabalhando agenda, avaliações e conversão para sustentar o resultado.'):'Já direcionei a equipe para atacar agenda, reagendamento, avaliações, follow-up e conversão enquanto confirmamos o número final do relatório.');
   return 'COLABORADORAS · MENSAGEIRO\n'+team+'\n\nFRANQUEADOS · GRUPO\n'+docs;
 }
+async function centralReadReturn1(row,cl){
+  await ensureCentralOcr();
+  const status=$('#crStatus');
+  if(status)status.textContent='Retorno 1 · lendo clínica, período, efetivações e meta…';
+  const result=await Promise.race([
+    Tesseract.recognize(row.image_data,'eng',{logger:m=>{
+      if(m.status==='recognizing text'&&status){
+        const p=Math.round((m.progress||0)*100);
+        status.textContent=(p<35?'Retorno 1 · lendo cabeçalho e período':p<75?'Retorno 1 · conferindo efetivações e meta':'Retorno 1 · preparando divisão das atividades')+' · '+p+'%';
+      }
+    }}),
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('A leitura do Retorno 1 passou de 2 minutos. Tente novamente.')),120000))
+  ]);
+  const text=String(result.data?.text||'').trim();
+  const confidence=Number(result.data?.confidence||0);
+  if(text.length<12)throw new Error('Não consegui ler texto suficiente do Retorno 1. Confira se o print está nítido e tente novamente.');
+  row._ocrText=text;row._ocrConfidence=confidence;
+  if(status)status.textContent='Retorno 1 · leitura concluída · montando mensagens e atividades…';
+  return text;
+}
 async function centralGenerateOne(row,index,cl){
   await ensureCentralOcr();
   const status=$('#crStatus');
@@ -312,15 +332,45 @@ async function uploadCentralFiles(files){
 let centralRows=[];
 async function generateCentralMessages(){
   if(!centralRows.length)return toast('Adicione os prints primeiro.');
-  const cl=clinic(Number($('#crClinic').value)),returnType=Number($('#crType').value),btn=$('#crGenerateAll'),status=$('#crStatus'),title=$('#crStatusTitle'),spin=$('#crSpinner'),bar=$('#crLiveBar');btn.disabled=true;btn.textContent='Analisando…';spin?.classList.add('active');if(title)title.textContent=returnType===1?'Leitura do Retorno 1 em andamento':'Análise estratégica em andamento';if(bar)bar.style.width='2%';
+  const cl=clinic(Number($('#crClinic').value)),returnType=Number($('#crType').value),btn=$('#crGenerateAll'),status=$('#crStatus'),title=$('#crStatusTitle'),spin=$('#crSpinner'),bar=$('#crLiveBar');
+  btn.disabled=true;btn.textContent=returnType===1?'Lendo Retorno 1…':'Analisando…';spin?.classList.add('active');
+  if(title)title.textContent=returnType===1?'Leitura do Retorno 1 em andamento':'Análise estratégica em andamento';
+  if(bar)bar.style.width='2%';
   try{
-    for(let i=0;i<centralRows.length;i++){
-      const row=rowsToProcess[i];
-      if(status)status.textContent='Print '+(i+1)+' de '+rowsToProcess.length+' · identificando título, números, metas e oportunidades…';if(bar)bar.style.width=Math.round((i/rowsToProcess.length)*100)+'%';
-      let msg=await centralGenerateOne(row,i,cl);if(returnType===1)msg=centralReturn1Message(row._ocrText||'',cl,return1People);if(!msg||msg.trim().length<35)throw new Error('A leitura do print '+(i+1)+' não ficou confiável. A mensagem não foi salva; use Gerar novamente.');await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
+    if(returnType===1){
+      const row=centralRows[centralRows.length-1];
+      const text=await centralReadReturn1(row,cl);
+      const localPeople=(data.staff?.[cl.id]||[]).map(x=>({name:x.name,functions:x.resp||'',individual_goal:x.target||''})).filter(x=>x.name);
+      const msg=centralReturn1Message(text,cl,localPeople);
+      if(!msg||msg.trim().length<80)throw new Error('A mensagem do Retorno 1 não ficou confiável o suficiente para salvar.');
+      await centralSaveMessage(row.id,msg);
+      row.message=msg;row.message_status='ready';
+      if(status)status.textContent='Retorno 1 concluído · leitura, divisão das atividades e mensagens prontas.';
+      if(title)title.textContent='Retorno 1 concluído';
+      if(bar)bar.style.width='100%';
+      toast('Retorno 1 preparado.');
+    }else{
+      for(let i=0;i<centralRows.length;i++){
+        const row=centralRows[i];
+        if(status)status.textContent='Print '+(i+1)+' de '+centralRows.length+' · identificando título, números, metas e oportunidades…';
+        if(bar)bar.style.width=Math.round((i/centralRows.length)*100)+'%';
+        const msg=await centralGenerateOne(row,i,cl);
+        if(!msg||msg.trim().length<35)throw new Error('A leitura do print '+(i+1)+' não ficou confiável. A mensagem não foi salva; use Gerar novamente.');
+        await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
+      }
+      if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints lidos e com mensagem.';
+      if(title)title.textContent='Análise concluída';
+      if(bar)bar.style.width='100%';
+      toast('Mensagens do Retorno 2 geradas e salvas.');
     }
-    if(status)status.textContent='Análise concluída · '+rowsToProcess.length+' de '+rowsToProcess.length+' print(s) lido(s) e com mensagem.';if(title)title.textContent='Análise concluída';if(bar)bar.style.width='100%';toast(returnType===1?'Retorno 1 preparado.':'Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
-  }catch(e){console.error(e);if(status)status.textContent='Erro na leitura: '+e.message;toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false;btn.textContent=returnType===1?'Gerar Retorno 1':'Gerar mensagens dos prints';spin?.classList.remove('active')}
+    await loadCentralReturns();
+  }catch(e){
+    console.error('Falha na geração central',e);
+    if(status)status.textContent='Erro na leitura: '+e.message;
+    toast('Não foi possível concluir: '+e.message);
+  }finally{
+    btn.disabled=false;btn.textContent=returnType===1?'Gerar Retorno 1':'Gerar mensagens dos prints';spin?.classList.remove('active');
+  }
 }
 async function generateAllClinics(){
   const btn=$('#crGenerateAllClinics'),status=$('#crStatus'),type=Number($('#crType').value),original=Number($('#crClinic').value);
