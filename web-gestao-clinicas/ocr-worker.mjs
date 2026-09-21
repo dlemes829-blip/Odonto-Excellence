@@ -11,7 +11,9 @@ async function listRows(){
   const r=await fetch(url,{headers});if(!r.ok)throw new Error("list "+r.status+" "+await r.text());return r.json();
 }
 async function saveText(id,text){
-  const r=await fetch(base+"?id=eq."+id,{method:"PATCH",headers:{...headers,Prefer:"return=minimal"},body:JSON.stringify({ocr_text:text})});
+  const token=process.env.ANALYSIS_TOKEN||"";
+  const url=(process.env.SUPABASE_URL||"")+"/functions/v1/chatgpt-ocr-save?token="+encodeURIComponent(token);
+  const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id,text})});
   if(!r.ok)throw new Error("update "+id+" "+r.status+" "+await r.text());
 }
 async function run(){
