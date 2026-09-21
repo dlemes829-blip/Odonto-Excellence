@@ -158,32 +158,49 @@ function centralHumanMessage(raw,cl,index,total=1){
   if(index===total-1)msg+=' Para finalizar, peço que leiam os pontos que trouxe nos relatórios. Vamos olhar esses dados juntos e trabalhar nas ações necessárias para melhorar ainda mais nossos resultados!';
   return msg.trim();
 }
-function centralReturn1Message(raw,cl){
-  const t=String(raw||'').replace(/\s+/g,' ').trim();
-  const nums=[...t.matchAll(/\b(\d{1,3})\b/g)].map(m=>Number(m[1])).filter(n=>n>=0&&n<500);
-  const eff=centralNum(t,[/efetiv(?:a[cç][oõ]es|ados?|adas?)[^0-9]{0,25}(\d+)/i,/realizadas?[^0-9]{0,20}(\d+)/i]);
-  const goal=centralNum(t,[/meta[^0-9]{0,25}(\d+)/i,/objetivo[^0-9]{0,25}(\d+)/i]);
+function centralNormalize(v=''){return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim()}
+function centralContext(raw,cl){
+  const t=String(raw||'').replace(/\s+/g,' ').trim(),n=centralNormalize(t);
   const dates=[...t.matchAll(/\b(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)\b/g)].map(m=>m[1]);
   const times=[...t.matchAll(/\b([01]?\d|2[0-3]):[0-5]\d\b/g)].map(m=>m[0]);
+  const expected=[cl?.city,cl?.name,cl?.code].filter(Boolean).map(centralNormalize);
+  const expectedHit=expected.some(x=>x&&n.includes(x));
+  const other=CLINICS.filter(x=>x.id!==cl?.id).find(x=>[x.city,x.name,x.code].filter(Boolean).map(centralNormalize).some(v=>v.length>=3&&n.includes(v)));
+  return {text:t,n,dates:[...new Set(dates)],times:[...new Set(times)],expectedHit,other};
+}
+function centralValidateClinic(raw,cl){
+  const c=centralContext(raw,cl);
+  if(c.other&&!c.expectedHit)throw new Error('O relatório parece ser da clínica '+c.other.city+', mas está salvo em '+cl.city+'. Mova/confira o print antes de gerar a mensagem.');
+  return c;
+}
+function centralReturn1Message(raw,cl){
+  const c=centralValidateClinic(raw,cl),t=c.text;
+  const eff=centralNum(t,[/efetiv(?:a[cç][oõ]es|ados?|adas?)[^0-9]{0,30}(\d+)/i,/realizadas?[^0-9]{0,25}(\d+)/i]);
+  const goal=centralNum(t,[/meta(?:\s+(?:do|de|para|efetiva[cç][oõ]es))?[^0-9]{0,30}(\d+)/i,/objetivo[^0-9]{0,30}(\d+)/i]);
   const h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
-  const period=dates.length>=2?' no período de '+dates[0]+' a '+dates[dates.length-1]:'';
-  if(eff!=null&&goal!=null){
-    const gap=Math.max(0,goal-eff);
-    return g+' Drs. Tudo bem?? Olhando nosso primeiro retorno'+period+', tivemos '+eff+' efetivações para uma meta de '+goal+'. '+(gap>0?'Ficamos '+gap+' abaixo da meta. Já alinhei com as colaboradoras a meta necessária para recuperarmos esse número e vamos acompanhar de perto durante o período.':'A meta foi atingida. Vamos manter o ritmo e acompanhar para sustentar esse resultado.');
-  }
-  if(eff!=null)return g+' Drs. Tudo bem?? Olhando nosso primeiro retorno'+period+', tivemos '+eff+' efetivações até aqui. Vou acompanhar esse número com as colaboradoras e direcionar a meta do próximo período para buscarmos o resultado esperado.';
-  throw new Error('Não consegui identificar com segurança as efetivações e a meta do Retorno 1. Confira o print e tente novamente.');
+  const period=c.dates.length>=2?' de '+c.dates[0]+' a '+c.dates[c.dates.length-1]:(c.dates.length===1?' em '+c.dates[0]:'');
+  if(eff==null||goal==null)throw new Error('Não consegui confirmar com segurança efetivações + meta no Retorno 1. A mensagem não foi criada para evitar número errado.');
+  const gap=Math.max(0,goal-eff),remaining=gap;
+  const team=gap>0
+    ?g+' meninas! Conferi o retorno'+period+': tivemos '+eff+' efetivações e nossa meta era '+goal+'. Ficaram '+gap+' para recuperar. Vamos trabalhar '+remaining+' efetivaç'+(remaining===1?'ão':'ões')+' como meta do próximo acompanhamento, puxando avaliações pendentes, reativações e confirmações. Me atualizem durante o período para a gente ir acompanhando juntas.'
+    :g+' meninas! Conferi o retorno'+period+': tivemos '+eff+' efetivações para meta de '+goal+' e batemos o combinado. Parabéns! Vamos manter o ritmo e não deixar as avaliações pendentes esfriarem.';
+  const docs=g+' Drs. Tudo bem?? No retorno'+period+', tivemos '+eff+' efetivações para meta de '+goal+'. '+(gap>0?'Ficamos '+gap+' abaixo. Já passei essa recuperação para as colaboradoras e vou acompanhar com elas durante o próximo período.':'Meta atingida. Vamos manter esse ritmo no próximo período.');
+  return 'COLABORADORAS · MENSAGEIRO\n'+team+'\n\nFRANQUEADOS · GRUPO\n'+docs;
 }
 async function centralGenerateOne(row,index,cl){
   await ensureCentralOcr();
-  const status=$('#crStatus');if(status)status.textContent='Lendo o print '+(index+1)+' e preparando a mensagem…';
+  const status=$('#crStatus');
+  const stages=['Preparando imagem','Lendo cabeçalho, clínica e período','Extraindo indicadores e metas','Conferindo datas, horários e cálculos','Montando mensagem humana'];
+  if(status)status.textContent=stages[0]+' · print '+(index+1);
   const r=await Promise.race([
-    Tesseract.recognize(row.image_data,'eng',{logger:m=>{if(m.status==='recognizing text'&&status)status.textContent='Lendo print '+(index+1)+' · '+Math.round((m.progress||0)*100)+'%…'}}),
-    new Promise((_,no)=>setTimeout(()=>no(new Error('A leitura demorou demais. Tente novamente.')),90000))
+    Tesseract.recognize(row.image_data,'eng',{logger:m=>{if(m.status==='recognizing text'&&status){const p=Math.round((m.progress||0)*100),stage=p<25?stages[1]:p<60?stages[2]:p<85?stages[3]:stages[4];status.textContent=stage+' · print '+(index+1)+' · '+p+'%'}}),
+    new Promise((_,no)=>setTimeout(()=>no(new Error('A leitura passou de 2 minutos. Tente novamente.')),120000))
   ]);
-  const text=r.data?.text||'';
-  if(text.trim().length<12)throw new Error('Não consegui ler texto suficiente do print '+(index+1)+'.');
-  row._ocrText=text;
+  const text=r.data?.text||'',confidence=Number(r.data?.confidence||0);
+  if(text.trim().length<20||confidence<18)throw new Error('A leitura do print '+(index+1)+' ficou com baixa confiança ('+Math.round(confidence)+'%). A mensagem não foi salva para evitar erro.');
+  const ctx=centralValidateClinic(text,cl);
+  row._ocrText=text;row._ocrConfidence=confidence;row._ocrContext=ctx;
+  if(status)status.textContent='Conferência final · print '+(index+1)+' · '+(ctx.dates.length?('datas '+ctx.dates.join(' → ')):'período sendo validado');
   return centralHumanMessage(text,cl,index,centralRows.length);
 }
 async function centralSaveMessage(id,message){
