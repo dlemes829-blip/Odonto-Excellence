@@ -194,7 +194,7 @@ async function centralGenerateOne(row,index,cl){
   const stages=['Preparando imagem','Lendo cabeçalho, clínica e período','Extraindo indicadores e metas','Conferindo datas, horários e cálculos','Montando mensagem humana'];
   if(status)status.textContent=stages[0]+' · print '+(index+1);
   const r=await Promise.race([
-    Tesseract.recognize(row.image_data,'eng',{logger:m=>{if(m.status==='recognizing text'&&status){const p=Math.round((m.progress||0)*100),stage=p<25?stages[1]:p<60?stages[2]:p<85?stages[3]:stages[4];status.textContent=stage+' · print '+(index+1)+' · '+p+'%'}}),
+    Tesseract.recognize(row.image_data,'eng',{logger:m=>{if(m.status==='recognizing text'&&status){const p=Math.round((m.progress||0)*100),stage=p<25?stages[1]:p<60?stages[2]:p<85?stages[3]:stages[4];status.textContent=stage+' · print '+(index+1)+' · '+p+'%'}}}),
     new Promise((_,no)=>setTimeout(()=>no(new Error('A leitura passou de 2 minutos. Tente novamente.')),120000))
   ]);
   const text=r.data?.text||'',confidence=Number(r.data?.confidence||0);
