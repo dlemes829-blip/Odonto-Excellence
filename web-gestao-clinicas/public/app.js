@@ -158,6 +158,22 @@ function centralHumanMessage(raw,cl,index,total=1){
   if(index===total-1)msg+=' Para finalizar, peço que leiam os pontos que trouxe nos relatórios. Vamos olhar esses dados juntos e trabalhar nas ações necessárias para melhorar ainda mais nossos resultados!';
   return msg.trim();
 }
+function centralReturn1Message(raw,cl){
+  const t=String(raw||'').replace(/\s+/g,' ').trim();
+  const nums=[...t.matchAll(/\b(\d{1,3})\b/g)].map(m=>Number(m[1])).filter(n=>n>=0&&n<500);
+  const eff=centralNum(t,[/efetiv(?:a[cç][oõ]es|ados?|adas?)[^0-9]{0,25}(\d+)/i,/realizadas?[^0-9]{0,20}(\d+)/i]);
+  const goal=centralNum(t,[/meta[^0-9]{0,25}(\d+)/i,/objetivo[^0-9]{0,25}(\d+)/i]);
+  const dates=[...t.matchAll(/\b(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)\b/g)].map(m=>m[1]);
+  const times=[...t.matchAll(/\b([01]?\d|2[0-3]):[0-5]\d\b/g)].map(m=>m[0]);
+  const h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+  const period=dates.length>=2?' no período de '+dates[0]+' a '+dates[dates.length-1]:'';
+  if(eff!=null&&goal!=null){
+    const gap=Math.max(0,goal-eff);
+    return g+' Drs. Tudo bem?? Olhando nosso primeiro retorno'+period+', tivemos '+eff+' efetivações para uma meta de '+goal+'. '+(gap>0?'Ficamos '+gap+' abaixo da meta. Já alinhei com as colaboradoras a meta necessária para recuperarmos esse número e vamos acompanhar de perto durante o período.':'A meta foi atingida. Vamos manter o ritmo e acompanhar para sustentar esse resultado.');
+  }
+  if(eff!=null)return g+' Drs. Tudo bem?? Olhando nosso primeiro retorno'+period+', tivemos '+eff+' efetivações até aqui. Vou acompanhar esse número com as colaboradoras e direcionar a meta do próximo período para buscarmos o resultado esperado.';
+  throw new Error('Não consegui identificar com segurança as efetivações e a meta do Retorno 1. Confira o print e tente novamente.');
+}
 async function centralGenerateOne(row,index,cl){
   await ensureCentralOcr();
   const status=$('#crStatus');if(status)status.textContent='Lendo o print '+(index+1)+' e preparando a mensagem…';
@@ -167,6 +183,7 @@ async function centralGenerateOne(row,index,cl){
   ]);
   const text=r.data?.text||'';
   if(text.trim().length<12)throw new Error('Não consegui ler texto suficiente do print '+(index+1)+'.');
+  row._ocrText=text;
   return centralHumanMessage(text,cl,index,centralRows.length);
 }
 async function centralSaveMessage(id,message){
@@ -244,14 +261,14 @@ async function uploadCentralFiles(files){
 let centralRows=[];
 async function generateCentralMessages(){
   if(!centralRows.length)return toast('Adicione os prints primeiro.');
-  const cl=clinic(Number($('#crClinic').value)),btn=$('#crGenerateAll'),status=$('#crStatus'),title=$('#crStatusTitle'),spin=$('#crSpinner'),bar=$('#crLiveBar');btn.disabled=true;btn.textContent='Analisando…';spin?.classList.add('active');if(title)title.textContent='Análise estratégica em andamento';if(bar)bar.style.width='2%';
+  const cl=clinic(Number($('#crClinic').value)),returnType=Number($('#crType').value),btn=$('#crGenerateAll'),status=$('#crStatus'),title=$('#crStatusTitle'),spin=$('#crSpinner'),bar=$('#crLiveBar');btn.disabled=true;btn.textContent='Analisando…';spin?.classList.add('active');if(title)title.textContent=returnType===1?'Leitura do Retorno 1 em andamento':'Análise estratégica em andamento';if(bar)bar.style.width='2%';
   try{
     for(let i=0;i<centralRows.length;i++){
       const row=centralRows[i];
       if(status)status.textContent='Print '+(i+1)+' de '+centralRows.length+' · identificando título, números, metas e oportunidades…';if(bar)bar.style.width=Math.round((i/centralRows.length)*100)+'%';
-      let msg=await centralGenerateOne(row,i,cl);if(!msg||msg.trim().length<35)msg='Olhando este relatório, identifiquei um ponto que precisamos acompanhar com atenção. Quero que confiram os números apresentados e a relação com a meta para direcionarmos a ação correta com a equipe. Não vamos deixar esse indicador passar sem acompanhamento.';await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
+      let msg=await centralGenerateOne(row,i,cl);if(returnType===1)msg=centralReturn1Message(row._ocrText||'',cl);if(!msg||msg.trim().length<35)throw new Error('A leitura do print '+(i+1)+' não ficou confiável. A mensagem não foi salva; use Gerar novamente.');await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
     }
-    if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints lidos e com mensagem.';if(title)title.textContent='Análise concluída';if(bar)bar.style.width='100%';toast('Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
+    if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints lidos e com mensagem.';if(title)title.textContent='Análise concluída';if(bar)bar.style.width='100%';toast(returnType===1?'Retorno 1 preparado.':'Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
   }catch(e){console.error(e);if(status)status.textContent='Erro na leitura: '+e.message;toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false;btn.textContent='Gerar mensagens dos prints';spin?.classList.remove('active')}
 }
 async function loadCentralReturns(){
@@ -273,9 +290,9 @@ async function loadCentralReturns(){
     const when=showingLatest?'última análise de '+brDate(analysisDate):'hoje';
     status.textContent=d.screenshots.length+' print(s) salvo(s) '+when+' · '+(return_type===1?'Retorno 1: breve e direto.':readyCount===d.screenshots.length&&d.screenshots.length?'Análise concluída · '+readyCount+' mensagem(ns) prontas para copiar.':'Retorno 2: foto por foto, com texto humano pronto para copiar.');
     const genBtn=$('#crGenerateAll');
-    genBtn.style.display=return_type===2?'':'none';
+    genBtn.style.display='';
     genBtn.disabled=false;
-    genBtn.textContent=readyCount===d.screenshots.length&&d.screenshots.length?'Gerar novamente':'Gerar mensagens dos prints';
+    genBtn.textContent=readyCount===d.screenshots.length&&d.screenshots.length?'Gerar novamente':(return_type===1?'Gerar Retorno 1':'Gerar mensagens dos prints');
     const analysisBox=$('#crAnalysis');
     if(return_type===2){
       const rows=await mgmtFetch('central_clinic_analysis?select=*&capture_date=eq.'+analysisDate+'&clinic_id=eq.'+clinic_id+'&return_type=eq.2&limit=1');
