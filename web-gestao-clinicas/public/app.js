@@ -75,7 +75,8 @@ async function centralFetch(path,opts={}){
   }
   if(opts.body)headers['Content-Type']='application/json';
   const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),20000);
-  let r; try{r=await fetch(url,{...opts,headers,signal:controller.signal})}catch(e){clearTimeout(timer);throw new Error(e.name==='AbortError'?'Tempo limite ao acessar o banco. Tente novamente.':'Falha de conexão com o banco.')} clearTimeout(timer);
+  const requestOpts={...opts,headers,signal:controller.signal}; delete requestOpts.fetch;
+  let r; try{r=await window.fetch(url,requestOpts)}catch(e){clearTimeout(timer);throw new Error(e.name==='AbortError'?'Tempo limite ao acessar o banco. Tente novamente.':'Falha de conexão com o banco.')} clearTimeout(timer);
   if(!r.ok){let e={};try{e=await r.json()}catch{};throw new Error(e.message||e.error||('Erro '+r.status))}
   if(opts.method==='DELETE')return {ok:true};
   const rows=await r.json();
@@ -282,7 +283,7 @@ async function loadCentralReturns(){
     $$('[data-cr-save]').forEach(b=>b.onclick=async()=>{const msg=$('[data-cr-msg="'+b.dataset.crSave+'"]').value.trim();await centralSaveMessage(b.dataset.crSave,msg);toast('Mensagem salva');await loadCentralReturns()});
     $$('[data-cr-copy]').forEach(b=>b.onclick=()=>copyText(d.screenshots[Number(b.dataset.crCopy)].message||''));
     $$('[data-cr-pack]').forEach(b=>b.onclick=()=>copyPrintAndMessage(d.screenshots[Number(b.dataset.crPack)]));
-  }catch(e){status.textContent='Não foi possível acessar o banco: '+e.message;grid.innerHTML='<div class="empty">A conexão com o armazenamento não respondeu. Use Atualizar para tentar novamente.</div>'}
+  }catch(e){console.error('Central de prints',e);status.textContent='Erro ao carregar os prints: '+e.message;grid.innerHTML='<div class="empty">Os prints não foram apagados. Clique em Atualizar para tentar carregar novamente.</div>'}
 }
 
 // Productivity shortcuts
