@@ -53,8 +53,9 @@ function renderAdmin(c){const s=data.settings;c.innerHTML=`<div class="page-intr
 function setting(k,l,s,step='1'){return `<div><label>${l}</label><input id="set_${k}" type="number" step="${step}" value="${s[k]}"></div>`}
 function exportBackup(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`gestao-12-clinicas-${isoDay()}.json`;a.click();URL.revokeObjectURL(a.href)}
 function importBackup(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{data={...baseData(),...JSON.parse(rd.result)};save();toast('Backup importado');go('dashboard')}catch{toast('Backup inválido')}};rd.readAsText(f)}
-function showLogin(){if(data.passwordHash){$('.login-card p').textContent='Digite sua senha administrativa.'}else{$('.login-card p').textContent='Primeiro acesso: crie uma senha administrativa neste navegador.'}}
-$('#loginForm').onsubmit=e=>{e.preventDefault();const p=$('#password').value;sessionStorage.setItem('g12_central_pass',p);if(p.length<6){$('#loginError').textContent='Use pelo menos 6 caracteres.';return}if(!data.passwordHash){data.passwordHash=hash(p);save()}else if(hash(p)!==data.passwordHash){$('#loginError').textContent='Senha inválida.';return}$('#loginError').textContent='';$('#login').classList.add('hidden');$('#app').classList.remove('hidden');renderNav();go(localStorage.getItem('g12_last_page')||'dashboard')};
+const CENTRAL_ADMIN_HASH='cf3a69d5';
+function showLogin(){$('.login-card p').textContent='Digite sua senha administrativa.'}
+$('#loginForm').onsubmit=e=>{e.preventDefault();const p=$('#password').value;if(p.length<6){$('#loginError').textContent='Use pelo menos 6 caracteres.';return}const legacyOk=data.passwordHash&&hash(p)===data.passwordHash,adminOk=hash(p)===CENTRAL_ADMIN_HASH;if(!legacyOk&&!adminOk){$('#loginError').textContent='Senha inválida.';return}if(adminOk&&data.passwordHash!==CENTRAL_ADMIN_HASH){data.passwordHash=CENTRAL_ADMIN_HASH;save()}sessionStorage.setItem('g12_central_pass',p);$('#loginError').textContent='';$('#login').classList.add('hidden');$('#app').classList.remove('hidden');renderNav();go(localStorage.getItem('g12_last_page')||'dashboard')};
 $('#logoutBtn').onclick=()=>{$('#app').classList.add('hidden');$('#login').classList.remove('hidden');$('#password').value=''};$('#exportBtn').onclick=exportBackup;$('#menuToggle').onclick=()=>$('.sidebar').classList.toggle('open');showLogin();
 
 const CENTRAL_DB_ROOT='https://ruzixytmhkduqxoslebu.supabase.co/rest/v1';
@@ -250,13 +251,14 @@ async function renderCentralReturns(c){
   c.innerHTML='<div class="section-head"><div><h3>Central de Retornos</h3><div class="clinic-meta">Cole todos os relatórios da unidade. No Retorno 2, cada print fica organizado com sua mensagem pronta para WhatsApp.</div></div></div>'+
   '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno 1 · breve e direto</option><option value="2" selected>Retorno 2 · análise completa por print</option></select></div></div></div>'+
   '<div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar os prints da clínica</strong><span>Pode colar até 8 ou mais, um após o outro. Eles ficam salvos e ordenados.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
-  '<div class="central-progress analysis-status-panel"><div class="analysis-spinner" id="crSpinner"></div><div><strong id="crStatusTitle">Central de análise</strong><span id="crStatus" class="hint">Carregando registros de hoje…</span><div class="analysis-live-bar"><i id="crLiveBar"></i></div></div><div class="actions"><button id="crGenerateAll" class="btn primary">Gerar mensagens dos prints</button><button id="crReload" class="ghost">Atualizar</button></div></div><div id="crAnalysis"></div><div id="crGrid" class="central-grid return2-grid"></div>';
+  '<div class="central-progress analysis-status-panel"><div class="analysis-spinner" id="crSpinner"></div><div><strong id="crStatusTitle">Central de análise</strong><span id="crStatus" class="hint">Carregando registros de hoje…</span><div class="analysis-live-bar"><i id="crLiveBar"></i></div></div><div class="actions"><button id="crGenerateAll" class="btn primary">Gerar mensagens desta clínica</button><button id="crGenerateAllClinics" class="btn secondary">Ler todas as clínicas</button><button id="crReload" class="ghost">Atualizar</button></div></div><div id="crAnalysis"></div><div id="crGrid" class="central-grid return2-grid"></div>';
   $('#crClinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderCentralReturns(c)};
   $('#crType').onchange=()=>loadCentralReturns();
   $('#crPaste').onpaste=async e=>{const files=[...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();await uploadCentralFiles(files)}};
   $('#crFiles').onchange=async e=>{await uploadCentralFiles([...e.target.files]);e.target.value=''};
   $('#crReload').onclick=()=>loadCentralReturns();
   $('#crGenerateAll').onclick=()=>generateCentralMessages();
+  $('#crGenerateAllClinics').onclick=()=>generateAllClinics();
   $('#crPaste').ondragover=e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}; $('#crPaste').ondragleave=e=>e.currentTarget.classList.remove('drag-over'); $('#crPaste').ondrop=async e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');await uploadCentralFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#crPaste').focus();
   await loadCentralReturns();
@@ -287,6 +289,22 @@ async function generateCentralMessages(){
     }
     if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints lidos e com mensagem.';if(title)title.textContent='Análise concluída';if(bar)bar.style.width='100%';toast(returnType===1?'Retorno 1 preparado.':'Mensagens do Retorno 2 geradas e salvas.');await loadCentralReturns();
   }catch(e){console.error(e);if(status)status.textContent='Erro na leitura: '+e.message;toast('Não foi possível concluir a leitura: '+e.message)}finally{btn.disabled=false;btn.textContent='Gerar mensagens dos prints';spin?.classList.remove('active')}
+}
+async function generateAllClinics(){
+  const btn=$('#crGenerateAllClinics'),status=$('#crStatus'),type=Number($('#crType').value),original=Number($('#crClinic').value);
+  btn.disabled=true;btn.textContent='Lendo 12 clínicas…';
+  let ok=0,fail=[];
+  try{
+    for(let pos=0;pos<CLINICS.length;pos++){
+      const cl=CLINICS[pos];$('#crClinic').value=cl.id;
+      if(status)status.textContent='Clínica '+(pos+1)+' de 12 · '+cl.city+' · carregando prints…';
+      await loadCentralReturns();
+      if(!centralRows.length){fail.push(cl.city+': sem print');continue}
+      try{await generateCentralMessages();ok++}catch(e){fail.push(cl.city+': '+e.message)}
+    }
+    toast(ok+' clínica(s) processada(s).');
+    if(status)status.textContent='Leitura geral concluída · '+ok+'/12 processadas'+(fail.length?' · '+fail.length+' pendência(s)':'');
+  }finally{$('#crClinic').value=original;state.selectedClinic=original;await loadCentralReturns();btn.disabled=false;btn.textContent='Ler todas as clínicas'}
 }
 async function loadCentralReturns(){
   const status=$('#crStatus'),grid=$('#crGrid'); if(!status||!grid)return;
