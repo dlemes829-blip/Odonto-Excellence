@@ -285,7 +285,7 @@ async function centralReadReturn1(row,cl){
         status.textContent=(p<35?'Retorno 1 · lendo cabeçalho e período':p<75?'Retorno 1 · conferindo efetivações e meta':'Retorno 1 · preparando divisão das atividades')+' · '+p+'%';
       }
     }}),
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error('A leitura do Retorno 1 passou de 2 minutos. Tente novamente.')),120000))
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('A leitura do retorno passou de 4 minutos. Confira a conexão e tente novamente.')),240000))
   ]);
   const text=String(result.data?.text||'').trim();
   const confidence=Number(result.data?.confidence||0);
@@ -297,14 +297,14 @@ async function centralReadReturn1(row,cl){
 async function centralGenerateOne(row,index,cl){
   await ensureCentralOcr();
   const status=$('#crStatus');
-  const stages=['Preparando imagem','Lendo cabeçalho, clínica e período','Extraindo indicadores e metas','Conferindo datas, horários e cálculos','Montando mensagem humana'];
+  const stages=['Preparando imagem','Lendo cabeçalho, clínica e período','Extraindo indicadores e metas','Conferindo números e metas','Definindo problema e prioridade','Montando plano de ação','Revisando tom humano e mensagem final'];
   if(status)status.textContent=stages[0]+' · print '+(index+1);
   const r=await Promise.race([
-    Tesseract.recognize(row.image_data,'eng',{logger:m=>{if(m.status==='recognizing text'&&status){const p=Math.round((m.progress||0)*100),stage=p<25?stages[1]:p<60?stages[2]:p<85?stages[3]:stages[4];status.textContent=stage+' · print '+(index+1)+' · '+p+'%'}}}),
-    new Promise((_,no)=>setTimeout(()=>no(new Error('A leitura passou de 2 minutos. Tente novamente.')),120000))
+    Tesseract.recognize(row.image_data,'eng',{logger:m=>{if(m.status==='recognizing text'&&status){const p=Math.round((m.progress||0)*100),stage=p<20?stages[1]:p<45?stages[2]:p<65?stages[3]:p<78?stages[4]:p<90?stages[5]:stages[6];status.textContent=stage+' · print '+(index+1)+' · '+p+'%'}}}),
+    new Promise((_,no)=>setTimeout(()=>no(new Error('A leitura passou de 4 minutos. Confira a conexão e tente novamente.')),240000))
   ]);
   const text=r.data?.text||'',confidence=Number(r.data?.confidence||0);
-  if(text.trim().length<20||confidence<18)throw new Error('A leitura do print '+(index+1)+' ficou com baixa confiança ('+Math.round(confidence)+'%). A mensagem não foi salva para evitar erro.');
+  if(text.trim().length<20||confidence<18)throw new Error('A leitura do print '+(index+1)+' ficou com baixa confiança ('+Math.round(confidence)+'%). Nada foi sobrescrito: melhore a nitidez do print e tente novamente.');
   const ctx=centralValidateClinic(text,cl);
   row._ocrText=text;row._ocrConfidence=confidence;row._ocrContext=ctx;
   if(status)status.textContent='Conferência final · print '+(index+1)+' · '+(ctx.dates.length?('datas '+ctx.dates.join(' → ')):'período sendo validado');
@@ -356,7 +356,7 @@ async function renderCentralReturns(c){
   const cl=clinic(state.selectedClinic||1);
   c.innerHTML='<div class="section-head"><div><h3>Tratativa</h3><div class="clinic-meta">Análise pesada dos relatórios da tarde: problema, solução, direcionamento e mensagem pronta para WhatsApp.</div></div></div>'+
   '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno da tarde · acompanhamento</option><option value="2" selected>Tratativa · análise completa por print</option></select></div></div></div>'+
-  '<div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar os prints da clínica</strong><span>Pode colar até 8 ou mais, um após o outro. Eles ficam salvos e ordenados.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
+  '<div class="treatment-quality card"><strong>Leitura completa · modo produção</strong><span>O sistema pode levar alguns minutos: valida clínica, números, meta, tom da mensagem e exige plano de ação antes de salvar.</span></div><div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar os prints da clínica</strong><span>Pode colar 8 ou mais. O original fica salvo até você decidir arquivar e zerar.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
   '<div class="central-progress analysis-status-panel"><div class="analysis-spinner" id="crSpinner"></div><div><strong id="crStatusTitle">Central de análise</strong><span id="crStatus" class="hint">Carregando registros de hoje…</span><div class="analysis-live-bar"><i id="crLiveBar"></i></div></div><div class="actions"><button id="crGenerateAll" class="btn primary">Gerar mensagens desta clínica</button><button id="crGenerateAllClinics" class="btn secondary">Ler todas as clínicas</button><button id="crReload" class="ghost">Atualizar</button></div></div><div id="crAnalysis"></div><div id="crGrid" class="central-grid return2-grid"></div>';
   $('#crClinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderCentralReturns(c)};
   $('#crType').onchange=()=>loadCentralReturns();
@@ -409,13 +409,13 @@ async function generateCentralMessages(){
         if(status)status.textContent='Print '+(i+1)+' de '+centralRows.length+' · identificando título, números, metas e oportunidades…';
         if(bar)bar.style.width=Math.round((i/centralRows.length)*100)+'%';
         const msg=await centralGenerateOne(row,i,cl);
-        if(!msg||msg.trim().length<35)throw new Error('A leitura do print '+(i+1)+' não ficou confiável. A mensagem não foi salva; use Gerar novamente.');
+        if(!msg||msg.trim().length<90||!/Plano de ação|Plano:/.test(msg))throw new Error('O print '+(i+1)+' não passou na validação final de mensagem + plano de ação. Nada foi sobrescrito; use Gerar novamente.');
         await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
       }
       if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints lidos e com mensagem.';
       if(title)title.textContent='Análise concluída';
       if(bar)bar.style.width='100%';
-      toast('Mensagens do Retorno 2 geradas e salvas.');
+      toast('Tratativa concluída: mensagens e planos de ação validados e salvos.');
     }
     await loadCentralReturns();
   }catch(e){
@@ -423,7 +423,7 @@ async function generateCentralMessages(){
     if(status)status.textContent='Erro na leitura: '+e.message;
     toast('Não foi possível concluir: '+e.message);
   }finally{
-    btn.disabled=false;btn.textContent=returnType===1?'Gerar Retorno 1':'Gerar mensagens dos prints';spin?.classList.remove('active');
+    btn.disabled=false;btn.textContent=returnType===1?'Gerar retorno da tarde':'Gerar tratativa completa';spin?.classList.remove('active');
   }
 }
 async function generateAllClinics(){
