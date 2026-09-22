@@ -134,50 +134,58 @@ function centralNum(text,regs){
 }
 function centralMoney(v){return v==null?'':v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
 function centralHumanMessage(raw,cl,index,total=1){
-  const t=String(raw||'').replace(/\s+/g,' ').trim(),u=t.toUpperCase();
-  const pct=(label)=>centralPct(t,label);
-  const acceptance=pct('aceita.{0,10}o'),conversion=pct('convers.{0,10}o'),app=pct('aplicativo'),collection=pct('aproveitamento');
-  const evals=centralNum(t,[/total de avalia[cç][oõ]es[^0-9]{0,20}(\d+)/i,/avalia[cç][oõ]es[^0-9]{0,15}(\d+)/i]);
-  const eff=centralNum(t,[/efetivadas?[^0-9]{0,15}(\d+)/i,/efetiva[cç][oõ]es[^0-9]{0,15}(\d+)/i]);
-  const treatments=centralNum(t,[/tratamentos efetivados[^0-9]{0,15}(\d+)/i]);
-  const started=centralNum(t,[/tratamentos iniciados[^0-9]{0,15}(\d+)/i]);
-  const paid=centralNum(t,[/pastas pagas[^0-9]{0,15}(\d+)/i]),paidGoal=centralNum(t,[/meta de pastas pagas[^0-9]{0,15}(\d+)/i]);
-  const charges=centralNum(t,[/cobran[cç]as efetuadas[^0-9]{0,15}(\d+)/i]),payments=centralNum(t,[/pagamentos realizados[^0-9]{0,15}(\d+)/i]);
-  const procedures=centralNum(t,[/procedimentos vendidos[^0-9]{0,15}(\d+)/i]),patients=centralNum(t,[/pacientes efetivados[^0-9]{0,15}(\d+)/i]);
-  const sold=centralNum(t,[/valor vendido[^0-9]{0,15}([\d.]+,\d{2})/i]);
-  const h=new Date().getHours(),greeting=h<12?'Bom dia':(h<18?'Boa tarde':'Boa noite');
-  let msg='';
-  if(/EFETIVAD[OA]S?\s*[Xx×]\s*INICIAD[OA]S?|EFETIVADOS?.{0,20}INICIADOS?/.test(u)){
-    const gap=treatments!=null&&started!=null?Math.max(0,treatments-started):null;
-    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Vejam que nas efetivações '+(gap===0&&treatments!=null?'todos os '+treatments+' tratamentos já foram iniciados. Excelente resultado! ':'temos um ponto importante nos tratamentos iniciados. ');
-    if(gap>0)msg+='Foram '+treatments+' tratamentos efetivados e '+started+' iniciados, então ainda temos '+gap+' paciente'+(gap===1?'':'s')+' que precisa'+(gap===1?'':'m')+' iniciar. Precisamos entrar em contato e garantir esse agendamento o quanto antes. ';
-    msg+='A orientação é que o paciente inicie o tratamento no mesmo dia da efetivação ou, no máximo, em até 2 dias.';
-  }else if(/ORTODONT/.test(u)||paid!=null){
-    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Vejam que na Ortodontia, ';
-    if(paid!=null&&paidGoal!=null){const gap=Math.max(0,paidGoal-paid);msg+=gap===0?'parabéns, já atingimos a meta de pastas pagas. ':('estamos com '+paid+' pastas pagas e faltam apenas '+gap+' para a meta. É um número totalmente alcançável e que podemos buscar juntos. ')}
-    if(acceptance!=null)msg+='Por outro lado, nossa aceitação está em '+Math.round(acceptance)+'%'+(acceptance<80?', abaixo do saudável. Precisamos melhorar a indicação e aproveitar melhor cada avaliação, tanto para Clínico Geral quanto para Ortodontia. ':'. ');
-  }else if(/INDICA[CÇ][OÕ]ES|INDICA[CÇ][AÃ]O/.test(u)){
-    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Observei também que a recepção ainda tem oportunidade nas indicações. Precisamos reforçar com a equipe a necessidade de oferecer e indicar as avaliações de Clínico Geral e Ortodontia aos pacientes, porque é daí que vamos gerar novas oportunidades e aumentar nossas efetivações.';
-  }else if(/COBRAN[CÇ]A|APROVEITAMENTO DO AGENTE/.test(u)){
-    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Na cobrança, outro ponto que observei foi que ';
-    if(charges!=null&&payments!=null)msg+='foram '+charges+' cobranças efetuadas e '+payments+' pagamentos realizados. ';
-    if(collection!=null)msg+='Nosso aproveitamento está em '+Math.round(collection)+'%'+(collection>=65?', dentro do saudável. Parabéns pelo resultado! ':', abaixo do saudável, então precisamos trabalhar mais esse processo para transformar as cobranças em pagamentos. ');
-    msg+='Mesmo quando o número está bom, precisamos continuar acompanhando para melhorar ainda mais o resultado.';
-  }else if(/TICKET M[EÉ]DIO|PROCEDIMENTOS VENDIDOS|PRODUTIVIDADE PROFISSIONAL/.test(u)){
-    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+'Sobre o ticket médio, quero chamar a atenção para esse número porque ele impacta diretamente a saúde da clínica. ';
-    if(procedures!=null&&patients!=null&&patients>0)msg+='Temos '+procedures+' procedimentos para '+patients+' pacientes efetivados, uma média de '+(procedures/patients).toFixed(1).replace('.',',')+' procedimentos por paciente. ';
-    if(sold!=null)msg+='O valor vendido foi de '+centralMoney(sold)+'. ';
-    msg+='Precisamos manter atenção nos planos apresentados e não realizar procedimentos abaixo do valor, porque isso impacta diretamente o ticket médio e o resultado da clínica.';
-  }else if(/[ÍI]NDICE DE ACEITA[CÇ][AÃ]O|ACEITA[CÇ][AÃ]O/.test(u)||acceptance!=null){
-    msg=index===0?greeting+' Drs. Tudo bem?? Estava olhando os relatórios da unidade e quero começar pelo nosso índice de aceitação. ':'Olhando agora nosso índice de aceitação, ';
-    if(evals!=null&&eff!=null)msg+='tivemos '+evals+' avaliações e '+eff+' efetivações. ';
-    if(acceptance!=null)msg+='Estamos com '+Math.round(acceptance)+'% de aceitação'+(acceptance<80?', abaixo do saudável de 80%. Precisamos aumentar o aproveitamento das avaliações e usar as ferramentas disponíveis para gerar novas avaliações e efetivações. ':', dentro do saudável. Vamos manter esse resultado e buscar evoluir ainda mais. ');
-  }else{
-    const title=(t.match(/(?:^|\s)(\d+(?:\.\d+)?\.?\s+[^%]{4,55}?)(?=\s{2,}|\d{1,3}%|Per[ií]odo|$)/i)||[])[1];
-    msg=(index===0?greeting+' Drs. Tudo bem?? ':'')+(title?'Olhando '+title.replace(/[+•]/g,'').trim()+', ':'Nesse próximo indicador, ')+'o que me chamou atenção foram os números apresentados em relação à meta. Vamos atacar especificamente o que ficou abaixo e manter o que já está saudável.';
-  }
-  if(index===total-1)msg+=' Para finalizar, peço que leiam os pontos que trouxe nos relatórios. Vamos olhar esses dados juntos e trabalhar nas ações necessárias para melhorar ainda mais nossos resultados!';
-  return msg.trim();
+ const t=String(raw||'').replace(/\s+/g,' ').trim(),u=t.toUpperCase(),P=(label)=>centralPct(t,label);
+ const acceptance=P('aceita.{0,12}o'),conversion=P('convers.{0,12}o'),app=P('aplicativo'),collection=P('aproveitamento'),chair=P('meta.{0,18}cadeira');
+ const evals=centralNum(t,[/total de avalia[cç][oõ]es[^0-9]{0,20}(\d+)/i,/avalia[cç][oõ]es[^0-9]{0,15}(\d+)/i]),eff=centralNum(t,[/efetivadas?[^0-9]{0,15}(\d+)/i,/efetiva[cç][oõ]es[^0-9]{0,15}(\d+)/i]);
+ const treatments=centralNum(t,[/tratamentos efetivados[^0-9]{0,15}(\d+)/i]),started=centralNum(t,[/tratamentos iniciados[^0-9]{0,15}(\d+)/i]);
+ const paid=centralNum(t,[/pastas pagas[^0-9]{0,15}(\d+)/i]),paidGoal=centralNum(t,[/meta de pastas pagas[^0-9]{0,15}(\d+)/i]);
+ const charges=centralNum(t,[/cobran[cç]as efetuadas[^0-9]{0,15}(\d+)/i]),payments=centralNum(t,[/pagamentos realizados[^0-9]{0,15}(\d+)/i]);
+ const procedures=centralNum(t,[/procedimentos vendidos[^0-9]{0,15}(\d+)/i]),patients=centralNum(t,[/pacientes efetivados[^0-9]{0,15}(\d+)/i]);
+ const ticket=centralNum(t,[/ticket\s*m[eé]dio[^0-9]{0,20}([\d.]+,\d{2})/i]),sold=centralNum(t,[/valor vendido[^0-9]{0,15}([\d.]+,\d{2})/i]);
+ const h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite',open=index===0?g+' Drs. Tudo bem?? ':'';
+ const healthyAcceptance=80,healthyConversion=30,healthyCollection=65,healthyApp=95,healthyTicket=3419.85;
+ let msg='',good=false;
+ if(/EFETIVAD[OA]S?\s*[Xx×]\s*INICIAD[OA]S?|EFETIVADOS?.{0,20}INICIADOS?/.test(u)){
+   const gap=treatments!=null&&started!=null?Math.max(0,treatments-started):null;good=gap===0&&treatments!=null;
+   msg=open+(good?'Aqui está bonito de ver 😄: os '+treatments+' tratamentos efetivados já foram iniciados. Obrigado pelo cuidado com esse processo! ':'Aqui acendeu um alerta pra mim 😕. ');
+   if(gap>0)msg+='Temos '+treatments+' efetivados e '+started+' iniciados, então '+gap+' paciente'+(gap===1?' ainda precisa':'s ainda precisam')+' começar. ';
+   msg+=good?'Plano: manter início no mesmo dia ou em até 2 dias e conferir no fim do expediente se ninguém ficou para trás.':'Plano de ação: a recepção lista agora os efetivados sem início, entra em contato, agenda para hoje ou no máximo em 2 dias e me retorna no fim do período com quem foi agendado e quem ainda ficou pendente.';
+ }else if(/ORTODONT/.test(u)||paid!=null){
+   const gap=paid!=null&&paidGoal!=null?Math.max(0,paidGoal-paid):null;good=gap===0&&paidGoal!=null;
+   msg=open+(good?'Orto em azul, muito bom! 💙 Obrigado pelo trabalho de vocês. ':'Na Orto ainda temos espaço para buscar resultado e não dá para deixar oportunidade passar. ');
+   if(paid!=null&&paidGoal!=null)msg+='Estamos com '+paid+' pastas pagas para meta de '+paidGoal+(gap>0?', faltando '+gap+'. ':'. ');
+   if(acceptance!=null)msg+='Aceitação em '+Math.round(acceptance)+'%. ';
+   msg+='Plano de ação: revisar pacientes avaliados que não fecharam, reforçar indicação de Orto em todo novo paciente, recepção acompanhar até o agendamento e trabalhar as pendências de pasta ainda hoje. Quero retorno do que virou avaliação, pasta e início.';
+ }else if(/INDICA[CÇ][OÕ]ES|INDICA[CÇ][AÃ]O/.test(u)){
+   good=collection!=null&&collection>=healthyCollection;
+   msg=open+'Indicação é uma ferramenta que não podemos deixar parada'+(good?' — aqui o movimento está bom, obrigada equipe! 💙. ':', e aqui fiquei preocupado porque estamos deixando oportunidade na mesa 😕. ')+'Plano de ação: profissional faz a indicação, recepção reforça a abordagem, registra os nomes e acompanha até o agendamento. No fim do período quero o retorno de quantas indicações foram pedidas, quantas viraram contato e quantas viraram avaliação.';
+ }else if(/COBRAN[CÇ]A|APROVEITAMENTO DO AGENTE/.test(u)){
+   good=collection!=null&&collection>=healthyCollection;msg=open+(good?'Cobrança em resultado saudável 💙. Obrigado pelo trabalho, vamos manter essa pegada! ':'Cobrança me preocupa nesse momento 😕, porque contato sem pagamento não resolve o caixa. ');
+   if(charges!=null&&payments!=null)msg+='Foram '+charges+' cobranças e '+payments+' pagamentos. ';
+   if(collection!=null)msg+='Aproveitamento em '+Math.round(collection)+'%'+(good?', acima/igual aos '+healthyCollection+'% que usamos como referência. ':', abaixo dos '+healthyCollection+'% de referência. ');
+   msg+='Plano de ação: separar a carteira por prioridade, fazer nova rodada nos sem retorno, retomar negociações abertas e registrar o motivo de quem não pagou. Quero parcial durante o dia e fechamento com quantidade de contatos, acordos e pagamentos.';
+ }else if(/TICKET M[EÉ]DIO|PROCEDIMENTOS VENDIDOS|PRODUTIVIDADE PROFISSIONAL/.test(u)){
+   good=ticket!=null&&ticket>=healthyTicket;msg=open+(good?'Ticket saudável 💙! Obrigado, Drs., esse resultado ajuda diretamente o caixa da clínica. ':'Aqui precisamos de atenção com o ticket 😕, porque ele bate direto no caixa. ');
+   if(ticket!=null)msg+='Estamos em '+centralMoney(ticket)+' para referência saudável de '+centralMoney(healthyTicket)+'. ';
+   if(procedures!=null&&patients>0)msg+='São '+procedures+' procedimentos para '+patients+' pacientes, média de '+(procedures/patients).toFixed(1).replace('.',',')+' por paciente. ';
+   if(sold!=null)msg+='Valor vendido: '+centralMoney(sold)+'. ';
+   msg+='Plano de ação: revisar profissional por profissional, trabalhar procedimentos dentro da tabela e montar o plano pelas 4 odontologias — necessidade, reparadora, prevenção e desejo. A referência é buscar média de 11 procedimentos por avaliação, sem empurrar tratamento e sem deixar necessidade clínica fora do plano.';
+ }else if(/[ÍI]NDICE DE ACEITA[CÇ][AÃ]O|ACEITA[CÇ][AÃ]O/.test(u)||acceptance!=null){
+   good=acceptance!=null&&acceptance>=healthyAcceptance;msg=open+(good?'Aceitação em azul 💙, muito bom! Obrigado pelo trabalho e pela abordagem com os pacientes. ':'Nossa aceitação pede atenção 😕. ');
+   if(evals!=null&&eff!=null)msg+='Tivemos '+evals+' avaliações e '+eff+' efetivações. ';
+   if(acceptance!=null)msg+='Estamos em '+Math.round(acceptance)+'%'+(good?', dentro dos '+healthyAcceptance+'% saudáveis. ':', abaixo dos '+healthyAcceptance+'% saudáveis. ');
+   msg+='Plano de ação: levantar os nomes de quem avaliou e não efetivou, revisar a abordagem, fazer follow-up e pedir retorno de quando cada paciente volta. No grupo, alinhar com recepção e profissionais onde está o menor aproveitamento e o franqueado reforça a execução.';
+ }else if(chair!=null){
+   good=chair>=100;msg=open+(good?'Meta por cadeira em azul 💙! Obrigado equipe, agora é proteger esse resultado. ':'Meta por cadeira abaixo do esperado e aqui precisamos reagir 😕. ')+'Estamos em '+Math.round(chair)+'%. Plano de ação: calcular o gap de pacientes por cadeira, abrir agenda para avaliações, puxar reativação/faltosos e dividir uma meta objetiva entre as recepcionistas. Fazer parcial à tarde e redistribuir a busca se alguma frente não avançar.';
+ }else if(conversion!=null){
+   good=conversion>=healthyConversion;msg=open+(good?'Conversão saudável 💙, parabéns pelo aproveitamento! ':'Conversão abaixo do saudável e isso merece atenção 😕. ')+'Estamos em '+Math.round(conversion)+'% para referência de '+healthyConversion+'%. Plano de ação: listar avaliações sem fechamento, separar motivo por paciente, fazer follow-up personalizado e acompanhar retorno até efetivação. Nada de contato genérico: precisamos atacar a dor que travou cada fechamento.';
+ }else if(app!=null){
+   good=app>=healthyApp;msg=open+(good?'Aplicativo em '+Math.round(app)+'% 💙. Obrigado, equipe, estamos no saudável! ':'Aplicativo em '+Math.round(app)+'% e precisamos recuperar esse indicador 😕. ')+'Plano de ação: conferir paciente por paciente sem instalação, orientar ainda na recepção e validar antes de ele sair da clínica. Meta é chegar aos '+healthyApp+'% e manter.';
+ }else{
+   msg=open+'Nesse indicador, quero atenção ao que ficou fora do saudável. Não vamos mandar só o problema para o grupo. Plano de ação: identificar os pacientes/processos que formam esse número, definir um responsável, executar a correção ainda no período e retornar com o que foi feito e o resultado. Se já estiver azul, obrigado pelo resultado 💙 — a ação é manter o processo e não deixar regredir.';
+ }
+ if(index===total-1)msg+=' Para fechar: me atualizem com o que foi feito e o que ainda precisa da minha ajuda. Bora virar o que estiver abaixo e manter o que já está azul! 🙌';
+ return msg.trim();
 }
 function centralNormalize(v=''){return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim()}
 function centralContext(raw,cl){
