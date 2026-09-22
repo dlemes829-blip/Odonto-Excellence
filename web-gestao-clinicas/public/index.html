@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#111318" />
   <title>Central de Gestão · 12 Clínicas</title>
-  <link rel="stylesheet" href="/styles.css?v=20260921-1638" />
-  <link rel="stylesheet" href="/report-intelligence.css?v=20260921-1638" />
-  <link rel="stylesheet" href="/report-intelligence-v2.css?v=20260921-1638" />
-  <link rel="stylesheet" href="/period2-strategy.css?v=20260921-1638" />
+  <link rel="stylesheet" href="/styles.css?v=20260921-2145" />
+  <link rel="stylesheet" href="/report-intelligence.css?v=20260921-2145" />
+  <link rel="stylesheet" href="/report-intelligence-v2.css?v=20260921-2145" />
+  <link rel="stylesheet" href="/period2-strategy.css?v=20260921-2145" />
 </head>
 <body>
   <div id="login" class="login-screen">
     <div class="login-card">
-      <div class="login-brand"><div class="brand-mark">OE</div><div><span class="eyebrow">ODONTO EXCELLENCE</span><h1>Central de Gestão</h1></div></div><p class="login-lead">Gestão diária das 12 unidades, metas, retornos e tratativas em um único ambiente.</p><div class="login-trust"><span>12 unidades</span><span>Ambiente administrativo</span><span>Dados centralizados</span></div>
+      <div class="login-brand"><div class="brand-mark">OE</div><div><span class="eyebrow">ODONTO EXCELLENCE</span><h1>Central de Gestão</h1></div></div><p class="login-lead">Rotina das 12 unidades: mensageiro e metas pela manhã, retorno à tarde e tratativas em um único ambiente.</p><div class="login-trust"><span>12 unidades</span><span>Ambiente administrativo</span><span>Dados centralizados</span></div>
       <form id="loginForm" onsubmit="return window.centralLogin ? window.centralLogin(event) : false;">
         <label>Acesso administrativo</label>
         <div class="login-input-wrap"><input id="password" type="password" inputmode="numeric" autocomplete="current-password" required placeholder="Digite sua senha de acesso" /><button type="button" id="togglePassword" class="login-eye" aria-label="Mostrar senha">Mostrar</button></div>
@@ -36,11 +36,11 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="/storage-api.js?v=20260921-1638"></script>
-  <script type="module" src="/app.js?v=20260921-1638"></script>
-  <script type="module" src="/report-intelligence.js?v=20260921-1638"></script>
-  <script type="module" src="/report-intelligence-v2.js?v=20260921-1638"></script>
-  <script type="module" src="/period2-strategy.js?v=20260921-1638"></script>
+  <script src="/storage-api.js?v=20260921-2145"></script>
+  <script type="module" src="/app.js?v=20260921-2145"></script>
+  <script type="module" src="/report-intelligence.js?v=20260921-2145"></script>
+  <script type="module" src="/report-intelligence-v2.js?v=20260921-2145"></script>
+  <script type="module" src="/period2-strategy.js?v=20260921-2145"></script>
 <script>
 (function(){
   function h(s){let x=2166136261;for(const c of s){x^=c.charCodeAt(0);x=Math.imul(x,16777619)}return (x>>>0).toString(16)}
@@ -52,7 +52,7 @@
     try{sessionStorage.setItem('g12_central_pass',p)}catch(_){}
     document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');
     btn.disabled=false;btn.textContent='Acessar Central';st.textContent='Acesso liberado';
-    try{if(window.renderNav)window.renderNav();if(window.go)window.go(localStorage.getItem('g12_last_page')||'dashboard')}catch(_){}
+    try{if(window.renderNav)window.renderNav();if(window.go)window.go(localStorage.getItem('g12_last_page')||'morning')}catch(_){}
     return false;
   };
   document.getElementById('togglePassword').onclick=function(){const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Mostrar':'Ocultar'};
