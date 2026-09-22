@@ -213,6 +213,24 @@ function centralHumanMessage(raw,cl,index,total=1){
  if(index===total-1)msg+=' Para fechar: me atualizem com o que foi feito e o que ainda precisa da minha ajuda. Bora virar o que estiver abaixo e manter o que já está azul! 🙌';
  return msg.trim();
 }
+function centralClinicActionSummary(rows,cl){
+ const texts=rows.map(r=>r._ocrText||'').filter(Boolean),joined=texts.join(' ');
+ const P=(label)=>centralPct(joined,label),acceptance=P('aceita.{0,12}o'),conversion=P('convers.{0,12}o'),app=P('aplicativo'),chair=P('meta.{0,18}cadeira');
+ const ticket=centralNum(joined,[/ticket\s*m[eé]dio[^0-9]{0,20}([\d.]+,\d{2})/i]);
+ const issues=[],wins=[];
+ const check=(label,val,target,high=true)=>{if(val==null)return;(high?val>=target:val<=target?true:false)?wins.push(label+' '+Math.round(val)+'%'):issues.push(label+' '+Math.round(val)+'%')};
+ check('aceitação',acceptance,80);check('conversão',conversion,30);check('aplicativo',app,95);if(chair!=null)(chair>=100?wins:issues).push('meta por cadeira '+Math.round(chair)+'%');if(ticket!=null)(ticket>=3419.85?wins:issues).push('ticket '+centralMoney(ticket));
+ const people=(data.staff?.[cl.id]||[]).filter(x=>x.name);
+ const owners=people.slice(0,3).map(x=>x.name).join(', ');
+ return {summary:(wins.length?'Pontos saudáveis: '+wins.join(', ')+'. ':'')+(issues.length?'Prioridades de reação: '+issues.join(', ')+'.':'Sem indicador crítico identificado com segurança nos prints lidos.'),attack:['1. Trabalhar primeiro os indicadores abaixo do saudável e transformar cada gap em lista de pacientes/processos.','2. Recepção: agenda, reativação, faltosos, indicações e avaliações sem fechamento.','3. Cobrança: carteira priorizada, follow-up e retorno de acordos/pagamentos.','4. Profissionais/franqueado: abordagem, ticket, indicações e reforço da execução.','5. Fazer parcial à tarde e fechar o dia com realizado, pendência e próximo passo.'].join('\n'),tasks:(owners?'Responsáveis cadastrados para direcionamento: '+owners+'.\n':'')+'Cada ação deve sair com responsável, meta e retorno do que foi feito; problema sem solução não entra como tratativa final.'};
+}
+async function centralSaveClinicAnalysis(rows,cl){
+ const a=centralClinicActionSummary(rows,cl),bundle=rows.filter(x=>x.message).map((x,i)=>'PRINT '+(i+1)+'\n'+x.message).join('\n\n');
+ const body={capture_date:rows[0]?.capture_date||isoDay(),clinic_id:cl.id,return_type:2,summary:a.summary,attack_plan:a.attack,team_tasks:a.tasks,whatsapp_bundle:bundle,updated_at:new Date().toISOString()};
+ const existing=await mgmtFetch('central_clinic_analysis?select=id&capture_date=eq.'+body.capture_date+'&clinic_id=eq.'+cl.id+'&return_type=eq.2&limit=1');
+ if(existing[0])await mgmtFetch('central_clinic_analysis?id=eq.'+existing[0].id,{method:'PATCH',body:JSON.stringify(body)});
+ else await mgmtFetch('central_clinic_analysis',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(body)});
+}
 function centralNormalize(v=''){return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim()}
 function centralContext(raw,cl){
   const t=String(raw||'').replace(/\s+/g,' ').trim(),n=centralNormalize(t);
@@ -415,7 +433,7 @@ async function generateCentralMessages(){
       if(status)status.textContent='Análise concluída · '+centralRows.length+' de '+centralRows.length+' prints lidos e com mensagem.';
       if(title)title.textContent='Análise concluída';
       if(bar)bar.style.width='100%';
-      toast('Tratativa concluída: mensagens e planos de ação validados e salvos.');
+      await centralSaveClinicAnalysis(centralRows,cl); toast('Tratativa concluída: mensagens, plano de ataque e distribuição validados e salvos.');
     }
     await loadCentralReturns();
   }catch(e){
