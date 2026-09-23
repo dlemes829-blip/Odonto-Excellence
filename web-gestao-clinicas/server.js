@@ -42,7 +42,7 @@ const defaults = {
   satisfactionHealthy: 0.9,
   orthoAcceptanceHealthy: 0.7,
   cancellationAttention: 0.21,
-  ticketReference: 3419.85,
+  ticketReference: 3488.25,
   theme: 'red',
   focusMode: true
 };
