@@ -376,10 +376,12 @@ async function renderCentralReturns(c){
   const cl=clinic(state.selectedClinic||1);
   c.innerHTML='<div class="section-head"><div><h3>Tratativa</h3><div class="clinic-meta">Análise pesada dos relatórios da tarde: problema, solução, direcionamento e mensagem pronta para WhatsApp.</div></div></div>'+
   '<div class="card central-controls"><div class="form-grid"><div><label>Clínica</label><select id="crClinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===cl.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div><div><label>Tipo</label><select id="crType"><option value="1">Retorno da tarde · acompanhamento</option><option value="2" selected>Tratativa · análise completa por print</option></select></div></div></div>'+
-  '<div class="treatment-quality card"><strong>Leitura completa · modo produção</strong><span>O sistema pode levar alguns minutos: valida clínica, números, meta, tom da mensagem e exige plano de ação antes de salvar.</span></div><div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar os prints da clínica</strong><span>Pode colar 8 ou mais. O original fica salvo até você decidir arquivar e zerar.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
+  '<div class="treatment-quality card"><strong>Leitura completa · modo produção</strong><span>O sistema pode levar alguns minutos: valida clínica, números, meta, tom da mensagem e exige plano de ação antes de salvar.</span></div><div class="card report-text-card"><div class="section-head"><div><h3>Texto completo do relatório</h3><div class="clinic-meta">Cole aqui o relatório em texto desta clínica. Ele fica salvo por clínica e data e entra junto com os prints na leitura estratégica.</div></div><span id="crTextState" class="hint">Carregando…</span></div><textarea id="crReportText" rows="10" placeholder="Cole aqui todo o texto do relatório da clínica…"></textarea><div class="actions"><button id="crSaveText" class="btn primary">Salvar texto desta clínica</button><button id="crClearText" class="ghost danger">Limpar texto</button></div></div><div id="crPaste" class="paste-zone" tabindex="0"><strong>Ctrl+V para colar os prints da clínica</strong><span>Pode colar 8 ou mais. O original fica salvo até você decidir arquivar e zerar.</span><label class="btn secondary">Selecionar imagens<input id="crFiles" class="hidden" type="file" accept="image/*" multiple></label></div>'+
   '<div class="central-progress analysis-status-panel"><div class="analysis-spinner" id="crSpinner"></div><div><strong id="crStatusTitle">Central de análise</strong><span id="crStatus" class="hint">Carregando registros de hoje…</span><div class="analysis-live-bar"><i id="crLiveBar"></i></div></div><div class="actions"><button id="crGenerateAll" class="btn primary">Gerar mensagens desta clínica</button><button id="crGenerateAllClinics" class="btn secondary">Ler todas as clínicas</button><button id="crReload" class="ghost">Atualizar</button></div></div><div id="crAnalysis"></div><div id="crGrid" class="central-grid return2-grid"></div>';
   $('#crClinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderCentralReturns(c)};
-  $('#crType').onchange=()=>loadCentralReturns();
+  $('#crSaveText').onclick=()=>saveCentralReportText();
+  $('#crClearText').onclick=()=>clearCentralReportText();
+  $('#crType').onchange=()=>Promise.all([loadCentralReturns(),loadCentralReportText()]);
   $('#crPaste').onpaste=async e=>{const files=[...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).map(i=>i.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();await uploadCentralFiles(files)}};
   $('#crFiles').onchange=async e=>{await uploadCentralFiles([...e.target.files]);e.target.value=''};
   $('#crReload').onclick=()=>loadCentralReturns();
@@ -387,7 +389,22 @@ async function renderCentralReturns(c){
   $('#crGenerateAllClinics').onclick=()=>generateAllClinics();
   $('#crPaste').ondragover=e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}; $('#crPaste').ondragleave=e=>e.currentTarget.classList.remove('drag-over'); $('#crPaste').ondrop=async e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');await uploadCentralFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#crPaste').focus();
-  await loadCentralReturns();
+  await Promise.all([loadCentralReturns(),loadCentralReportText()]);
+}
+async function loadCentralReportText(){
+ const cid=Number($('#crClinic')?.value||state.selectedClinic||1),rt=Number($('#crType')?.value||2),box=$('#crReportText'),st=$('#crTextState');if(!box)return;
+ try{const rows=await mgmtFetch('central_report_texts?select=id,report_text,updated_at&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&limit=1');box.value=rows[0]?.report_text||'';box.dataset.rowId=rows[0]?.id||'';if(st)st.textContent=rows[0]?'Salvo · '+new Date(rows[0].updated_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'Ainda não salvo';}catch(e){if(st)st.textContent='Falha ao carregar';console.error(e)}
+}
+async function saveCentralReportText(){
+ const box=$('#crReportText'),st=$('#crTextState'),text=(box?.value||'').trim(),cid=Number($('#crClinic').value),rt=Number($('#crType').value);if(!text)return toast('Cole o texto do relatório primeiro.');
+ try{if(st)st.textContent='Salvando…';const body={capture_date:isoDay(),clinic_id:cid,return_type:rt,report_text:text,updated_at:new Date().toISOString()};const id=box.dataset.rowId;if(id)await mgmtFetch('central_report_texts?id=eq.'+id,{method:'PATCH',body:JSON.stringify(body)});else await mgmtFetch('central_report_texts',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(body)});await loadCentralReportText();toast('Texto do relatório salvo nesta clínica.');}catch(e){if(st)st.textContent='Falha ao salvar';toast('Não foi possível salvar o texto: '+e.message)}
+}
+async function clearCentralReportText(){
+ const box=$('#crReportText'),id=box?.dataset.rowId;if(!box)return;if(!confirm('Limpar o texto do relatório desta clínica hoje?'))return;
+ try{if(id)await mgmtFetch('central_report_texts?id=eq.'+id,{method:'DELETE'});box.value='';box.dataset.rowId='';$('#crTextState').textContent='Ainda não salvo';toast('Texto removido desta clínica.');}catch(e){toast('Não foi possível limpar: '+e.message)}
+}
+async function currentCentralReportText(){
+ const box=$('#crReportText');if(box&&box.value.trim())return box.value.trim();const cid=Number($('#crClinic')?.value||state.selectedClinic||1),rt=Number($('#crType')?.value||2);try{const rows=await mgmtFetch('central_report_texts?select=report_text&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&limit=1');return rows[0]?.report_text||''}catch{return ''}
 }
 async function fileToDataUrl(file){return new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(file)})}
 async function uploadCentralFiles(files){
