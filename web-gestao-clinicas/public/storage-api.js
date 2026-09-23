@@ -1,7 +1,7 @@
 const DBKEY='g12_web_db_v1';
 const clinicsSeed=[
 ['DIAMANTINA - MG[1031]','Diamantina','MG','1031'],['DOM PEDRITO - RS[915]','Dom Pedrito','RS','915'],['GARCA - SP[470]','Garça','SP','470'],['GUAIRA - SP[1214]','Guaíra','SP','1214'],['ILHOTA - SC[550]','Ilhota','SC','550'],['JARDIM - MS[368]','Jardim','MS','368'],['PONTA GROSSA - PR - UVARANAS[51]','Ponta Grossa - Uvaranas','PR','51'],['REGISTRO I - SP[1609]','Registro I','SP','1609'],['RIO DO SUL - SC[27]','Rio do Sul','SC','27'],["SANTA BARBARA D`OESTE - JARDIM EUROPA - SP[1658]","Santa Bárbara d'Oeste - Jardim Europa",'SP','1658'],['SIDROLANDIA - MS[307]','Sidrolândia','MS','307'],['TAQUARITINGA - SP[1655]','Taquaritinga','SP','1655']];
-const defaults={minEvaluations:15,maxEvaluations:20,cgEffective:7,orthoFolders:4,acceptanceHealthy:.8,conversionHealthy:.3,appHealthy:.95,satisfactionHealthy:.9,orthoAcceptanceHealthy:.7,cancellationAttention:.21,ticketReference:3419.85,theme:'red',focusMode:true};
+const defaults={minEvaluations:15,maxEvaluations:20,cgEffective:7,orthoFolders:4,acceptanceHealthy:.8,conversionHealthy:.3,appHealthy:.95,satisfactionHealthy:.9,orthoAcceptanceHealthy:.7,cancellationAttention:.21,ticketReference: 3488.25,theme:'red',focusMode:true};
 const day=()=>new Date().toISOString().slice(0,10);
 function load(){let d;try{d=JSON.parse(localStorage.getItem(DBKEY)||'null')}catch{}if(!d){d={clinics:clinicsSeed.map((x,i)=>({id:i+1,name:x[0],city:x[1],state:x[2],code:x[3],active:true})),settings:defaults,metrics:[],plans:[],assignments:[],returns:[],history:[],seq:{plan:1,assignment:1,return:1,history:1}};save(d)}return d}
 function save(d){localStorage.setItem(DBKEY,JSON.stringify(d))}
