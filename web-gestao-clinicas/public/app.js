@@ -595,3 +595,6 @@ async function renderSavedMessages(c){
  }
  $('#savedMsgForm').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,btn=form.querySelector('button');btn.disabled=true;const o=Object.fromEntries(new FormData(form));o.clinic_id=Number(o.clinic_id);try{await mgmtFetch('saved_messages',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(o)});toast('Mensagem salva para '+brDate(o.scheduled_date));form.querySelector('[name=body]').value='';await list()}catch(err){toast('Não foi possível salvar: '+err.message)}finally{btn.disabled=false}};await list();
 }
+
+// Public bootstrap used by the login shell.
+window.renderNav=renderNav;window.go=go;window.renderPage=renderPage;
