@@ -416,7 +416,7 @@ async function renderCentralReturns(c){
   $('#crGenerateAllClinics').onclick=()=>generateAllClinics();
   $('#crPaste').ondragover=e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}; $('#crPaste').ondragleave=e=>e.currentTarget.classList.remove('drag-over'); $('#crPaste').ondrop=async e=>{e.preventDefault();e.currentTarget.classList.remove('drag-over');await uploadCentralFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#crPaste').focus();
-  await Promise.all([loadCentralReturns(),loadCentralReportText()]);
+  await Promise.all([loadCentralReturns(),loadCentralReportText()]); try{$('#crSavedTreatment').innerHTML=await guideCards(Number($('#crClinic').value),'treatment');await bindGuideCards()}catch{}
 }
 async function loadCentralReportText(){
  const cid=Number($('#crClinic')?.value||state.selectedClinic||1),rt=Number($('#crType')?.value||2),box=$('#crReportText'),st=$('#crTextState');if(!box)return;
