@@ -314,7 +314,7 @@ async function centralReadReturn1(row,cl){
   if(status)status.textContent='Retorno 1 · leitura concluída · montando mensagens e atividades…';
   return text;
 }
-async function centralGenerateOne(row,index,cl){
+async function centralGenerateOne(row,index,cl,reportText=''){
   await ensureCentralOcr();
   const status=$('#crStatus');
   const stages=['Preparando imagem','Lendo cabeçalho, clínica e período','Extraindo indicadores e metas','Conferindo números e metas','Definindo problema e prioridade','Montando plano de ação','Revisando tom humano e mensagem final'];
@@ -328,7 +328,7 @@ async function centralGenerateOne(row,index,cl){
   const ctx=centralValidateClinic(text,cl);
   row._ocrText=text;row._ocrConfidence=confidence;row._ocrContext=ctx;
   if(status)status.textContent='Conferência final · print '+(index+1)+' · '+(ctx.dates.length?('datas '+ctx.dates.join(' → ')):'período sendo validado');
-  return centralHumanMessage(text,cl,index,centralRows.length);
+  return centralHumanMessage(reportText?reportText+'\n\nLEITURA DO PRINT ATUAL:\n'+text:text,cl,index,centralRows.length);
 }
 async function centralSaveMessage(id,message){
   await centralFetch('/screenshots/'+id,{method:'PATCH',body:JSON.stringify({message,message_status:'ready',analyzed_at:new Date().toISOString()})});
@@ -430,9 +430,9 @@ async function generateCentralMessages(){
   try{
     if(returnType===1){
       const row=centralRows[centralRows.length-1];
-      const text=await centralReadReturn1(row,cl);
+      const text=await centralReadReturn1(row,cl),reportText=await currentCentralReportText(),strategicText=reportText?reportText+'\n\nLEITURA DO PRINT:\n'+text:text;
       const localPeople=(data.staff?.[cl.id]||[]).map(x=>({name:x.name,functions:x.resp||'',individual_goal:x.target||''})).filter(x=>x.name);
-      const msg=centralReturn1Message(text,cl,localPeople);
+      const msg=centralReturn1Message(strategicText,cl,localPeople);
       if(!msg||msg.trim().length<80)throw new Error('A mensagem do Retorno 1 não ficou confiável o suficiente para salvar.');
       await centralSaveMessage(row.id,msg);
       row.message=msg;row.message_status='ready';
@@ -445,7 +445,7 @@ async function generateCentralMessages(){
         const row=centralRows[i];
         if(status)status.textContent='Print '+(i+1)+' de '+centralRows.length+' · identificando título, números, metas e oportunidades…';
         if(bar)bar.style.width=Math.round((i/centralRows.length)*100)+'%';
-        const msg=await centralGenerateOne(row,i,cl);
+        const msg=await centralGenerateOne(row,i,cl,await currentCentralReportText());
         if(!msg||msg.trim().length<90||!/Plano de ação|Plano:/.test(msg))throw new Error('O print '+(i+1)+' não passou na validação final de mensagem + plano de ação. Nada foi sobrescrito; use Gerar novamente.');
         await centralSaveMessage(row.id,msg);row.message=msg;row.message_status='ready';
       }
