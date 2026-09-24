@@ -178,16 +178,18 @@ function reportHistorySummary(current,previous,previousMonth){
  return parts.slice(0,3).join(' · ');
 }
 
+
 function dailyGuideMessages(cl,raw,people=[],history={}){
  const x=reportCore(raw),prev=history.previous?reportCore(history.previous):null,prevMonth=history.previousMonth?reportCore(history.previousMonth):null;
- const healthyAcceptance=80,healthyConversion=30,healthyApp=95,healthyRebooking=90;
+ const healthyAcceptance=80,healthyConversion=30,healthyApp=95,healthyRebooking=90,healthyCollection=65,healthySatisfaction=90,healthyAgenda=80;
  const days=monthBusinessDaysRemaining(x.periodEnd),gap=x.chairProp!=null&&x.chairEff!=null?Math.max(0,x.chairProp-x.chairEff):0;
  const dailyEff=gap>0?Math.max(1,Math.ceil(gap/days)):Math.max(1,Math.ceil((x.chairs||1)*1.5));
  const ticket=x.ticket&&x.ticket>0?x.ticket:Number(data.settings.ticketReference||3488.25),dailyMoney=dailyEff*ticket;
  const evalGoal=Math.max(3,Math.ceil(dailyEff/(healthyConversion/100)));
+ const orthoDaily=x.orthoPaidProp!=null&&x.orthoPaid!=null?Math.max(0,Math.ceil(Math.max(0,x.orthoPaidProp-x.orthoPaid)/days)):null;
+
  const configured=people.filter(p=>p.role_type==='receptionist'&&p.name).map(p=>p.name),fromMap=x.collaborators.map(p=>p.name);
  const names=Array.from({length:3},(_,i)=>configured[i]||fromMap[i]||('Colaboradora '+(i+1)+' · editar nome'));
- const evalSplit=centralSplitTarget(evalGoal,3),effSplit=centralSplitTarget(dailyEff,3);
 
  const t=String(raw||'').replace(/\s+/g,' ');
  const directCapture=rPct(t,[/capta[cç][aã]o[^0-9]{0,20}([\d.,]+)\s*%/i,/coleta[^0-9]{0,20}([\d.,]+)\s*%/i]);
@@ -195,102 +197,110 @@ function dailyGuideMessages(cl,raw,people=[],history={}){
  const convContacts=rInt(t,[/(\d+)\s+contatos?\s+de\s+\d+\s+possibilidades?/i,/contatos?[^0-9]{0,20}(\d+)\s+(?:de|\/)\s*\d+/i]);
  const capture=directCapture!=null?directCapture:(convPoss&&convContacts!=null?convContacts/convPoss*100:x.capturePct);
  const targetContacts=convPoss?Math.ceil(convPoss*.10):null;
- const contactsNeeded=targetContacts!=null&&convContacts!=null?Math.max(0,targetContacts-convContacts):null;
- const conversionTask=Math.max(5,Math.min(15,evalGoal));
+ const contactsNeeded=targetContacts!=null&&convContacts!=null?Math.max(0,targetContacts-convContacts):Math.max(6,Math.ceil(evalGoal*.6));
  const todayAgenda=rInt(t,[/temos\s+apenas\s+(\d+)\s+avalia[cç][oõ]es?\s+na\s+agenda/i,/agenda[^0-9]{0,30}(\d+)\s+avalia[cç][oõ]es?/i]);
  const startedDayEvals=rInt(t,[/iniciamos\s+o\s+dia\s+com\s+(\d+)\s+avalia[cç][oõ]es?/i]);
- const yesterdayEff=prev&&prev.chairEff!=null&&x.chairEff!=null?Math.max(0,x.chairEff-prev.chairEff):null;
- const yesterdayOrtho=prev&&prev.orthoPaid!=null&&x.orthoPaid!=null?Math.max(0,x.orthoPaid-prev.orthoPaid):null;
  const comparison=reportHistorySummary(x,prev,prevMonth),coverage=x.audit.count+'/'+x.audit.total;
 
  const qty=(n,sing,plur)=>n+' '+(n===1?sing:plur);
  const money=v=>centralMoney(v);
- const yesterdaySentence=()=>{
-   if(yesterdayEff==null&&yesterdayOrtho==null)return '';
-   const cg=yesterdayEff!=null?qty(yesterdayEff,'efetivação de Clínico Geral','efetivações de Clínico Geral'):'';
-   const ort=yesterdayOrtho!=null?qty(yesterdayOrtho,'pasta de Ortodontia','pastas de Ortodontia'):'';
-   if(yesterdayEff===0&&yesterdayOrtho===0)return 'Finalizamos o dia de ontem sem nenhuma efetivação em Clínico Geral e sem nenhuma pasta de Ortodontia. O que aconteceu? ';
-   return 'Finalizamos o dia de ontem com '+[cg,ort].filter(Boolean).join(' e ')+'. ';
+ const yesterdayPlaceholder='Ontem efetivamos ___ em Clínico Geral e ___ em Ortodontia. O que houve? ';
+
+ const positiveSentence=()=>{
+   const metrics=[
+     {label:'reagendamento',value:x.rebooking,target:healthyRebooking},
+     {label:'aplicativo',value:x.app,target:healthyApp},
+     {label:'aceitação',value:x.accept,target:healthyAcceptance},
+     {label:'cobrança',value:x.collectionAgent,target:healthyCollection},
+     {label:'satisfação',value:x.satisfaction,target:healthySatisfaction},
+     {label:'aproveitamento da agenda',value:x.agendaCG,target:healthyAgenda}
+   ].filter(m=>m.value!=null&&Number.isFinite(Number(m.value)));
+   if(!metrics.length)return 'Obrigado pelo empenho e pelo trabalho de ontem. Vamos manter constância e buscar evolução hoje. ';
+   metrics.sort((a,b)=>(b.value/b.target)-(a.value/a.target));
+   const best=metrics[0],v=Math.round(best.value);
+   if(best.value>=best.target)return 'Parabéns pelo '+best.label+', que está em '+v+'%, dentro do saudável. Obrigado pelo trabalho e vamos manter essa constância hoje. ';
+   return 'Parabéns pelo esforço no '+best.label+', que é hoje o indicador mais próximo da meta, em '+v+'%. Obrigado pelo trabalho; vamos avançar mais nesse ponto hoje. ';
  };
 
- const sharedContext=()=>{
-   let msg=yesterdaySentence();
+ const clinicContext=()=>{
+   let msg='';
    if(startedDayEvals!=null)msg+='Iniciamos o dia com '+qty(startedDayEvals,'avaliação','avaliações')+'. ';
-   if(todayAgenda!=null)msg+='Temos '+qty(todayAgenda,'avaliação','avaliações')+' na agenda e '+(todayAgenda<evalGoal?'isso não será suficiente para a meta de hoje. ':'esse volume ajuda, mas precisamos acompanhar a conversão ao longo do dia. ');
-   msg+='A meta de hoje é '+qty(dailyEff,'paciente efetivado de Clínico Geral','pacientes efetivados de Clínico Geral')+', totalizando '+money(dailyMoney)+'. ';
-   if(x.orthoPaidProp!=null&&x.orthoPaid!=null){const oGap=Math.max(0,x.orthoPaidProp-x.orthoPaid);msg+='Na Ortodontia, precisamos buscar '+qty(Math.max(0,Math.ceil(oGap/days)),'pasta','pastas')+' hoje para aproximar a unidade da meta proporcional. ';}
+   if(todayAgenda!=null)msg+='Temos '+qty(todayAgenda,'avaliação','avaliações')+' na agenda e '+(todayAgenda<evalGoal?'isso não será suficiente para a meta de hoje. ':'esse volume ajuda, mas ainda precisamos acompanhar o resultado. ');
+   msg+='A meta do dia é '+qty(dailyEff,'paciente efetivado de Clínico Geral','pacientes efetivados de Clínico Geral')+', totalizando '+money(dailyMoney)+'. ';
+   if(orthoDaily!=null)msg+='Na Ortodontia, a meta de hoje é '+qty(orthoDaily,'pasta','pastas')+'. ';
    return msg;
  };
 
- const focusSentence=()=>{
-   const focus=[];
-   if(capture!=null&&capture<10)focus.push('coleta de contatos');
-   if(x.accept!=null&&x.accept<healthyAcceptance)focus.push('aceitação');
-   if(todayAgenda!=null&&todayAgenda<evalGoal)focus.push('agendamento de avaliações');
-   focus.push('conversão');
-   return 'Hoje vamos trabalhar principalmente '+focus.slice(0,2).join(' e ')+'. ';
- };
-
- const captureSentence=()=>{
-   if(capture==null)return '';
-   let z='A captação está em '+capture.toFixed(0).replace('.',',')+'%. ';
-   if(capture<10){
-     if(contactsNeeded!=null&&convPoss!=null&&convContacts!=null)z+='Sua meta é coletar mais '+qty(contactsNeeded,'contato','contatos')+' para chegarmos a 10%; hoje temos '+convContacts+' contatos em '+convPoss+' possibilidades. ';
-     else z+='Precisamos chegar a pelo menos 10%, então a coleta deve acontecer em todos os atendimentos. ';
-     z+='Reforce com cada paciente a importância de indicar alguém e explique o benefício disponível na clínica quando ele existir. Quanto mais contatos coletarmos, mais possibilidades teremos para gerar avaliações. ';
+ const captureText=()=>{
+   let msg='';
+   if(capture!=null)msg+='A captação está em '+Math.round(capture)+'%. ';
+   if(capture==null||capture<10){
+     msg+='Sua meta é coletar '+qty(Math.max(1,contactsNeeded),'contato','contatos')+' hoje para aproximarmos a captação de 10%. ';
+     if(convContacts!=null&&convPoss!=null)msg+='Hoje temos '+convContacts+' contatos em '+convPoss+' possibilidades. ';
+     msg+='Trabalhe a importância da indicação em todos os atendimentos e explique o benefício disponível na clínica quando houver. Quanto mais contatos coletarmos, mais possibilidades teremos de gerar novas avaliações. ';
    }
-   return z;
+   return msg;
  };
 
- const conversionSentence=(share)=>{
-   const n=Math.max(1,share);
-   let z='Pela Ferramenta de Conversão, trabalhe os pacientes dos últimos 45 dias e agende '+qty(n,'avaliação','avaliações')+'. ';
-   if(convPoss!=null)z+='Temos '+convPoss+' possibilidades registradas; precisamos transformar essa base em agenda. ';
-   return z;
+ const agendaText=()=>{
+   let msg='Você fica responsável pelo agendamento de avaliações hoje. Pela Ferramenta de Conversão, trabalhe os pacientes dos últimos 45 dias e agende '+qty(evalGoal,'avaliação','avaliações')+'. ';
+   msg+='Também confirme a agenda, recupere cancelamentos e faltosos e preencha os horários vagos. ';
+   if(convPoss!=null)msg+='Temos '+convPoss+' possibilidades registradas; precisamos transformar essa base em avaliações marcadas. ';
+   return msg;
  };
 
- const praiseSentence=()=>{
-   let p='';
-   if(x.rebooking!=null&&x.rebooking>=healthyRebooking)p+='Parabéns pelo reagendamento de ontem, que fechou em '+Math.round(x.rebooking)+'%. ';
-   else if(x.rebooking!=null)p+='O reagendamento ficou em '+Math.round(x.rebooking)+'%, abaixo dos 90% que precisamos; hoje ninguém deve sair sem o próximo horário definido. ';
-   if(x.app!=null&&x.app>=90)p+='O aplicativo está em '+Math.round(x.app)+'%; vamos manter constância nessa tarefa e buscar os 95% saudáveis. ';
-   else if(x.app!=null)p+='O aplicativo está em '+Math.round(x.app)+'%; precisamos aumentar esse número e aproveitar o fechamento do atendimento para concluir a instalação. ';
-   return p;
+ const postSaleText=()=>{
+   let msg='Você fica responsável pelos pacientes que já fecharam e ainda precisam iniciar, pelo reagendamento e pelos pacientes sem próximo horário. ';
+   if(x.treatmentsEff!=null&&x.treatmentsStarted!=null){const left=Math.max(0,x.treatmentsEff-x.treatmentsStarted);msg+='Temos '+x.treatmentsEff+' tratamentos efetivados e '+x.treatmentsStarted+' iniciados; '+left+' ainda precisam começar. ';}
+   if(x.noAgendaCG!=null)msg+='A proporção de pacientes sem agendamento está em '+Math.round(x.noAgendaCG)+'%; trabalhe essa lista e deixe cada paciente com próximo passo definido. ';
+   if(x.rebooking!=null&&x.rebooking<healthyRebooking)msg+='O reagendamento está em '+Math.round(x.rebooking)+'%, abaixo dos 90% saudáveis, então esse ponto precisa de atenção hoje. ';
+   if(x.app!=null&&x.app<healthyApp)msg+='O aplicativo está em '+Math.round(x.app)+'%; precisamos buscar os 95% saudáveis no fechamento do atendimento. ';
+   return msg;
  };
+
+ const acceptanceText=()=>x.accept!=null&&x.accept<healthyAcceptance
+   ?'A aceitação está em '+Math.round(x.accept)+'%, abaixo dos 80% saudáveis; acompanhe cada avaliação que não fechou, entenda o motivo e me retorne os casos. '
+   :'';
 
  const individual=names.map((n,i)=>{
-   let msg='Bom dia '+n+', tudo bem? ';
-   msg+=sharedContext();
-   msg+=focusSentence();
+   let msg='Bom dia '+n+', tudo bem? '+yesterdayPlaceholder+clinicContext();
    if(i===0){
-     msg+=captureSentence();
-     msg+='Além disso, cuide da agenda: confirme os pacientes, recupere cancelamentos e faltosos e coloque pelo menos '+qty(Math.max(1,evalSplit[i]),'nova avaliação','novas avaliações')+' na agenda. ';
+     msg+=agendaText();
+     msg+='Essa é sua meta principal do dia: '+qty(evalGoal,'avaliação agendada','avaliações agendadas')+'. ';
    }else if(i===1){
-     msg+=conversionSentence(Math.max(1,Math.ceil(conversionTask/3)));
-     msg+='Quero que você acompanhe quem já demonstrou interesse até sair com horário marcado ou com uma data definida para novo contato. ';
+     msg+=captureText();
+     msg+='Sua meta principal é aumentar a entrada de contatos e indicações para gerar novas possibilidades de avaliação. ';
    }else{
-     if(x.treatmentsEff!=null&&x.treatmentsStarted!=null){const st=Math.max(0,x.treatmentsEff-x.treatmentsStarted);msg+='Temos '+x.treatmentsEff+' tratamentos efetivados e '+x.treatmentsStarted+' iniciados; '+st+' ainda precisam começar. Trabalhe esses pacientes e garanta o primeiro agendamento. ';}
-     msg+='Também revise os pacientes sem próximo horário e mantenha o reagendamento do dia em dia. ';
+     msg+=postSaleText();
+     msg+='Sua meta principal é não deixar paciente efetivado sem início e não deixar paciente atendido sem próximo horário definido. ';
    }
-   msg+='Sua contribuição para hoje é '+qty(Math.max(1,effSplit[i]),'efetivação','efetivações')+' e '+qty(Math.max(1,evalSplit[i]),'novo agendamento de avaliação','novos agendamentos de avaliação')+'. ';
-   if(x.accept!=null&&x.accept<healthyAcceptance)msg+='A aceitação está em '+Math.round(x.accept)+'%, abaixo dos 80% saudáveis; acompanhe cada avaliação que não fechou, entenda o motivo e me retorne os casos. ';
-   msg+=praiseSentence();
+   msg+=acceptanceText();
+   msg+=positiveSentence();
    msg+='Vamos manter constância no dia de hoje, combinado? Você sabe qual é o percentual saudável da aceitação?';
    return {recipient:n,title:'Mensageiro da manhã · '+n,message:msg};
  });
 
- let group='Bom dia, equipe. '+sharedContext()+focusSentence();
- if(capture!=null)group+=captureSentence();
- group+='Para sustentar a meta de '+dailyEff+' efetivações com conversão saudável de 30%, precisamos colocar pelo menos '+evalGoal+' avaliações na agenda hoje. ';
- group+='Divisão do trabalho: '+names[0]+' fica com coleta de contatos, confirmações, cancelamentos e faltosos; '+names[1]+' trabalha a Ferramenta de Conversão dos últimos 45 dias; '+names[2]+' acompanha pacientes que fecharam e ainda não iniciaram, além dos pacientes sem próximo horário. ';
- if(x.accept!=null)group+='Aceitação em '+Math.round(x.accept)+'% (saudável: 80%). ';
- group+=praiseSentence();
+ let group='Bom dia, equipe. '+yesterdayPlaceholder+clinicContext();
+ group+='Hoje as tarefas ficam divididas assim: '+names[0]+' fica responsável por agendar '+evalGoal+' avaliações pela Ferramenta de Conversão dos últimos 45 dias, além de confirmações, cancelamentos e faltosos; ';
+ group+=names[1]+' fica responsável pela coleta de contatos e indicações, com meta de '+Math.max(1,contactsNeeded)+' contatos; ';
+ group+=names[2]+' fica responsável pelos pacientes que fecharam e ainda não iniciaram, reagendamento, pacientes sem próximo horário e aplicativo. ';
+ if(x.accept!=null)group+='A aceitação está em '+Math.round(x.accept)+'% e o saudável é 80%. ';
+ group+=positiveSentence();
  if(comparison)group+='Comparando com a leitura anterior: '+comparison+'. ';
- group+='À tarde vou conferir o realizado de cada uma e o que ainda falta para a meta.';
+ group+='Obrigado pelo trabalho de todas. À tarde vamos conferir o realizado de cada tarefa e o que ainda falta para a meta.';
 
- const retIndividuals=names.map((n,i)=>({recipient:n,title:'Retorno individual · '+n,message:'Boa tarde '+n+'. Pela manhã combinamos '+qty(Math.max(1,evalSplit[i]),'novo agendamento de avaliação','novos agendamentos de avaliação')+' e contribuição de '+qty(Math.max(1,effSplit[i]),'efetivação','efetivações')+'. Me retorne agora quantos agendamentos fez, quantos contatos coletou, quantos pacientes da conversão marcou, quantas efetivações tivemos e quais pacientes ainda precisam de ação. O que ficou abaixo da meta precisa sair deste retorno com uma ação definida para hoje.'}));
- const ret='Boa tarde, equipe. Na manhã definimos meta de '+dailyEff+' efetivações de Clínico Geral, '+money(dailyMoney)+' e pelo menos '+evalGoal+' avaliações na agenda. Agora preciso do realizado de cada colaboradora: coleta de contatos, avaliações agendadas, pacientes trabalhados na Ferramenta de Conversão, efetivações, Ortodontia, reagendamento e pacientes que ainda precisam de ação. O que faltar será redistribuído agora para buscarmos o resultado até o fim do dia.';
- const treatment='Tratativa estratégica · '+cl.city+'. Relatório completo com '+coverage+' itens detectados. Meta proporcional de cadeira: '+(x.chairProp??'—')+'; efetivados: '+(x.chairEff??x.eff??'—')+'; faltam '+gap+'. Meta de hoje: '+dailyEff+' efetivações, '+money(dailyMoney)+' e pelo menos '+evalGoal+' avaliações. Aceitação '+(x.accept??'—')+'% (saudável 80%); Ortodontia '+(x.orthoEff??'—')+'/'+(x.orthoProp??'—')+' efetivações e '+(x.orthoPaid??'—')+'/'+(x.orthoPaidProp??'—')+' pastas; faltosos '+(x.absenteesPct??'—')+'%; reagendamento '+(x.rebooking??'—')+'%; aplicativo '+(x.app??'—')+'%. Ações: coleta de contatos, agenda, Ferramenta de Conversão dos últimos 45 dias, pacientes efetivados sem início e pacientes sem próximo horário. Comparativo: '+(comparison||'sem histórico suficiente para comparação segura')+'.';
+ const retIndividuals=names.map((n,i)=>{
+   let task='';
+   if(i===0)task='Pela manhã sua meta era agendar '+evalGoal+' avaliações pela Ferramenta de Conversão e recuperar cancelamentos/faltosos. Me retorne quantas avaliações agendou, quantas confirmações fez e quantos horários conseguiu preencher.';
+   else if(i===1)task='Pela manhã sua meta era coletar '+Math.max(1,contactsNeeded)+' contatos e aumentar as indicações. Me retorne quantos contatos coletou, quantas indicações conseguiu e quantas já viraram possibilidade de avaliação.';
+   else task='Pela manhã sua responsabilidade era trabalhar pacientes efetivados sem início, reagendamento, pacientes sem próximo horário e aplicativo. Me retorne quantos pacientes iniciou, quantos reagendou, quantos ficaram com próximo horário definido e como ficou o aplicativo.';
+   return {recipient:n,title:'Retorno individual · '+n,message:'Boa tarde '+n+'. '+task+' O que ficou abaixo da meta precisa sair deste retorno com uma ação definida para hoje.'};
+ });
+
+ const ret='Boa tarde, equipe. Na manhã definimos meta de '+dailyEff+' efetivações de Clínico Geral, '+money(dailyMoney)+(orthoDaily!=null?' e '+orthoDaily+' pasta(s) de Ortodontia':'')+'. '+names[0]+' ficou com agendamento de avaliações, '+names[1]+' com coleta de contatos e indicações, e '+names[2]+' com pacientes efetivados sem início, reagendamento e pacientes sem próximo horário. Agora preciso do realizado de cada uma. O que faltar será redistribuído para buscarmos o resultado até o fim do dia.';
+
+ const treatment='Tratativa estratégica · '+cl.city+'. Relatório completo com '+coverage+' itens detectados. Meta proporcional de cadeira: '+(x.chairProp??'—')+'; efetivados: '+(x.chairEff??x.eff??'—')+'; faltam '+gap+'. Meta de hoje: '+dailyEff+' efetivações, '+money(dailyMoney)+(orthoDaily!=null?' e '+orthoDaily+' pasta(s) de Ortodontia':'')+'. Distribuição: '+names[0]+' — agendamento de '+evalGoal+' avaliações; '+names[1]+' — coleta de '+Math.max(1,contactsNeeded)+' contatos e indicações; '+names[2]+' — pacientes efetivados sem início, reagendamento, pacientes sem próximo horário e aplicativo. Aceitação '+(x.accept??'—')+'% (saudável 80%); faltosos '+(x.absenteesPct??'—')+'%; reagendamento '+(x.rebooking??'—')+'%; aplicativo '+(x.app??'—')+'%. Comparativo: '+(comparison||'sem histórico suficiente para comparação segura')+'.';
+
  return {individual,retIndividuals,group,ret,treatment,audit:x.audit,metrics:x};
 }
 async function reportHistoryForClinic(id){
