@@ -21,6 +21,7 @@ const ROAD_SEPTEMBER={
 // Mapa de Trabalho > Cobrança / Cobrados - Franquia; data consultada 23/09/2026.
 // Quantidades operacionais, não valores recebidos. Acima de 100% requer conferir definição do denominador.
 const COLLECTION_YESTERDAY={'1031':[170,0],'915':[113,0],'470':[214,211],'1214':[8,20],'550':[45,45],'368':[134,185],'51':[174,169],'1609':[396,388],'27':[170,173],'1658':[137,136],'307':[129,135],'1655':[81,83]};
+function roadTier(perChair){return perChair>40?'Ouro':perChair>=30?'Prata':perChair>=20?'Bronze':perChair>=10?'Em desenvolvimento':'Sem classificação'}
 const defaults={minEvaluations:15,maxEvaluations:20,cgEffective:7,orthoFolders:4,acceptanceHealthy:.8,conversionHealthy:.3,appHealthy:.95,satisfactionHealthy:.9,ticketReference:3488.25};
 const paths={'Avaliações':'Admin > Indicações > Ferramenta de Conversão','Efetivações':'Rel. Administrativos > Gerentes > Avaliações','Conversão':'Admin > Indicações > Ferramenta de Conversão','Faltosos':'Agenda > Relatórios > Pacientes Faltosos','Trat. sem 1º agendamento':'Relatório de Avaliações > Tratamentos sem 1º agendamento','App':'Admin > Indicações / App','Pesquisa satisfação':'Admin > Indicações / App','Indicações/Amigo do Peito':'Admin > Indicações / App','Ortodontia':'Relatórios / Ortodontia'};
 const tools={'Avaliações':'Ferramenta de Conversão','Efetivações':'Relatório de Avaliações','Conversão':'Ferramenta de Conversão','Faltosos':'Pacientes Faltosos','Trat. sem 1º agendamento':'Relatório de Avaliações','App':'Indicações / App','Pesquisa satisfação':'Indicações / App','Indicações/Amigo do Peito':'Indicações / App','Ortodontia':'Ortodontia'};
@@ -213,7 +214,7 @@ function dailyGuideMessages(cl,raw,people=[],history={},sourceDate=isoDay()){
  const reception=people.filter(p=>p.role_type==='receptionist'&&p.name).map(p=>p.name.trim());
  const team=reception.length?reception:['Recepção'];
  const source='Mapa de Trabalho: período até '+brDate(x.periodEnd)+'; captura '+brDate(sourceDate);
- const roadText=road?'ROAD setembro, consulta 24/09: '+road.effective+'/'+road.goal+' efetivações; posição '+road.rank+' de 801; '+road.perChair+' por cadeira. ':'ROAD não conferida para esta unidade. ';
+ const roadText=road?'ROAD setembro, consulta 24/09: '+road.effective+'/'+road.goal+' efetivações; posição '+road.rank+' de 801; '+road.perChair+' por cadeira ('+roadTier(road.perChair)+'). ':'ROAD não conferida para esta unidade. ';
  const collection=COLLECTION_YESTERDAY[cl.code],collectionText=collection?'Cobrança 23/09: '+collection[0]+' cobranças / '+collection[1]+' cobrados'+(collection[1]===0?' (conferir ausência de registro)':'')+(collection[1]>collection[0]?' (conferir critério da contagem)':'')+'. ':'';
  const lastDay=prev&&history.previousDate&&x.periodEnd&&prev.periodEnd&&history.previousDate<sourceDate&&prev.periodEnd<x.periodEnd&&prev.periodEnd.slice(0,7)===x.periodEnd.slice(0,7);
  const deltaCG=lastDay&&x.eff!=null&&prev.eff!=null&&x.eff>=prev.eff?x.eff-prev.eff:null;
@@ -285,7 +286,7 @@ async function bindReportTextGenerator(id,section){
 function roadPanel(){
  if(isoDay().slice(0,7)!=='2026-09')return '';
  const rows=CLINICS.map(cl=>({cl,...ROAD_SEPTEMBER[cl.code]})).sort((a,b)=>(a.goal-a.effective)-(b.goal-b.effective));
- return '<details class="card" open><summary><strong>ROAD · Brasil · setembro/2026 · 12 clínicas</strong></summary><p class="hint">Retrato consultado em 24/09; ranking ao vivo pode mudar. Meta de 40 efetivações por cadeira no mês. O Mapa de Trabalho usa outra apuração. Priorize Jardim para fechar a meta; nas demais, recupere agenda e propostas com base na capacidade real.</p><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>Clínica</th><th>Posição/801</th><th>ROAD</th><th>Por cadeira</th><th>Faltam para meta</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.cl.city)+'</td><td>'+r.rank+'</td><td>'+r.effective+'/'+r.goal+'</td><td>'+r.perChair+'</td><td>'+Math.max(0,r.goal-r.effective)+'</td></tr>').join('')+'</tbody></table></div></details>';
+ return '<details class="card" open><summary><strong>ROAD · Brasil · setembro/2026 · 12 clínicas</strong></summary><p class="hint">Retrato consultado em 24/09; ranking ao vivo pode mudar. Meta de 40 efetivações por cadeira no mês. Faixas: abaixo de 10 sem classificação; 10–20 em desenvolvimento; 20–30 bronze; 30–40 prata; acima de 40 ouro. O Mapa de Trabalho usa outra apuração. Priorize Jardim para fechar a meta; nas demais, recupere agenda e propostas com base na capacidade real.</p><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>Clínica</th><th>Posição/801</th><th>ROAD</th><th>Por cadeira</th><th>Faixa</th><th>Faltam para meta</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.cl.city)+'</td><td>'+r.rank+'</td><td>'+r.effective+'/'+r.goal+'</td><td>'+r.perChair+'</td><td>'+roadTier(r.perChair)+'</td><td>'+Math.max(0,r.goal-r.effective)+'</td></tr>').join('')+'</tbody></table></div></details>';
 }
 
 async function renderPeriod1(c){
