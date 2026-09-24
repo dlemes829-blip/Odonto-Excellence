@@ -106,9 +106,13 @@ function reportMapCollaborators(raw){
  return rows.slice(0,8);
 }
 function monthBusinessDaysRemaining(reportEnd){
- const base=reportEnd?new Date(reportEnd+'T12:00:00'):new Date(),y=base.getFullYear(),m=base.getMonth(),today=new Date();
- let d=new Date(Math.max(today.getTime(),new Date(y,m,base.getDate()+1,12).getTime())),count=0;
- if(d.getFullYear()!==y||d.getMonth()!==m)d=new Date(y,m,base.getDate()+1,12);
+ const current=isoDay(),source=reportEnd||current,month=source.slice(0,7);
+ const next=new Date(source+'T12:00:00');next.setDate(next.getDate()+1);
+ const today=new Date(current+'T12:00:00');
+ const first=next>today?next:today;
+ const y=Number(month.slice(0,4)),m=Number(month.slice(5,7))-1;
+ let d=first,count=0;
+ if(d.getFullYear()!==y||d.getMonth()!==m)return 1;
  const last=new Date(y,m+1,0,12);
  for(;d<=last;d.setDate(d.getDate()+1)){const w=d.getDay();if(w!==0&&w!==6)count++}
  return Math.max(1,count);
