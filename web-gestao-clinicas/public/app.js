@@ -638,7 +638,7 @@ async function renderCentralReturns(c){
 }
 async function loadCentralReportText(){
  const cid=Number($('#crClinic')?.value||state.selectedClinic||1),rt=Number($('#crType')?.value||2),box=$('#crReportText'),st=$('#crTextState');if(!box)return;
- try{const rows=await mgmtFetch('central_report_texts?select=id,report_text,updated_at&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&limit=1');box.value=rows[0]?.report_text||'';box.dataset.rowId=rows[0]?.id||'';if(st)st.textContent=rows[0]?'Salvo · '+new Date(rows[0].updated_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'Ainda não salvo';}catch(e){if(st)st.textContent='Falha ao carregar';console.error(e)}
+ try{const rows=await mgmtFetch('central_report_texts?select=id,report_text,capture_date,updated_at&capture_date=lte.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&order=capture_date.desc,updated_at.desc&limit=1');box.value=rows[0]?.report_text||'';box.dataset.rowId=rows[0]?.capture_date===isoDay()?rows[0].id:'';if(st)st.textContent=rows[0]?'Fonte: '+brDate(rows[0].capture_date)+(rows[0].capture_date===isoDay()?' · salva hoje':' · leitura anterior; confirme antes de atualizar'):'Ainda não salvo';}catch(e){if(st)st.textContent='Falha ao carregar';console.error(e)}
 }
 async function saveCentralReportText(){
  const box=$('#crReportText'),st=$('#crTextState'),text=(box?.value||'').trim(),cid=Number($('#crClinic').value),rt=Number($('#crType').value);if(!text)return toast('Cole o texto do relatório primeiro.');
@@ -649,7 +649,7 @@ async function clearCentralReportText(){
  try{if(id)await mgmtFetch('central_report_texts?id=eq.'+id,{method:'DELETE'});box.value='';box.dataset.rowId='';$('#crTextState').textContent='Ainda não salvo';toast('Texto removido desta clínica.');}catch(e){toast('Não foi possível limpar: '+e.message)}
 }
 async function currentCentralReportText(){
- const box=$('#crReportText');if(box&&box.value.trim())return box.value.trim();const cid=Number($('#crClinic')?.value||state.selectedClinic||1),rt=Number($('#crType')?.value||2);try{const rows=await mgmtFetch('central_report_texts?select=report_text&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&limit=1');return rows[0]?.report_text||''}catch{return ''}
+ const box=$('#crReportText');if(box&&box.value.trim())return box.value.trim();const cid=Number($('#crClinic')?.value||state.selectedClinic||1),rt=Number($('#crType')?.value||2);try{const rows=await mgmtFetch('central_report_texts?select=report_text&capture_date=lte.'+isoDay()+'&clinic_id=eq.'+cid+'&return_type=eq.'+rt+'&order=capture_date.desc,updated_at.desc&limit=1');return rows[0]?.report_text||''}catch{return ''}
 }
 async function fileToDataUrl(file){return new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(file)})}
 async function uploadCentralFiles(files){
@@ -700,10 +700,12 @@ async function generateCentralMessages(){
       await centralSaveClinicAnalysis(centralRows,cl); toast('Tratativa concluída: mensagens, plano de ataque e distribuição validados e salvos.');
     }
     await loadCentralReturns();
+    return true;
   }catch(e){
     console.error('Falha na geração central',e);
     if(status)status.textContent='Erro na leitura: '+e.message;
     toast('Não foi possível concluir: '+e.message);
+    return false;
   }finally{
     btn.disabled=false;btn.textContent=returnType===1?'Gerar retorno da tarde':'Gerar tratativa completa';spin?.classList.remove('active');
   }
@@ -718,7 +720,7 @@ async function generateAllClinics(){
       if(status)status.textContent='Clínica '+(pos+1)+' de 12 · '+cl.city+' · carregando prints…';
       await loadCentralReturns();
       if(!centralRows.length){fail.push(cl.city+': sem print');continue}
-      try{await generateCentralMessages();ok++}catch(e){fail.push(cl.city+': '+e.message)}
+      try{if(await generateCentralMessages())ok++;else fail.push(cl.city+': falha na análise')}catch(e){fail.push(cl.city+': '+e.message)}
     }
     toast(ok+' clínica(s) processada(s).');
     if(status)status.textContent='Leitura geral concluída · '+ok+'/12 processadas'+(fail.length?' · '+fail.length+' pendência(s)':'');
@@ -758,7 +760,7 @@ async function loadCentralReturns(){
       }else analysisBox.innerHTML='<div class="hint analysis-wait">Os prints estão salvos. A leitura estratégica desta clínica ainda não foi registrada.</div>';
     }else analysisBox.innerHTML='';
     if(!d.screenshots.length){grid.innerHTML='<div class="empty">Nenhum print salvo para esta clínica/tipo hoje.</div>';return}
-    grid.innerHTML=d.screenshots.map((x,i)=>'<article class="card print-card return2-card"><div class="print-head"><div><strong>Print '+(i+1)+'</strong><span class="clinic-meta">'+esc(clinic(clinic_id)?.city||'')+'</span></div><button class="ghost danger" data-cr-del="'+x.id+'">Excluir</button></div><button class="report-preview-btn" data-cr-preview="'+i+'" title="Abrir relatório em tamanho grande"><img src="'+x.image_data+'" loading="lazy" alt="Print '+(i+1)+'"><span>🔎 Clique para ampliar e conferir o relatório</span></button><label class="return-message-label">Mensagem pronta para o grupo</label><textarea class="return-message-editor '+(x.message?'':'pending-message')+'" data-cr-msg="'+x.id+'" rows="7" placeholder="Clique em Gerar mensagens dos prints…">'+esc(x.message||'')+'</textarea><div class="return-actions"><button class="ghost" data-cr-save="'+x.id+'">Salvar texto</button><button class="ghost" data-cr-copy="'+i+'">Copiar mensagem</button><button class="btn primary" data-cr-pack="'+i+'" '+(x.message?'':'disabled')+'>Copiar print + mensagem</button></div></article>').join('');
+    grid.innerHTML=d.screenshots.map((x,i)=>{const derived=(x.file_name||'').startsWith('extrato-mapa-'),label=derived?'Extrato visual gerado do Mapa':'Print do sistema';return '<article class="card print-card return2-card"><div class="print-head"><div><strong>'+label+' '+(i+1)+'</strong><span class="clinic-meta">'+esc(clinic(clinic_id)?.city||'')+' · fonte '+brDate(x.capture_date)+'</span></div><button class="ghost danger" data-cr-del="'+x.id+'">Excluir</button></div><button class="report-preview-btn" data-cr-preview="'+i+'" title="Abrir relatório em tamanho grande"><img src="'+x.image_data+'" loading="lazy" alt="'+label+' '+(i+1)+'"><span>🔎 Clique para ampliar e conferir os números</span></button><label class="return-message-label">Mensagem pronta para o grupo</label><textarea class="return-message-editor '+(x.message?'':'pending-message')+'" data-cr-msg="'+x.id+'" rows="7" placeholder="Clique em Gerar mensagens dos prints…">'+esc(x.message||'')+'</textarea><div class="return-actions"><button class="ghost" data-cr-save="'+x.id+'">Salvar texto</button><button class="ghost" data-cr-copy="'+i+'">Copiar mensagem</button><button class="btn primary" data-cr-pack="'+i+'" '+(x.message?'':'disabled')+'>Copiar imagem + mensagem</button></div></article>'}).join('');
     $$('[data-cr-preview]').forEach(b=>b.onclick=()=>{const r=d.screenshots[Number(b.dataset.crPreview)];const modal=document.createElement('div');modal.className='report-preview-modal';modal.innerHTML='<div class="report-preview-toolbar"><strong>Print '+(Number(b.dataset.crPreview)+1)+' · '+esc(clinic(clinic_id)?.name||'')+'</strong><span>Use a rolagem para conferir todos os números</span><button class="btn secondary" data-close-preview>Fechar</button></div><div class="report-preview-stage"><img src="'+r.image_data+'" alt="Relatório ampliado"></div>';document.body.appendChild(modal);modal.querySelector('[data-close-preview]').onclick=()=>modal.remove();modal.onclick=e=>{if(e.target===modal)modal.remove()};});
     $$('[data-cr-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir este print?'))return;await centralFetch('/screenshots/'+b.dataset.crDel,{method:'DELETE'});await loadCentralReturns()});
     $$('[data-cr-save]').forEach(b=>b.onclick=async()=>{const msg=$('[data-cr-msg="'+b.dataset.crSave+'"]').value.trim();await centralSaveMessage(b.dataset.crSave,msg);toast('Mensagem salva');await loadCentralReturns()});
