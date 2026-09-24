@@ -3,45 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b0d12">
+<meta name="theme-color" content="#0a0d12">
+<meta name="color-scheme" content="dark">
 <title>Sala Operacional · Daniel + ChatGPT + Work</title>
 <style>
-:root{--bg:#090b10;--panel:#11141b;--panel2:#171b24;--line:#262c38;--text:#f6f7fb;--muted:#98a1b2;--accent:#d11f32;--green:#31c48d;--blue:#5d8df6;--amber:#f5b942}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#171c28 0,#090b10 42%);color:var(--text);font:15px/1.45 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+:root{
+  --bg:#080a0f;--panel:#0f131a;--panel-2:#151a23;--panel-3:#1a202b;--line:#252d3a;
+  --text:#f5f7fb;--muted:#8e98aa;--muted-2:#687386;--accent:#d82238;--accent-2:#9b1020;
+  --green:#36d39a;--blue:#6596ff;--amber:#f4b94b;--danger:#ff6f83;
+  --shadow:0 18px 60px rgba(0,0,0,.34);--radius:18px
+}
+*{box-sizing:border-box}
+html,body{height:100%;overscroll-behavior:none}
+body{margin:0;background:
+  radial-gradient(circle at 20% -10%,rgba(84,101,143,.20),transparent 36%),
+  linear-gradient(180deg,#0a0d12,#080a0f 55%);color:var(--text);
+  font:14px/1.5 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  overflow:hidden
+}
 button,input,select,textarea{font:inherit}.hidden{display:none!important}
-.shell{min-height:100vh;display:grid;grid-template-columns:320px minmax(0,1fr)}
-.side{border-right:1px solid var(--line);background:rgba(11,14,20,.92);padding:24px;position:sticky;top:0;height:100vh;overflow:auto}
-.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.mark{width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,#e4233d,#86101f);display:grid;place-items:center;font-weight:900;box-shadow:0 12px 32px #d11f3230}.eyebrow{font-size:11px;letter-spacing:.14em;color:#e46b78;font-weight:800}.brand h1{font-size:16px;margin:2px 0 0}
-.card{background:linear-gradient(180deg,#151923,#10131a);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}.card h3{font-size:13px;margin:0 0 10px}.card p{margin:0;color:var(--muted);font-size:13px}.path{padding:8px 0;border-bottom:1px solid #222734;color:#c9cfdb;font-size:12px}.path:last-child{border:0}
-.presence{display:grid;gap:9px}.person{display:flex;align-items:center;gap:9px}.dot{width:8px;height:8px;border-radius:50%;background:#485063}.person.online .dot{background:var(--green);box-shadow:0 0 0 4px #31c48d19}.person span{color:var(--muted);font-size:12px}.person strong{font-size:13px}
-.main{min-width:0;display:flex;flex-direction:column;height:100vh}.top{height:72px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:rgba(10,12,17,.82);backdrop-filter:blur(16px)}.top h2{font-size:17px;margin:0}.top small{display:block;color:var(--muted);margin-top:2px}.badge{padding:6px 10px;border:1px solid #2b3341;border-radius:999px;color:#b6bdca;font-size:11px}
-.messages{flex:1;overflow:auto;padding:24px max(24px,calc((100vw - 1180px)/2));scroll-behavior:smooth}.empty{height:100%;display:grid;place-items:center;text-align:center;color:var(--muted)}.empty strong{display:block;color:#dfe4ed;font-size:18px;margin-bottom:6px}
-.msg{display:flex;gap:11px;margin:0 0 18px;max-width:920px}.avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;font-size:12px;flex:0 0 34px;background:#242a35}.msg.ChatGPT .avatar{background:#18382f;color:#8df0c8}.msg.Work .avatar{background:#1a2d51;color:#9bbcff}.msg.Daniel .avatar{background:#4a1d24;color:#ffacb7}.bubble{min-width:0}.meta{display:flex;gap:8px;align-items:center;margin:0 0 5px}.meta strong{font-size:13px}.meta time{font-size:11px;color:#687286}.kind{font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:2px 6px;border-radius:6px;background:#252b36;color:#aeb6c4}.body{white-space:pre-wrap;word-break:break-word;color:#e8ebf1;background:#131720;border:1px solid #232936;border-radius:4px 14px 14px 14px;padding:12px 14px}.msg.direction .body{border-left:3px solid var(--amber)}.msg.report .body{border-left:3px solid var(--blue)}
-.composer{border-top:1px solid var(--line);padding:14px max(18px,calc((100vw - 1180px)/2));background:#0c0f15}.composebox{display:grid;grid-template-columns:150px 1fr auto;gap:10px;align-items:end}.composebox select,.composebox textarea{background:#141923;border:1px solid #29313f;color:var(--text);border-radius:12px;padding:11px 12px}.composebox textarea{resize:none;min-height:48px;max-height:180px}.send{border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;padding:12px 18px;cursor:pointer;min-height:48px}.send:disabled{opacity:.5}.hint{font-size:11px;color:#70798b;margin-top:7px}
-.login{position:fixed;inset:0;background:radial-gradient(circle at 50% 10%,#252b3a,#090b10 55%);z-index:50;display:grid;place-items:center;padding:20px}.loginbox{width:min(440px,100%);background:#11151d;border:1px solid #2b3240;border-radius:22px;padding:26px;box-shadow:0 30px 80px #0008}.loginbox h1{font-size:24px;margin:6px 0}.loginbox p{color:var(--muted);margin:0 0 20px}.field{display:grid;gap:7px;margin:12px 0}.field label{font-size:12px;color:#adb5c4}.field input,.field select{width:100%;background:#0c1016;border:1px solid #2a3240;color:#fff;border-radius:12px;padding:13px}.enter{width:100%;border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:900;padding:14px;margin-top:8px}.error{color:#ff8d9d;font-size:12px;min-height:18px;margin-top:10px}
-.mobileSide{display:none}
-@media(max-width:860px){.shell{grid-template-columns:1fr}.side{display:none}.mobileSide{display:inline-flex;background:#171c25;border:1px solid #2a3240;color:#fff;border-radius:10px;padding:8px 10px}.top{padding:0 14px}.messages{padding:18px 14px}.composer{padding:10px 12px}.composebox{grid-template-columns:1fr auto}.composebox select{grid-column:1/-1}.side.open{display:block;position:fixed;z-index:30;width:min(88vw,340px);left:0;top:0}.msg{max-width:100%}}
+button{touch-action:manipulation}
+.app{height:100dvh;display:grid;grid-template-columns:300px minmax(0,1fr)}
+.sidebar{height:100dvh;border-right:1px solid var(--line);background:rgba(10,13,18,.94);backdrop-filter:blur(18px);padding:18px;overflow:auto}
+.brand{display:flex;align-items:center;gap:12px;padding:4px 3px 18px}
+.mark{width:44px;height:44px;border-radius:14px;background:linear-gradient(145deg,#e02a40,#850d1c);display:grid;place-items:center;font-weight:900;box-shadow:0 10px 32px rgba(216,34,56,.28)}
+.eyebrow{font-size:10px;letter-spacing:.13em;color:#e87381;font-weight:850}
+.brand h1{margin:3px 0 0;font-size:15px;letter-spacing:-.01em}
+.panel{border:1px solid var(--line);background:linear-gradient(180deg,rgba(23,28,38,.9),rgba(15,19,26,.94));border-radius:16px;padding:14px;margin-bottom:12px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.panel h3{font-size:12px;margin:0;color:#eef1f6}.panel p{margin:0;color:var(--muted);font-size:12px}
+.count{font-size:10px;color:#9aa5b6;background:#202733;border:1px solid #2c3441;border-radius:999px;padding:3px 7px}
+.presence{display:grid;gap:8px}.person{display:flex;align-items:center;gap:10px;padding:8px;border-radius:11px}.person:hover{background:#171c25}
+.pavatar{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-weight:850;font-size:11px;background:#242b36;position:relative}
+.pavatar i{position:absolute;right:-2px;bottom:-2px;width:9px;height:9px;border-radius:50%;background:#4b5566;border:2px solid #10141b}
+.person.online .pavatar i{background:var(--green)}.person .info{min-width:0;flex:1}.person strong{display:block;font-size:12px}.person span{display:block;color:var(--muted-2);font-size:10px;margin-top:1px}
+.path{padding:9px 0;border-bottom:1px solid #222a35;color:#c2c9d4;font-size:11px}.path:last-child{border-bottom:0}
+.workspace{min-width:0;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;background:rgba(8,10,15,.45)}
+.header{min-height:68px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 20px;background:rgba(10,13,18,.78);backdrop-filter:blur(18px);z-index:5}
+.header-left{display:flex;align-items:center;gap:12px;min-width:0}.header h2{font-size:15px;margin:0;white-space:nowrap}.sub{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;margin-top:2px}.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(54,211,154,.11)}
+.header-actions{display:flex;align-items:center;gap:8px}.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid #2a3341;background:#151a23;border-radius:999px;padding:6px 9px;color:#b7c0ce;font-size:10px}.pill b{color:#f1f4f8}
+.iconbtn{display:none;border:1px solid #2b3341;background:#161b24;color:#fff;border-radius:11px;width:38px;height:38px;place-items:center}
+.timeline{overflow:auto;padding:22px clamp(16px,3vw,38px);scrollbar-width:thin;scrollbar-color:#313948 transparent}
+.timeline-inner{width:min(900px,100%);margin:0 auto}
+.day-sep{display:flex;align-items:center;gap:10px;margin:22px 0;color:#667184;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.day-sep:before,.day-sep:after{content:"";height:1px;background:#202733;flex:1}
+.empty{min-height:62vh;display:grid;place-items:center;text-align:center;color:var(--muted)}.empty-card{max-width:420px;padding:28px}.empty strong{display:block;color:#e9edf4;font-size:18px;margin-bottom:5px}.empty span{font-size:12px}
+.message{display:flex;gap:10px;margin:0 0 16px;align-items:flex-start}.message.own{flex-direction:row-reverse}.avatar{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-weight:850;font-size:11px;flex:0 0 auto;background:#272e3a}
+.message.ChatGPT .avatar{background:#17392f;color:#9cf2d1}.message.Work .avatar{background:#1a2c51;color:#a9c3ff}.message.Daniel .avatar{background:#4b1d25;color:#ffb2bb}
+.content{min-width:0;max-width:min(760px,calc(100% - 44px))}.message.own .content{display:flex;flex-direction:column;align-items:flex-end}
+.meta{display:flex;align-items:center;gap:7px;margin:0 0 5px}.message.own .meta{justify-content:flex-end}.meta strong{font-size:11px}.meta time{font-size:10px;color:#667286}
+.kind{font-size:9px;text-transform:uppercase;letter-spacing:.07em;padding:2px 6px;border-radius:999px;background:#222936;color:#aeb7c6}
+.bubble{white-space:pre-wrap;word-break:break-word;background:#141923;border:1px solid #242c38;border-radius:5px 15px 15px 15px;padding:11px 13px;color:#e9edf3;box-shadow:0 6px 24px rgba(0,0,0,.10)}
+.message.own .bubble{background:linear-gradient(180deg,#29151b,#231218);border-color:#4d2430;border-radius:15px 5px 15px 15px}
+.message.direction .bubble{border-left:3px solid var(--amber)}.message.report .bubble{border-left:3px solid var(--blue)}
+.typingbar{min-height:30px;padding:0 clamp(16px,3vw,38px);display:flex;align-items:center;background:rgba(9,12,17,.82)}
+.typingbar>div{width:min(900px,100%);margin:0 auto;color:#9ca6b7;font-size:11px;display:flex;align-items:center;gap:7px}
+.dots{display:inline-flex;gap:3px}.dots i{width:4px;height:4px;border-radius:50%;background:#8d98aa;animation:bounce 1.1s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-3px);opacity:1}}
+.composer{border-top:1px solid var(--line);background:#0c1016;padding:12px clamp(12px,3vw,30px) calc(12px + env(safe-area-inset-bottom))}
+.composer-inner{width:min(900px,100%);margin:0 auto}
+.compose-card{border:1px solid #2a3240;background:#141922;border-radius:17px;padding:9px;box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.compose-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:1px 3px 7px}.compose-top span{font-size:10px;color:#758094}
+.type-select{appearance:none;background:#1b212c;border:1px solid #2b3442;color:#dce1e9;border-radius:9px;padding:6px 28px 6px 9px;font-size:10px}
+.compose-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+textarea{width:100%;min-height:42px;max-height:150px;resize:none;overflow:auto;background:transparent;border:0;outline:0;color:#f5f7fb;padding:9px 8px;font-size:14px;line-height:1.4}
+textarea::placeholder{color:#647084}.send{width:42px;height:42px;border:0;border-radius:12px;background:linear-gradient(145deg,#df263e,#a41123);color:#fff;display:grid;place-items:center;font-size:18px;font-weight:900;cursor:pointer;box-shadow:0 8px 20px rgba(216,34,56,.22)}.send:disabled{opacity:.45;box-shadow:none}
+.login{position:fixed;inset:0;z-index:100;background:radial-gradient(circle at 50% 5%,#242c3d,#090b10 55%);display:grid;place-items:center;padding:18px}
+.login-card{width:min(430px,100%);background:linear-gradient(180deg,#141923,#0f131a);border:1px solid #2a3240;border-radius:22px;padding:24px;box-shadow:var(--shadow)}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:17px}.login-card h1{font-size:22px;margin:3px 0}.login-card p{color:var(--muted);font-size:12px;margin:0 0 18px}
+.field{display:grid;gap:6px;margin:11px 0}.field label{font-size:11px;color:#aab3c2}.field input,.field select{width:100%;background:#0b0f15;border:1px solid #2a3240;color:#fff;border-radius:12px;padding:12px 13px;outline:0}.field input:focus,.field select:focus{border-color:#556174;box-shadow:0 0 0 3px rgba(101,150,255,.08)}
+.enter{width:100%;border:0;border-radius:12px;background:linear-gradient(145deg,#df263e,#a41123);color:#fff;font-weight:850;padding:13px;margin-top:7px}.error{color:#ff8d9d;font-size:11px;min-height:18px;margin-top:9px}
+.backdrop{display:none}
+@media(max-width:820px){
+  .app{grid-template-columns:1fr}.sidebar{display:none;position:fixed;left:0;top:0;bottom:0;width:min(86vw,330px);z-index:40;box-shadow:30px 0 70px rgba(0,0,0,.5)}
+  .sidebar.open{display:block}.backdrop.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.52);backdrop-filter:blur(2px);z-index:35}
+  .iconbtn{display:grid}.header{min-height:62px;padding:8px 12px}.header h2{font-size:14px}.header-actions .pill:nth-child(1){display:none}
+  .timeline{padding:16px 12px}.content{max-width:calc(100% - 42px)}.bubble{font-size:13px;padding:10px 11px}
+  .typingbar{padding:0 12px}.composer{padding:9px 10px calc(9px + env(safe-area-inset-bottom))}.compose-card{border-radius:15px}.compose-top span{display:none}
+  .type-select{max-width:150px}.avatar{width:32px;height:32px}.message{gap:8px;margin-bottom:14px}
+}
+@media(min-width:821px) and (max-width:1100px){.app{grid-template-columns:260px minmax(0,1fr)}.sidebar{padding:14px}}
 </style>
 </head>
 <body>
 <div id="login" class="login">
-  <div class="loginbox">
-    <span class="eyebrow">SALA OPERACIONAL AO VIVO</span>
-    <h1>Daniel + ChatGPT + Work</h1>
-    <p>Coordenação dos relatórios, metas, mensageiros e planos das clínicas.</p>
-    <div class="field"><label>Quem está entrando?</label><select id="role"><option>Daniel</option><option>Work</option><option>ChatGPT</option></select></div>
-    <div class="field"><label>Código da sala</label><input id="accessKey" type="password" autocomplete="off" placeholder="Cole o código de acesso"></div>
+  <div class="login-card">
+    <div class="login-logo"><div class="mark">OE</div><div><span class="eyebrow">SALA OPERACIONAL</span><h1>Daniel + ChatGPT + Work</h1></div></div>
+    <p>Um espaço privado para coordenar relatórios, metas, mensageiros, evidências e planos das clínicas.</p>
+    <div class="field"><label>Entrar como</label><select id="role"><option>Daniel</option><option>Work</option><option>ChatGPT</option></select></div>
+    <div class="field"><label>Código da sala</label><input id="accessKey" type="password" autocomplete="off" placeholder="Digite o código de acesso"></div>
     <button id="enter" class="enter">Entrar na sala</button>
     <div id="loginError" class="error"></div>
   </div>
 </div>
 
-<div class="shell">
-  <aside id="side" class="side">
+<div id="backdrop" class="backdrop"></div>
+<div class="app">
+  <aside id="sidebar" class="sidebar">
     <div class="brand"><div class="mark">OE</div><div><span class="eyebrow">CENTRAL OPERACIONAL</span><h1>Gestão das Clínicas</h1></div></div>
-    <div class="card"><h3>Objetivo da sala</h3><p>Daniel direciona. ChatGPT estrutura a estratégia. Work consulta o Odonto, valida os dados e devolve evidências para construir mensageiros, grupos e planos de ataque.</p></div>
-    <div class="card"><h3>Participantes</h3><div id="presence" class="presence"></div></div>
-    <div class="card"><h3>Caminhos oficiais de acompanhamento</h3>
+
+    <section class="panel">
+      <div class="panel-head"><h3>Participantes</h3><span id="onlineCount" class="count">0 online</span></div>
+      <div id="presence" class="presence"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h3>Objetivo da sala</h3></div>
+      <p>Daniel direciona. ChatGPT organiza a estratégia. Work consulta o Odonto, valida os relatórios e devolve evidências para construir mensageiros, metas e planos de ataque.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h3>Caminhos oficiais</h3></div>
       <div class="path">ADM › Ranking › Resumo Supervisor</div>
       <div class="path">Franqueadora › Pastas por Equipe</div>
       <div class="path">Agenda de avaliações › ADM › Agenda › dia atual</div>
@@ -53,18 +123,36 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
       <div class="path">ADM › Franquia › desconto efetivação</div>
       <div class="path">Mapa de Trabalho itens 1 e 2 › meta das cadeiras / efetivações</div>
       <div class="path">Mapa de Trabalho item 4 › 1º agendamento Clínico Geral</div>
-    </div>
+    </section>
   </aside>
-  <main class="main">
-    <header class="top"><div style="display:flex;gap:11px;align-items:center"><button id="menu" class="mobileSide">☰</button><div><h2>Sala de estratégia</h2><small id="roomStatus">Conectando…</small></div></div><span class="badge">atualização a cada 2s</span></header>
-    <section id="messages" class="messages"><div class="empty"><div><strong>Nenhuma mensagem ainda</strong>A conversa operacional aparecerá aqui.</div></div></section>
-    <footer class="composer">
-      <div class="composebox">
-        <select id="kind"><option value="message">Mensagem</option><option value="direction">Direcionamento</option><option value="report">Relatório / evidência</option></select>
-        <textarea id="body" placeholder="Escreva uma mensagem para o grupo…"></textarea>
-        <button id="send" class="send">Enviar</button>
+
+  <main class="workspace">
+    <header class="header">
+      <div class="header-left">
+        <button id="menu" class="iconbtn" aria-label="Abrir menu">☰</button>
+        <div><h2>Sala de estratégia</h2><div class="sub"><i class="live-dot"></i><span id="roomStatus">Conectando…</span></div></div>
       </div>
-      <div class="hint">Enter envia · Shift+Enter quebra linha. Dados operacionais ficam salvos na sala.</div>
+      <div class="header-actions">
+        <span class="pill"><b id="onlineHeader">0</b> online</span>
+        <span class="pill">sincronização ao vivo</span>
+      </div>
+    </header>
+
+    <section id="timeline" class="timeline">
+      <div id="messages" class="timeline-inner">
+        <div class="empty"><div class="empty-card"><strong>A sala está pronta</strong><span>Mensagens, evidências e direcionamentos aparecerão aqui em ordem cronológica.</span></div></div>
+      </div>
+    </section>
+
+    <div id="typingbar" class="typingbar hidden"><div><span id="typingText"></span><span class="dots"><i></i><i></i><i></i></span></div></div>
+
+    <footer class="composer">
+      <div class="composer-inner">
+        <div class="compose-card">
+          <div class="compose-top"><select id="kind" class="type-select"><option value="message">Mensagem</option><option value="direction">Direcionamento</option><option value="report">Relatório / evidência</option></select><span>Enter envia · Shift+Enter quebra linha</span></div>
+          <div class="compose-row"><textarea id="body" rows="1" placeholder="Escreva para o grupo…"></textarea><button id="send" class="send" aria-label="Enviar">↑</button></div>
+        </div>
+      </div>
     </footer>
   </main>
 </div>
@@ -73,51 +161,107 @@ button,input,select,textarea{font:inherit}.hidden{display:none!important}
 const SUPA='https://ruzixytmhkduqxoslebu.supabase.co/rest/v1/rpc/';
 const APIKEY='sb_publishable_yBOiTyDqHdx02M2VYHnMRg_xEC7yGxI';
 const SLUG='daniel-chatgpt-work';
-let key='',role='Daniel',lastId=0,joined=false,pollTimer=null,pingTimer=null;
+const PEOPLE=['Daniel','ChatGPT','Work'];
+let key='',role='Daniel',lastId=0,joined=false,pollTimer=null,pingTimer=null,typingTimer=null,typingSent=false,lastDay='';
 const $=s=>document.querySelector(s);
+
 async function rpc(fn,payload){
-  const r=await fetch(SUPA+fn,{method:'POST',headers:{apikey:APIKEY,'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  if(!r.ok){let t=await r.text();throw new Error(t||('Erro '+r.status))}
-  return r.json();
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{
+    const r=await fetch(SUPA+fn,{method:'POST',headers:{apikey:APIKEY,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
+    if(!r.ok){let t=await r.text();throw new Error(t||('Erro '+r.status))}
+    return await r.json();
+  }finally{clearTimeout(timer)}
 }
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function initials(a){return a==='ChatGPT'?'AI':a==='Work'?'WK':'DL'}
-function fmt(ts){return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+function fmtTime(ts){return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+function dayKey(ts){return new Date(ts).toLocaleDateString('pt-BR')}
+function dayLabel(ts){
+  const d=new Date(ts),today=new Date(),y=new Date();y.setDate(today.getDate()-1);
+  if(d.toDateString()===today.toDateString())return 'Hoje';
+  if(d.toDateString()===y.toDateString())return 'Ontem';
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'});
+}
 function addMessages(rows){
   if(!rows?.length)return;
   const box=$('#messages');if(box.querySelector('.empty'))box.innerHTML='';
+  let appended=false;
   for(const m of rows){
     if(document.querySelector('[data-id="'+m.id+'"]'))continue;
-    const el=document.createElement('article');el.className='msg '+m.author+' '+m.kind;el.dataset.id=m.id;
-    el.innerHTML='<div class="avatar">'+initials(m.author)+'</div><div class="bubble"><div class="meta"><strong>'+escapeHtml(m.author)+'</strong><time>'+fmt(m.created_at)+'</time>'+(m.kind!=='message'?'<span class="kind">'+escapeHtml(m.kind)+'</span>':'')+'</div><div class="body">'+escapeHtml(m.body)+'</div></div>';
-    box.appendChild(el);lastId=Math.max(lastId,Number(m.id)||0);
+    const dk=dayKey(m.created_at);
+    if(dk!==lastDay){const sep=document.createElement('div');sep.className='day-sep';sep.textContent=dayLabel(m.created_at);box.appendChild(sep);lastDay=dk}
+    const el=document.createElement('article');
+    el.className='message '+m.author+' '+m.kind+(m.author===role?' own':'');
+    el.dataset.id=m.id;
+    el.innerHTML='<div class="avatar">'+initials(m.author)+'</div><div class="content"><div class="meta"><strong>'+escapeHtml(m.author)+'</strong><time>'+fmtTime(m.created_at)+'</time>'+(m.kind!=='message'?'<span class="kind">'+escapeHtml(m.kind)+'</span>':'')+'</div><div class="bubble">'+escapeHtml(m.body)+'</div></div>';
+    box.appendChild(el);lastId=Math.max(lastId,Number(m.id)||0);appended=true;
   }
-  box.scrollTop=box.scrollHeight;
+  if(appended){const tl=$('#timeline');tl.scrollTop=tl.scrollHeight;document.title='Sala Operacional · Daniel + ChatGPT + Work'}
 }
-function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function poll(){
-  if(!joined)return;
-  try{const rows=await rpc('collab_get_messages',{p_slug:SLUG,p_key:key,p_after:lastId});addMessages(rows);$('#roomStatus').textContent='Online · '+role}catch(e){$('#roomStatus').textContent='Reconectando…'}
-  try{const p=await rpc('collab_get_presence',{p_slug:SLUG,p_key:key});renderPresence(p)}catch{}
+function relative(ts){
+  if(!ts)return 'offline';
+  const s=Math.max(0,Math.floor((Date.now()-new Date(ts).getTime())/1000));
+  if(s<45)return 'online agora';if(s<120)return 'visto há 1 min';if(s<3600)return 'visto há '+Math.floor(s/60)+' min';return 'offline';
 }
 function renderPresence(rows){
-  const by=Object.fromEntries((rows||[]).map(x=>[x.author,x]));
-  $('#presence').innerHTML=['Daniel','ChatGPT','Work'].map(a=>'<div class="person '+(by[a]?.is_online?'online':'')+'"><i class="dot"></i><div><strong>'+a+'</strong><span> · '+(by[a]?.is_online?'online':'offline')+'</span></div></div>').join('');
+  const by=Object.fromEntries((rows||[]).map(x=>[x.author,x]));let online=0;
+  $('#presence').innerHTML=PEOPLE.map(a=>{const p=by[a],on=!!p?.is_online;if(on)online++;return '<div class="person '+(on?'online':'')+'"><div class="pavatar">'+initials(a)+'<i></i></div><div class="info"><strong>'+a+'</strong><span>'+relative(p?.last_seen)+'</span></div></div>'}).join('');
+  $('#onlineCount').textContent=online+' online';$('#onlineHeader').textContent=online;
 }
-async function ping(){if(!joined)return;try{await rpc('collab_ping',{p_slug:SLUG,p_key:key,p_author:role})}catch{}}
+function renderTyping(rows){
+  const active=(rows||[]).filter(x=>x.typing&&x.author!==role).map(x=>x.author);
+  if(!active.length){$('#typingbar').classList.add('hidden');return}
+  $('#typingText').textContent=active.length===1?active[0]+' está digitando':active.join(' e ')+' estão digitando';
+  $('#typingbar').classList.remove('hidden');
+}
+async function setTyping(value){
+  if(!joined||typingSent===value)return;
+  typingSent=value;
+  try{await rpc('collab_set_typing',{p_slug:SLUG,p_key:key,p_author:role,p_typing:value})}catch{}
+}
+function scheduleTypingStop(){clearTimeout(typingTimer);typingTimer=setTimeout(()=>setTyping(false),2200)}
+async function poll(){
+  if(!joined)return;
+  let healthy=true;
+  try{addMessages(await rpc('collab_get_messages',{p_slug:SLUG,p_key:key,p_after:lastId}))}catch{healthy=false}
+  try{renderPresence(await rpc('collab_get_presence',{p_slug:SLUG,p_key:key}))}catch{healthy=false}
+  try{renderTyping(await rpc('collab_get_typing',{p_slug:SLUG,p_key:key}))}catch{}
+  $('#roomStatus').textContent=healthy?'Online · '+role:'Reconectando…';
+}
+async function ping(){if(joined)try{await rpc('collab_ping',{p_slug:SLUG,p_key:key,p_author:role})}catch{}}
 async function enter(){
-  role=$('#role').value;key=$('#accessKey').value.trim();$('#loginError').textContent='';$('#enter').disabled=true;$('#enter').textContent='Entrando…';
+  role=$('#role').value;key=$('#accessKey').value.trim();$('#loginError').textContent='';$('#enter').disabled=true;$('#enter').textContent='Conectando…';
   try{
     const ok=await rpc('collab_join',{p_slug:SLUG,p_key:key});if(!ok)throw new Error('Código inválido.');
-    localStorage.setItem('oe_room_key',key);localStorage.setItem('oe_room_role',role);joined=true;$('#login').classList.add('hidden');await ping();await poll();
-    pollTimer=setInterval(poll,2000);pingTimer=setInterval(ping,15000);
-  }catch(e){$('#loginError').textContent=e.message.includes('invalid')?'Código da sala inválido.':e.message}
+    localStorage.setItem('oe_room_key',key);localStorage.setItem('oe_room_role',role);
+    joined=true;$('#login').classList.add('hidden');await ping();await poll();
+    clearInterval(pollTimer);clearInterval(pingTimer);
+    pollTimer=setInterval(poll,1200);pingTimer=setInterval(ping,12000);
+    $('#body').focus();
+  }catch(e){$('#loginError').textContent=e.name==='AbortError'?'A conexão demorou. Tente novamente.':(e.message.includes('invalid')||e.message.includes('Código')?'Código da sala inválido.':'Não foi possível entrar agora. Tente novamente.')}
   finally{$('#enter').disabled=false;$('#enter').textContent='Entrar na sala'}
 }
 async function send(){
-  const body=$('#body').value.trim();if(!body)return;const btn=$('#send');btn.disabled=true;
-  try{await rpc('collab_post_message',{p_slug:SLUG,p_key:key,p_author:role,p_body:body,p_kind:$('#kind').value});$('#body').value='';await poll()}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;$('#body').focus()}
+  const body=$('#body').value.trim();if(!body)return;
+  const btn=$('#send');btn.disabled=true;await setTyping(false);
+  try{
+    await rpc('collab_post_message',{p_slug:SLUG,p_key:key,p_author:role,p_body:body,p_kind:$('#kind').value});
+    $('#body').value='';autoGrow();await poll();
+  }catch(e){alert('Não foi possível enviar a mensagem. Verifique sua conexão e tente novamente.')}
+  finally{btn.disabled=false;$('#body').focus()}
 }
-$('#enter').onclick=enter;$('#send').onclick=send;$('#body').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}};$('#menu').onclick=()=>$('#side').classList.toggle('open');
+function autoGrow(){const t=$('#body');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,150)+'px'}
+
+$('#enter').onclick=enter;
+$('#send').onclick=send;
+$('#body').oninput=()=>{autoGrow();setTyping(true);scheduleTypingStop()};
+$('#body').onblur=()=>setTyping(false);
+$('#body').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}};
+$('#menu').onclick=()=>{$('#sidebar').classList.add('open');$('#backdrop').classList.add('show')};
+$('#backdrop').onclick=()=>{$('#sidebar').classList.remove('open');$('#backdrop').classList.remove('show')};
+window.addEventListener('beforeunload',()=>{setTyping(false)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)setTyping(false);else{ping();poll()}});
 const saved=localStorage.getItem('oe_room_key');if(saved){$('#accessKey').value=saved;$('#role').value=localStorage.getItem('oe_room_role')||'Daniel'}
 </script>
 </body>
