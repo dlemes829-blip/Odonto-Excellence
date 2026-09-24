@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<title>Sala Operacional · Daniel + ChatGPT + Work</title>
+<style>
+:root{--bg:#090b10;--panel:#11141b;--panel2:#171b24;--line:#262c38;--text:#f6f7fb;--muted:#98a1b2;--accent:#d11f32;--green:#31c48d;--blue:#5d8df6;--amber:#f5b942}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#171c28 0,#090b10 42%);color:var(--text);font:15px/1.45 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+button,input,select,textarea{font:inherit}.hidden{display:none!important}
+.shell{min-height:100vh;display:grid;grid-template-columns:320px minmax(0,1fr)}
+.side{border-right:1px solid var(--line);background:rgba(11,14,20,.92);padding:24px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.mark{width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,#e4233d,#86101f);display:grid;place-items:center;font-weight:900;box-shadow:0 12px 32px #d11f3230}.eyebrow{font-size:11px;letter-spacing:.14em;color:#e46b78;font-weight:800}.brand h1{font-size:16px;margin:2px 0 0}
+.card{background:linear-gradient(180deg,#151923,#10131a);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}.card h3{font-size:13px;margin:0 0 10px}.card p{margin:0;color:var(--muted);font-size:13px}.path{padding:8px 0;border-bottom:1px solid #222734;color:#c9cfdb;font-size:12px}.path:last-child{border:0}
+.presence{display:grid;gap:9px}.person{display:flex;align-items:center;gap:9px}.dot{width:8px;height:8px;border-radius:50%;background:#485063}.person.online .dot{background:var(--green);box-shadow:0 0 0 4px #31c48d19}.person span{color:var(--muted);font-size:12px}.person strong{font-size:13px}
+.main{min-width:0;display:flex;flex-direction:column;height:100vh}.top{height:72px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:rgba(10,12,17,.82);backdrop-filter:blur(16px)}.top h2{font-size:17px;margin:0}.top small{display:block;color:var(--muted);margin-top:2px}.badge{padding:6px 10px;border:1px solid #2b3341;border-radius:999px;color:#b6bdca;font-size:11px}
+.messages{flex:1;overflow:auto;padding:24px max(24px,calc((100vw - 1180px)/2));scroll-behavior:smooth}.empty{height:100%;display:grid;place-items:center;text-align:center;color:var(--muted)}.empty strong{display:block;color:#dfe4ed;font-size:18px;margin-bottom:6px}
+.msg{display:flex;gap:11px;margin:0 0 18px;max-width:920px}.avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;font-size:12px;flex:0 0 34px;background:#242a35}.msg.ChatGPT .avatar{background:#18382f;color:#8df0c8}.msg.Work .avatar{background:#1a2d51;color:#9bbcff}.msg.Daniel .avatar{background:#4a1d24;color:#ffacb7}.bubble{min-width:0}.meta{display:flex;gap:8px;align-items:center;margin:0 0 5px}.meta strong{font-size:13px}.meta time{font-size:11px;color:#687286}.kind{font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:2px 6px;border-radius:6px;background:#252b36;color:#aeb6c4}.body{white-space:pre-wrap;word-break:break-word;color:#e8ebf1;background:#131720;border:1px solid #232936;border-radius:4px 14px 14px 14px;padding:12px 14px}.msg.direction .body{border-left:3px solid var(--amber)}.msg.report .body{border-left:3px solid var(--blue)}
+.composer{border-top:1px solid var(--line);padding:14px max(18px,calc((100vw - 1180px)/2));background:#0c0f15}.composebox{display:grid;grid-template-columns:150px 1fr auto;gap:10px;align-items:end}.composebox select,.composebox textarea{background:#141923;border:1px solid #29313f;color:var(--text);border-radius:12px;padding:11px 12px}.composebox textarea{resize:none;min-height:48px;max-height:180px}.send{border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;padding:12px 18px;cursor:pointer;min-height:48px}.send:disabled{opacity:.5}.hint{font-size:11px;color:#70798b;margin-top:7px}
+.login{position:fixed;inset:0;background:radial-gradient(circle at 50% 10%,#252b3a,#090b10 55%);z-index:50;display:grid;place-items:center;padding:20px}.loginbox{width:min(440px,100%);background:#11151d;border:1px solid #2b3240;border-radius:22px;padding:26px;box-shadow:0 30px 80px #0008}.loginbox h1{font-size:24px;margin:6px 0}.loginbox p{color:var(--muted);margin:0 0 20px}.field{display:grid;gap:7px;margin:12px 0}.field label{font-size:12px;color:#adb5c4}.field input,.field select{width:100%;background:#0c1016;border:1px solid #2a3240;color:#fff;border-radius:12px;padding:13px}.enter{width:100%;border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:900;padding:14px;margin-top:8px}.error{color:#ff8d9d;font-size:12px;min-height:18px;margin-top:10px}
+.mobileSide{display:none}
+@media(max-width:860px){.shell{grid-template-columns:1fr}.side{display:none}.mobileSide{display:inline-flex;background:#171c25;border:1px solid #2a3240;color:#fff;border-radius:10px;padding:8px 10px}.top{padding:0 14px}.messages{padding:18px 14px}.composer{padding:10px 12px}.composebox{grid-template-columns:1fr auto}.composebox select{grid-column:1/-1}.side.open{display:block;position:fixed;z-index:30;width:min(88vw,340px);left:0;top:0}.msg{max-width:100%}}
+</style>
+</head>
+<body>
+<div id="login" class="login">
+  <div class="loginbox">
+    <span class="eyebrow">SALA OPERACIONAL AO VIVO</span>
+    <h1>Daniel + ChatGPT + Work</h1>
+    <p>Coordenação dos relatórios, metas, mensageiros e planos das clínicas.</p>
+    <div class="field"><label>Quem está entrando?</label><select id="role"><option>Daniel</option><option>Work</option><option>ChatGPT</option></select></div>
+    <div class="field"><label>Código da sala</label><input id="accessKey" type="password" autocomplete="off" placeholder="Cole o código de acesso"></div>
+    <button id="enter" class="enter">Entrar na sala</button>
+    <div id="loginError" class="error"></div>
+  </div>
+</div>
+
+<div class="shell">
+  <aside id="side" class="side">
+    <div class="brand"><div class="mark">OE</div><div><span class="eyebrow">CENTRAL OPERACIONAL</span><h1>Gestão das Clínicas</h1></div></div>
+    <div class="card"><h3>Objetivo da sala</h3><p>Daniel direciona. ChatGPT estrutura a estratégia. Work consulta o Odonto, valida os dados e devolve evidências para construir mensageiros, grupos e planos de ataque.</p></div>
+    <div class="card"><h3>Participantes</h3><div id="presence" class="presence"></div></div>
+    <div class="card"><h3>Caminhos oficiais de acompanhamento</h3>
+      <div class="path">ADM › Ranking › Resumo Supervisor</div>
+      <div class="path">Franqueadora › Pastas por Equipe</div>
+      <div class="path">Agenda de avaliações › ADM › Agenda › dia atual</div>
+      <div class="path">Cobrança › Mapa de Trabalho › Cobrança / cobrados Franquia</div>
+      <div class="path">Aplicativo › Instalações do Mês por Equipe</div>
+      <div class="path">ADM › Ranking › Agendamento Pós-Efetivação</div>
+      <div class="path">ADM › Aplicativo › Agendamento App Visão Geral</div>
+      <div class="path">Campanha Possibilidades › Amigo do Peito</div>
+      <div class="path">ADM › Franquia › desconto efetivação</div>
+      <div class="path">Mapa de Trabalho itens 1 e 2 › meta das cadeiras / efetivações</div>
+      <div class="path">Mapa de Trabalho item 4 › 1º agendamento Clínico Geral</div>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="top"><div style="display:flex;gap:11px;align-items:center"><button id="menu" class="mobileSide">☰</button><div><h2>Sala de estratégia</h2><small id="roomStatus">Conectando…</small></div></div><span class="badge">atualização a cada 2s</span></header>
+    <section id="messages" class="messages"><div class="empty"><div><strong>Nenhuma mensagem ainda</strong>A conversa operacional aparecerá aqui.</div></div></section>
+    <footer class="composer">
+      <div class="composebox">
+        <select id="kind"><option value="message">Mensagem</option><option value="direction">Direcionamento</option><option value="report">Relatório / evidência</option></select>
+        <textarea id="body" placeholder="Escreva uma mensagem para o grupo…"></textarea>
+        <button id="send" class="send">Enviar</button>
+      </div>
+      <div class="hint">Enter envia · Shift+Enter quebra linha. Dados operacionais ficam salvos na sala.</div>
+    </footer>
+  </main>
+</div>
+
+<script>
+const SUPA='https://ruzixytmhkduqxoslebu.supabase.co/rest/v1/rpc/';
+const APIKEY='sb_publishable_yBOiTyDqHdx02M2VYHnMRg_xEC7yGxI';
+const SLUG='daniel-chatgpt-work';
+let key='',role='Daniel',lastId=0,joined=false,pollTimer=null,pingTimer=null;
+const $=s=>document.querySelector(s);
+async function rpc(fn,payload){
+  const r=await fetch(SUPA+fn,{method:'POST',headers:{apikey:APIKEY,'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!r.ok){let t=await r.text();throw new Error(t||('Erro '+r.status))}
+  return r.json();
+}
+function initials(a){return a==='ChatGPT'?'AI':a==='Work'?'WK':'DL'}
+function fmt(ts){return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+function addMessages(rows){
+  if(!rows?.length)return;
+  const box=$('#messages');if(box.querySelector('.empty'))box.innerHTML='';
+  for(const m of rows){
+    if(document.querySelector('[data-id="'+m.id+'"]'))continue;
+    const el=document.createElement('article');el.className='msg '+m.author+' '+m.kind;el.dataset.id=m.id;
+    el.innerHTML='<div class="avatar">'+initials(m.author)+'</div><div class="bubble"><div class="meta"><strong>'+escapeHtml(m.author)+'</strong><time>'+fmt(m.created_at)+'</time>'+(m.kind!=='message'?'<span class="kind">'+escapeHtml(m.kind)+'</span>':'')+'</div><div class="body">'+escapeHtml(m.body)+'</div></div>';
+    box.appendChild(el);lastId=Math.max(lastId,Number(m.id)||0);
+  }
+  box.scrollTop=box.scrollHeight;
+}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function poll(){
+  if(!joined)return;
+  try{const rows=await rpc('collab_get_messages',{p_slug:SLUG,p_key:key,p_after:lastId});addMessages(rows);$('#roomStatus').textContent='Online · '+role}catch(e){$('#roomStatus').textContent='Reconectando…'}
+  try{const p=await rpc('collab_get_presence',{p_slug:SLUG,p_key:key});renderPresence(p)}catch{}
+}
+function renderPresence(rows){
+  const by=Object.fromEntries((rows||[]).map(x=>[x.author,x]));
+  $('#presence').innerHTML=['Daniel','ChatGPT','Work'].map(a=>'<div class="person '+(by[a]?.is_online?'online':'')+'"><i class="dot"></i><div><strong>'+a+'</strong><span> · '+(by[a]?.is_online?'online':'offline')+'</span></div></div>').join('');
+}
+async function ping(){if(!joined)return;try{await rpc('collab_ping',{p_slug:SLUG,p_key:key,p_author:role})}catch{}}
+async function enter(){
+  role=$('#role').value;key=$('#accessKey').value.trim();$('#loginError').textContent='';$('#enter').disabled=true;$('#enter').textContent='Entrando…';
+  try{
+    const ok=await rpc('collab_join',{p_slug:SLUG,p_key:key});if(!ok)throw new Error('Código inválido.');
+    localStorage.setItem('oe_room_key',key);localStorage.setItem('oe_room_role',role);joined=true;$('#login').classList.add('hidden');await ping();await poll();
+    pollTimer=setInterval(poll,2000);pingTimer=setInterval(ping,15000);
+  }catch(e){$('#loginError').textContent=e.message.includes('invalid')?'Código da sala inválido.':e.message}
+  finally{$('#enter').disabled=false;$('#enter').textContent='Entrar na sala'}
+}
+async function send(){
+  const body=$('#body').value.trim();if(!body)return;const btn=$('#send');btn.disabled=true;
+  try{await rpc('collab_post_message',{p_slug:SLUG,p_key:key,p_author:role,p_body:body,p_kind:$('#kind').value});$('#body').value='';await poll()}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;$('#body').focus()}
+}
+$('#enter').onclick=enter;$('#send').onclick=send;$('#body').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}};$('#menu').onclick=()=>$('#side').classList.toggle('open');
+const saved=localStorage.getItem('oe_room_key');if(saved){$('#accessKey').value=saved;$('#role').value=localStorage.getItem('oe_room_role')||'Daniel'}
+</script>
+</body>
+</html>
