@@ -2,6 +2,25 @@ const $=(s,e=document)=>e.querySelector(s), $$=(s,e=document)=>[...e.querySelect
 const CLINICS=[
 ['DIAMANTINA - MG[1031]','Diamantina','MG','1031'],['DOM PEDRITO - RS[915]','Dom Pedrito','RS','915'],['GARCA - SP[470]','Garça','SP','470'],['GUAIRA - SP[1214]','Guaíra','SP','1214'],['ILHOTA - SC[550]','Ilhota','SC','550'],['JARDIM - MS[368]','Jardim','MS','368'],['PONTA GROSSA - PR - UVARANAS[51]','Ponta Grossa - Uvaranas','PR','51'],['REGISTRO I - SP[1609]','Registro I','SP','1609'],['RIO DO SUL - SC[27]','Rio do Sul','SC','27'],["SANTA BARBARA D`OESTE - JARDIM EUROPA - SP[1658]","Santa Bárbara d'Oeste - Jardim Europa",'SP','1658'],['SIDROLANDIA - MS[307]','Sidrolândia','MS','307'],['TAQUARITINGA - SP[1655]','Taquaritinga','SP','1655']
 ].map((x,i)=>({id:i+1,name:x[0],city:x[1],state:x[2],code:x[3]}));
+// ROAD Admin > Campanha Efetivação Cadeiras > ranking Brasil, setembro/2026.
+// Consulta em 24/09/2026. Apuração em tempo real; este retrato não se atualiza sozinho.
+const ROAD_SEPTEMBER={
+ '1031':{rank:324,chairs:3,effective:50,goal:120,perChair:17},
+ '915':{rank:439,chairs:3,effective:39,goal:120,perChair:13},
+ '470':{rank:272,chairs:3,effective:55,goal:120,perChair:19},
+ '1214':{rank:585,chairs:2,effective:17,goal:80,perChair:9},
+ '550':{rank:256,chairs:2,effective:38,goal:80,perChair:19},
+ '368':{rank:42,chairs:2,effective:67,goal:80,perChair:34},
+ '51':{rank:576,chairs:3,effective:27,goal:120,perChair:9},
+ '1609':{rank:216,chairs:3,effective:63,goal:120,perChair:21},
+ '27':{rank:410,chairs:3,effective:41,goal:120,perChair:14},
+ '1658':{rank:392,chairs:2,effective:29,goal:80,perChair:15},
+ '307':{rank:321,chairs:2,effective:34,goal:80,perChair:17},
+ '1655':{rank:497,chairs:2,effective:23,goal:80,perChair:12}
+};
+// Mapa de Trabalho > Cobrança / Cobrados - Franquia; data consultada 23/09/2026.
+// Quantidades operacionais, não valores recebidos. Acima de 100% requer conferir definição do denominador.
+const COLLECTION_YESTERDAY={'1031':[170,0],'915':[113,0],'470':[214,211],'1214':[8,20],'550':[45,45],'368':[134,185],'51':[174,169],'1609':[396,388],'27':[170,173],'1658':[137,136],'307':[129,135],'1655':[81,83]};
 const defaults={minEvaluations:15,maxEvaluations:20,cgEffective:7,orthoFolders:4,acceptanceHealthy:.8,conversionHealthy:.3,appHealthy:.95,satisfactionHealthy:.9,ticketReference:3488.25};
 const paths={'Avaliações':'Admin > Indicações > Ferramenta de Conversão','Efetivações':'Rel. Administrativos > Gerentes > Avaliações','Conversão':'Admin > Indicações > Ferramenta de Conversão','Faltosos':'Agenda > Relatórios > Pacientes Faltosos','Trat. sem 1º agendamento':'Relatório de Avaliações > Tratamentos sem 1º agendamento','App':'Admin > Indicações / App','Pesquisa satisfação':'Admin > Indicações / App','Indicações/Amigo do Peito':'Admin > Indicações / App','Ortodontia':'Relatórios / Ortodontia'};
 const tools={'Avaliações':'Ferramenta de Conversão','Efetivações':'Relatório de Avaliações','Conversão':'Ferramenta de Conversão','Faltosos':'Pacientes Faltosos','Trat. sem 1º agendamento':'Relatório de Avaliações','App':'Indicações / App','Pesquisa satisfação':'Indicações / App','Indicações/Amigo do Peito':'Indicações / App','Ortodontia':'Ortodontia'};
@@ -20,7 +39,7 @@ function pct(v){return v===''||v==null?'—':`${(Number(v)*100).toFixed(1).repla
 function metric(id){return data.metrics[id]||{}}
 function plan(id){return data.plans[id]||null}
 function clinic(id){return CLINICS.find(x=>x.id==id)}
-function isoDay(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+function isoDay(d=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(d)}
 function monthKey(d=isoDay()){return d.slice(0,7)}
 function brDate(s){if(!s)return '—';const [y,m,d]=s.split('-');return `${d}/${m}/${y}`}
 function todayBR(){return new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}
@@ -51,7 +70,8 @@ function morningGroupText(cl,m,pri){
  const t=Number(m.ticket_avg||0)>0?money(m.ticket_avg):'sem atualização';
  return `Bom dia, pessoal! Na ${cl.city}, hoje vamos atacar ${pri.slice(0,3).join(', ').toLowerCase()}. Aceitação em ${a} e ticket em ${t}. O direcionamento para a recepção é trabalhar avaliações, pacientes que ainda não agendaram, pacientes sem agenda e indicações; com os profissionais, reforçar abordagem, indicação e composição dos planos. O que não avançar, me sinalizem com o nome do paciente e o que já foi feito para conseguirmos solucionar rápido.`;
 }
-async function reportTextForClinic(id){try{const r=await mgmtFetch('central_report_texts?select=report_text&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&return_type=eq.2&limit=1');return r[0]?.report_text||''}catch{return ''}}
+async function latestReportForClinic(id){try{const r=await mgmtFetch('central_report_texts?select=report_text,capture_date&capture_date=lte.'+isoDay()+'&clinic_id=eq.'+id+'&return_type=eq.2&order=capture_date.desc,updated_at.desc&limit=1');return r[0]||null}catch{return null}}
+async function reportTextForClinic(id){return (await latestReportForClinic(id))?.report_text||''}
 
 function reportSections(raw){
  const text=String(raw||'').replace(/\r/g,''),starts=[],re=/^\s*(\d{1,2})(?:\.0)?\.\s+/gm;let m;
@@ -179,169 +199,98 @@ function reportHistorySummary(current,previous,previousMonth){
 }
 
 
-function dailyGuideMessages(cl,raw,people=[],history={}){
- const x=reportCore(raw),prev=history.previous?reportCore(history.previous):null,prevMonth=history.previousMonth?reportCore(history.previousMonth):null;
- const healthyAcceptance=80,healthyConversion=30,healthyApp=95,healthyRebooking=90,healthyCollection=65,healthySatisfaction=90,healthyAgenda=80;
- const days=monthBusinessDaysRemaining(x.periodEnd),gap=x.chairProp!=null&&x.chairEff!=null?Math.max(0,x.chairProp-x.chairEff):0;
- const dailyEff=gap>0?Math.max(1,Math.ceil(gap/days)):Math.max(1,Math.ceil((x.chairs||1)*1.5));
- const ticket=x.ticket&&x.ticket>0?x.ticket:Number(data.settings.ticketReference||3488.25),dailyMoney=dailyEff*ticket;
- const evalGoal=Math.max(3,Math.ceil(dailyEff/(healthyConversion/100)));
- const orthoDaily=x.orthoPaidProp!=null&&x.orthoPaid!=null?Math.max(0,Math.ceil(Math.max(0,x.orthoPaidProp-x.orthoPaid)/days)):null;
-
- const configured=people.filter(p=>p.role_type==='receptionist'&&p.name).map(p=>p.name),fromMap=x.collaborators.map(p=>p.name);
- const names=Array.from({length:3},(_,i)=>configured[i]||fromMap[i]||('Colaboradora '+(i+1)+' · editar nome'));
-
- const t=String(raw||'').replace(/\s+/g,' ');
- const directCapture=rPct(t,[/capta[cç][aã]o[^0-9]{0,20}([\d.,]+)\s*%/i,/coleta[^0-9]{0,20}([\d.,]+)\s*%/i]);
- const convPoss=rInt(t,[/(\d+)\s+possibilidades?/i,/possibilidades?[^0-9]{0,25}(\d+)/i]);
- const convContacts=rInt(t,[/(\d+)\s+contatos?\s+de\s+\d+\s+possibilidades?/i,/contatos?[^0-9]{0,20}(\d+)\s+(?:de|\/)\s*\d+/i]);
- const capture=directCapture!=null?directCapture:(convPoss&&convContacts!=null?convContacts/convPoss*100:x.capturePct);
- const targetContacts=convPoss?Math.ceil(convPoss*.10):null;
- const contactsNeeded=targetContacts!=null&&convContacts!=null?Math.max(0,targetContacts-convContacts):Math.max(6,Math.ceil(evalGoal*.6));
- const todayAgenda=rInt(t,[/temos\s+apenas\s+(\d+)\s+avalia[cç][oõ]es?\s+na\s+agenda/i,/agenda[^0-9]{0,30}(\d+)\s+avalia[cç][oõ]es?/i]);
- const startedDayEvals=rInt(t,[/iniciamos\s+o\s+dia\s+com\s+(\d+)\s+avalia[cç][oõ]es?/i]);
- const comparison=reportHistorySummary(x,prev,prevMonth),coverage=x.audit.count+'/'+x.audit.total;
-
- const qty=(n,sing,plur)=>n+' '+(n===1?sing:plur);
- const money=v=>centralMoney(v);
- const yesterdayPlaceholder='Ontem efetivamos ___ em Clínico Geral e ___ em Ortodontia. O que houve? ';
-
- const positiveSentence=()=>{
-   const metrics=[
-     {label:'reagendamento',value:x.rebooking,target:healthyRebooking},
-     {label:'aplicativo',value:x.app,target:healthyApp},
-     {label:'aceitação',value:x.accept,target:healthyAcceptance},
-     {label:'cobrança',value:x.collectionAgent,target:healthyCollection},
-     {label:'satisfação',value:x.satisfaction,target:healthySatisfaction},
-     {label:'aproveitamento da agenda',value:x.agendaCG,target:healthyAgenda}
-   ].filter(m=>m.value!=null&&Number.isFinite(Number(m.value)));
-   if(!metrics.length)return 'Obrigado pelo empenho e pelo trabalho de ontem. Vamos manter constância e buscar evolução hoje. ';
-   metrics.sort((a,b)=>(b.value/b.target)-(a.value/a.target));
-   const best=metrics[0],v=Math.round(best.value);
-   if(best.value>=best.target)return 'Parabéns pelo '+best.label+', que está em '+v+'%, dentro do saudável. Obrigado pelo trabalho e vamos manter essa constância hoje. ';
-   return 'Parabéns pelo esforço no '+best.label+', que é hoje o indicador mais próximo da meta, em '+v+'%. Obrigado pelo trabalho; vamos avançar mais nesse ponto hoje. ';
- };
-
- const clinicContext=()=>{
-   let msg='';
-   if(startedDayEvals!=null)msg+='Iniciamos o dia com '+qty(startedDayEvals,'avaliação','avaliações')+'. ';
-   if(todayAgenda!=null)msg+='Temos '+qty(todayAgenda,'avaliação','avaliações')+' na agenda e '+(todayAgenda<evalGoal?'isso não será suficiente para a meta de hoje. ':'esse volume ajuda, mas ainda precisamos acompanhar o resultado. ');
-   msg+='A meta do dia é '+qty(dailyEff,'paciente efetivado de Clínico Geral','pacientes efetivados de Clínico Geral')+', totalizando '+money(dailyMoney)+'. ';
-   if(orthoDaily!=null)msg+='Na Ortodontia, a meta de hoje é '+qty(orthoDaily,'pasta','pastas')+'. ';
-   return msg;
- };
-
- const captureText=()=>{
-   let msg='';
-   if(capture!=null)msg+='A captação está em '+Math.round(capture)+'%. ';
-   if(capture==null||capture<10){
-     msg+='Sua meta é coletar '+qty(Math.max(1,contactsNeeded),'contato','contatos')+' hoje para aproximarmos a captação de 10%. ';
-     if(convContacts!=null&&convPoss!=null)msg+='Hoje temos '+convContacts+' contatos em '+convPoss+' possibilidades. ';
-     msg+='Trabalhe a importância da indicação em todos os atendimentos e explique o benefício disponível na clínica quando houver. Quanto mais contatos coletarmos, mais possibilidades teremos de gerar novas avaliações. ';
-   }
-   return msg;
- };
-
- const agendaText=()=>{
-   let msg='Você fica responsável pelo agendamento de avaliações hoje. Pela Ferramenta de Conversão, trabalhe os pacientes dos últimos 45 dias e agende '+qty(evalGoal,'avaliação','avaliações')+'. ';
-   msg+='Também confirme a agenda, recupere cancelamentos e faltosos e preencha os horários vagos. ';
-   if(convPoss!=null)msg+='Temos '+convPoss+' possibilidades registradas; precisamos transformar essa base em avaliações marcadas. ';
-   return msg;
- };
-
- const postSaleText=()=>{
-   let msg='Você fica responsável pelos pacientes que já fecharam e ainda precisam iniciar, pelo reagendamento e pelos pacientes sem próximo horário. ';
-   if(x.treatmentsEff!=null&&x.treatmentsStarted!=null){const left=Math.max(0,x.treatmentsEff-x.treatmentsStarted);msg+='Temos '+x.treatmentsEff+' tratamentos efetivados e '+x.treatmentsStarted+' iniciados; '+left+' ainda precisam começar. ';}
-   if(x.noAgendaCG!=null)msg+='A proporção de pacientes sem agendamento está em '+Math.round(x.noAgendaCG)+'%; trabalhe essa lista e deixe cada paciente com próximo passo definido. ';
-   if(x.rebooking!=null&&x.rebooking<healthyRebooking)msg+='O reagendamento está em '+Math.round(x.rebooking)+'%, abaixo dos 90% saudáveis, então esse ponto precisa de atenção hoje. ';
-   if(x.app!=null&&x.app<healthyApp)msg+='O aplicativo está em '+Math.round(x.app)+'%; precisamos buscar os 95% saudáveis no fechamento do atendimento. ';
-   return msg;
- };
-
- const acceptanceText=()=>x.accept!=null&&x.accept<healthyAcceptance
-   ?'A aceitação está em '+Math.round(x.accept)+'%, abaixo dos 80% saudáveis; acompanhe cada avaliação que não fechou, entenda o motivo e me retorne os casos. '
-   :'';
-
- const individual=names.map((n,i)=>{
-   let msg='Bom dia '+n+', tudo bem? '+yesterdayPlaceholder+clinicContext();
-   if(i===0){
-     msg+=agendaText();
-     msg+='Essa é sua meta principal do dia: '+qty(evalGoal,'avaliação agendada','avaliações agendadas')+'. ';
-   }else if(i===1){
-     msg+=captureText();
-     msg+='Sua meta principal é aumentar a entrada de contatos e indicações para gerar novas possibilidades de avaliação. ';
-   }else{
-     msg+=postSaleText();
-     msg+='Sua meta principal é não deixar paciente efetivado sem início e não deixar paciente atendido sem próximo horário definido. ';
-   }
-   msg+=acceptanceText();
-   msg+=positiveSentence();
-   msg+='Vamos manter constância no dia de hoje, combinado? Você sabe qual é o percentual saudável da aceitação?';
-   return {recipient:n,title:'Mensageiro da manhã · '+n,message:msg};
- });
-
- let group='Bom dia, equipe. '+yesterdayPlaceholder+clinicContext();
- group+='Hoje as tarefas ficam divididas assim: '+names[0]+' fica responsável por agendar '+evalGoal+' avaliações pela Ferramenta de Conversão dos últimos 45 dias, além de confirmações, cancelamentos e faltosos; ';
- group+=names[1]+' fica responsável pela coleta de contatos e indicações, com meta de '+Math.max(1,contactsNeeded)+' contatos; ';
- group+=names[2]+' fica responsável pelos pacientes que fecharam e ainda não iniciaram, reagendamento, pacientes sem próximo horário e aplicativo. ';
- if(x.accept!=null)group+='A aceitação está em '+Math.round(x.accept)+'% e o saudável é 80%. ';
- group+=positiveSentence();
- if(comparison)group+='Comparando com a leitura anterior: '+comparison+'. ';
- group+='Obrigado pelo trabalho de todas. À tarde vamos conferir o realizado de cada tarefa e o que ainda falta para a meta.';
-
- const retIndividuals=names.map((n,i)=>{
-   let task='';
-   if(i===0)task='Pela manhã sua meta era agendar '+evalGoal+' avaliações pela Ferramenta de Conversão e recuperar cancelamentos/faltosos. Me retorne quantas avaliações agendou, quantas confirmações fez e quantos horários conseguiu preencher.';
-   else if(i===1)task='Pela manhã sua meta era coletar '+Math.max(1,contactsNeeded)+' contatos e aumentar as indicações. Me retorne quantos contatos coletou, quantas indicações conseguiu e quantas já viraram possibilidade de avaliação.';
-   else task='Pela manhã sua responsabilidade era trabalhar pacientes efetivados sem início, reagendamento, pacientes sem próximo horário e aplicativo. Me retorne quantos pacientes iniciou, quantos reagendou, quantos ficaram com próximo horário definido e como ficou o aplicativo.';
-   return {recipient:n,title:'Retorno individual · '+n,message:'Boa tarde '+n+'. '+task+' O que ficou abaixo da meta precisa sair deste retorno com uma ação definida para hoje.'};
- });
-
- const ret='Boa tarde, equipe. Na manhã definimos meta de '+dailyEff+' efetivações de Clínico Geral, '+money(dailyMoney)+(orthoDaily!=null?' e '+orthoDaily+' pasta(s) de Ortodontia':'')+'. '+names[0]+' ficou com agendamento de avaliações, '+names[1]+' com coleta de contatos e indicações, e '+names[2]+' com pacientes efetivados sem início, reagendamento e pacientes sem próximo horário. Agora preciso do realizado de cada uma. O que faltar será redistribuído para buscarmos o resultado até o fim do dia.';
-
- const treatment='Tratativa estratégica · '+cl.city+'. Relatório completo com '+coverage+' itens detectados. Meta proporcional de cadeira: '+(x.chairProp??'—')+'; efetivados: '+(x.chairEff??x.eff??'—')+'; faltam '+gap+'. Meta de hoje: '+dailyEff+' efetivações, '+money(dailyMoney)+(orthoDaily!=null?' e '+orthoDaily+' pasta(s) de Ortodontia':'')+'. Distribuição: '+names[0]+' — agendamento de '+evalGoal+' avaliações; '+names[1]+' — coleta de '+Math.max(1,contactsNeeded)+' contatos e indicações; '+names[2]+' — pacientes efetivados sem início, reagendamento, pacientes sem próximo horário e aplicativo. Aceitação '+(x.accept??'—')+'% (saudável 80%); faltosos '+(x.absenteesPct??'—')+'%; reagendamento '+(x.rebooking??'—')+'%; aplicativo '+(x.app??'—')+'%. Comparativo: '+(comparison||'sem histórico suficiente para comparação segura')+'.';
-
+function dailyGuideMessages(cl,raw,people=[],history={},sourceDate=isoDay()){
+ const x=reportCore(raw),prev=history.previous?reportCore(history.previous):null;
+ const days=monthBusinessDaysRemaining(x.periodEnd);
+ const chairGoal=x.chairMonthly??(x.chairs?x.chairs*40:null);
+ const chairGap=chairGoal!=null&&x.chairEff!=null?Math.max(0,chairGoal-x.chairEff):null;
+ const chairDaily=chairGap!=null?Math.ceil(chairGap/days):null;
+ const financialGap=x.cgGoalMoney!=null&&x.cgEffectiveMoney!=null?Math.max(0,x.cgGoalMoney-x.cgEffectiveMoney):null;
+ const financialDaily=financialGap!=null?financialGap/days:null;
+ const orthoGap=x.orthoPaidGoal!=null&&x.orthoPaid!=null?Math.max(0,x.orthoPaidGoal-x.orthoPaid):null;
+ const orthoDaily=orthoGap!=null?Math.ceil(orthoGap/days):null;
+ const road=ROAD_SEPTEMBER[cl.code];
+ const reception=people.filter(p=>p.role_type==='receptionist'&&p.name).map(p=>p.name.trim());
+ const team=reception.length?reception:['Recepção'];
+ const source='Mapa de Trabalho: período até '+brDate(x.periodEnd)+'; captura '+brDate(sourceDate);
+ const roadText=road?'ROAD setembro, consulta 24/09: '+road.effective+'/'+road.goal+' efetivações; posição '+road.rank+' de 801; '+road.perChair+' por cadeira. ':'ROAD não conferida para esta unidade. ';
+ const collection=COLLECTION_YESTERDAY[cl.code],collectionText=collection?'Cobrança 23/09: '+collection[0]+' cobranças / '+collection[1]+' cobrados'+(collection[1]===0?' (conferir ausência de registro)':'')+(collection[1]>collection[0]?' (conferir critério da contagem)':'')+'. ':'';
+ const lastDay=prev&&history.previousDate&&x.periodEnd&&prev.periodEnd&&history.previousDate<sourceDate&&prev.periodEnd<x.periodEnd&&prev.periodEnd.slice(0,7)===x.periodEnd.slice(0,7);
+ const deltaCG=lastDay&&x.eff!=null&&prev.eff!=null&&x.eff>=prev.eff?x.eff-prev.eff:null;
+ const deltaOrtho=lastDay&&x.orthoEvalEff!=null&&prev.orthoEvalEff!=null&&x.orthoEvalEff>=prev.orthoEvalEff?x.orthoEvalEff-prev.orthoEvalEff:null;
+ const yesterday=deltaCG!=null?'Entre '+brDate(prev.periodEnd)+' e '+brDate(x.periodEnd)+': '+deltaCG+' efetivação(ões) em Clínico Geral'+(deltaOrtho!=null?' e '+deltaOrtho+' em Ortodontia':'')+'. ':'';
+ const chairLine=chairGoal!=null&&x.chairEff!=null?'Cadeiras: '+x.chairEff+'/'+chairGoal+' no mês; faltam '+chairGap+(chairDaily!=null?'; ritmo necessário de '+chairDaily+' efetivação(ões) por dia útil restante':'')+'. ':'';
+ const moneyLine=x.cgGoalMoney!=null&&x.cgEffectiveMoney!=null?'Clínico Geral: '+centralMoney(x.cgEffectiveMoney)+' de '+centralMoney(x.cgGoalMoney)+' no mês; diferença '+centralMoney(financialGap)+(financialDaily!=null?'; ritmo '+centralMoney(financialDaily)+'/dia útil':'')+'. ':'';
+ const orthoLine=orthoGap!=null?'Pastas pagas Orto: faltam '+orthoGap+' no mês'+(orthoDaily!=null?' ('+orthoDaily+'/dia útil)':'')+'. ':'';
+ const evidence=chairLine+moneyLine+orthoLine+roadText;
+ const weak=[];
+ if(x.accept!=null&&x.accept<80)weak.push('aceitação '+Math.round(x.accept)+'%');
+ if(x.app!=null&&x.app<95)weak.push('app '+Math.round(x.app)+'%');
+ if(x.rebooking!=null&&x.rebooking<90)weak.push('reagendamento '+Math.round(x.rebooking)+'%');
+ if(x.treatmentsEff!=null&&x.treatmentsStarted!=null&&x.treatmentsEff>x.treatmentsStarted)weak.push((x.treatmentsEff-x.treatmentsStarted)+' tratamentos efetivados sem início');
+ const focus=weak.length?'Pontos para verificar: '+weak.slice(0,3).join(', ')+'. ':'Confira agenda, confirmação e oportunidades ainda abertas. ';
+ const fronts=[
+  'Revisar Ferramenta de Conversão, confirmar avaliações e recuperar faltosos; informar agendamentos, comparecimentos e oportunidades sem resposta.',
+  'Revisar avaliações sem fechamento e objeções; registrar devolutivas e encaminhar propostas ao responsável pela negociação.',
+  'Checar tratamentos efetivados sem primeiro horário, reagendamentos e indicação/app; registrar cada próximo passo.'
+ ];
+ const assignments=team.map((n,i)=>({name:n,task:fronts[i%fronts.length]}));
+ if(team.length===1)assignments[0].task=fronts.join(' ');
+ const individual=assignments.map(a=>({recipient:a.name,title:'Mensageiro · '+a.name,message:'Bom dia, '+a.name+'. '+source+'. '+yesterday+evidence+focus+'Sua frente hoje: '+a.task+' Me envie uma parcial no meio do dia e o resultado no fim do expediente, com números e obstáculos para destravarmos juntos.'}));
+ const group='Bom dia, equipe e franqueados de '+cl.city+'. '+source+'. '+yesterday+evidence+focus+'Plano de hoje: '+assignments.map(a=>a.name+' — '+a.task).join(' ')+' Se houver gargalo de agenda ou negociação, sinalizem cedo para redistribuirmos. Enviem parcial à tarde: avaliações agendadas/comparecidas, efetivações, inícios e pendências.';
+ const retIndividuals=assignments.map(a=>({recipient:a.name,title:'Retorno · '+a.name,message:'Boa tarde, '+a.name+'. Conforme o combinado: '+a.task+' Me diga o realizado, o que ficou pendente, motivo e próximo horário de ação. Se precisar de apoio do franqueado ou da supervisão, me sinalize.'}));
+ const ret='Boa tarde, equipe de '+cl.city+'. Na leitura de '+brDate(x.periodEnd)+', '+chairLine+moneyLine+'Por favor, enviem a parcial por frente: avaliações agendadas e comparecidas, CG e Orto efetivados, tratamentos iniciados e pendências com próximo passo. Vamos escolher as oportunidades viáveis para concluir hoje.';
+ const treatment='Diagnóstico · '+cl.city+' ('+source+'). Auditoria '+x.audit.count+'/21 itens; item 15 ausente na exportação. '+evidence+collectionText+focus+'Equipes: '+assignments.map(a=>a.name+' — '+a.task).join(' ')+' Comparação de períodos: '+(lastDay?reportHistorySummary(x,prev,null):'sem leitura anterior comparável para o período')+'. Critério: cadeira é contagem de efetivações; meta financeira de CG é em reais, calculada separadamente. O ROAD possui apuração própria; não igualar seus totais ao Mapa. Validar capacidade e números de hoje antes do envio.';
  return {individual,retIndividuals,group,ret,treatment,audit:x.audit,metrics:x};
 }
 async function reportHistoryForClinic(id){
  try{
    const rows=await mgmtFetch('central_report_texts?select=capture_date,report_text,updated_at&clinic_id=eq.'+id+'&return_type=eq.2&order=capture_date.desc,updated_at.desc&limit=60');
    const today=isoDay(),currentMonth=today.slice(0,7);
-   const previous=rows.find(x=>x.capture_date<today)?.report_text||'';
+   const previousRow=rows.find(x=>x.capture_date<today);
+   const previous=previousRow?.report_text||'';
    const previousMonth=rows.find(x=>String(x.capture_date||'').slice(0,7)<currentMonth)?.report_text||'';
-   return {previous,previousMonth};
+   return {previous,previousDate:previousRow?.capture_date||'',previousMonth};
  }catch{return {previous:'',previousMonth:''}}
 }
 async function saveDailyGuides(id){
- const cl=clinic(id),raw=await reportTextForClinic(id);if(!raw)return toast('Salve primeiro o texto completo do relatório desta clínica.');
+ const cl=clinic(id),latest=await latestReportForClinic(id),raw=latest?.report_text;if(!raw)throw new Error('Sem Mapa de Trabalho salvo para '+cl.city+'.');
  const audit=reportAudit21(raw);
- if(audit.count<15)throw new Error('O relatório parece incompleto: apenas '+audit.count+' dos 21 itens foram detectados. Cole o Mapa de Trabalho completo antes de gerar.');
+ if(audit.count<20||audit.missing.some(n=>n!==15))throw new Error('Relatório com '+audit.count+'/21 itens: faltam '+audit.missing.join(', ')+'. Confira o Mapa antes de gerar.');
+ const parsed=reportCore(raw);
+ if(parsed.clinicCode!==cl.code)throw new Error('Código da franquia no relatório ('+(parsed.clinicCode||'ausente')+') difere de '+cl.code+'. Revise a clínica selecionada.');
+ if(!parsed.periodEnd||parsed.periodEnd.slice(0,7)!==isoDay().slice(0,7))throw new Error('O relatório não corresponde ao mês corrente. Atualize a fonte antes de gerar.');
  let people=[];try{people=await mgmtFetch('management_people?select=role_type,name,functions&clinic_id=eq.'+id+'&active=eq.true')}catch{}
- const history=await reportHistoryForClinic(id),g=dailyGuideMessages(cl,raw,people,history);
+ const history=await reportHistoryForClinic(id),g=dailyGuideMessages(cl,raw,people,history,latest.capture_date);
  const rows=[...g.individual.map(x=>({section:'morning_messenger',...x})),...g.retIndividuals.map(x=>({section:'afternoon_return',...x})),{section:'morning_group',recipient:'group',title:'Grupo · manhã',message:g.group},{section:'afternoon_return',recipient:'group',title:'Retorno da tarde',message:g.ret},{section:'treatment',recipient:'group',title:'Tratativa estratégica',message:g.treatment}];
  for(const r of rows){const body={guide_date:isoDay(),clinic_id:id,section:r.section,recipient:r.recipient,title:r.title,message:r.message,action_plan:r.section==='treatment'?r.message:''};const old=await mgmtFetch('daily_clinic_guides?select=id&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+encodeURIComponent(r.section)+'&recipient=eq.'+encodeURIComponent(r.recipient)+'&order=id.desc&limit=20');if(old[0]){await mgmtFetch('daily_clinic_guides?id=eq.'+old[0].id,{method:'PATCH',body:JSON.stringify(body)});for(const stale of old.slice(1))await mgmtFetch('daily_clinic_guides?id=eq.'+stale.id,{method:'DELETE'})}else await mgmtFetch('daily_clinic_guides',{method:'POST',body:JSON.stringify(body)})}
- toast('Mapa completo lido ('+audit.count+'/21) e mensageiros recalculados para '+cl.city+'.');
+ toast('Mapa '+brDate(latest.capture_date)+' ('+audit.count+'/21; item 15 ausente na exportação) e mensagens recalculadas para '+cl.city+'.');
 }
 async function guideCards(id,section){
  const rows=await mgmtFetch('daily_clinic_guides?select=*&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+section+'&order=id.desc');
  const seen=new Set(),latest=[];for(const r of rows){const k=String(r.recipient||'group').toLowerCase();if(seen.has(k))continue;seen.add(k);latest.push(r)}
  latest.reverse();
- return latest.map(r=>'<div class="card guide-output"><div class="section-head"><div><strong>'+esc(r.title)+'</strong><div class="clinic-meta">'+esc(r.recipient)+'</div></div><button class="ghost" data-copy-guide="'+r.id+'">Copiar</button></div><div class="message-box">'+esc(r.message)+'</div><label class="btn secondary">Adicionar imagem<input class="hidden guide-image" data-guide-image="'+r.id+'" type="file" accept="image/*"></label>'+(r.image_data?'<img class="guide-preview" src="'+r.image_data+'">':'')+'</div>').join('')}
-async function bindGuideCards(){$$('[data-merge-guides]').forEach(b=>b.onclick=async()=>{const id=Number(b.dataset.mergeGuides),section=b.dataset.section,rows=await mgmtFetch('daily_clinic_guides?select=*&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+section+'&order=id.asc'),ind=rows.filter(x=>x.recipient!=='group');if(!ind.length)return toast('Nenhuma mensagem individual para unir.');const merged=ind.map((x,i)=>'Tarefa '+(i+1)+' · '+x.recipient+'\n'+x.message).join('\n\n');const body={guide_date:isoDay(),clinic_id:id,section,recipient:'Equipe unificada',title:'Tarefas unificadas · 3 colaboradoras',message:merged,action_plan:'Executar as três frentes em conjunto e redistribuir internamente.',updated_at:new Date().toISOString()};const old=await mgmtFetch('daily_clinic_guides?select=id&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+section+'&recipient=eq.'+encodeURIComponent('Equipe unificada')+'&limit=1');if(old[0])await mgmtFetch('daily_clinic_guides?id=eq.'+old[0].id,{method:'PATCH',body:JSON.stringify(body)});else await mgmtFetch('daily_clinic_guides',{method:'POST',body:JSON.stringify(body)});toast('As três tarefas foram unidas em uma mensagem.');renderPage()});$$('[data-copy-guide]').forEach(b=>b.onclick=()=>copyText(b.closest('.guide-output').querySelector('.message-box').textContent));$$('[data-guide-image]').forEach(inp=>inp.onchange=async()=>{const f=inp.files?.[0];if(!f)return;const d=await fileToDataUrl(f);await mgmtFetch('daily_clinic_guides?id=eq.'+inp.dataset.guideImage,{method:'PATCH',body:JSON.stringify({image_data:d,updated_at:new Date().toISOString()})});toast('Imagem anexada à mensagem.');renderPage()})}
+ return latest.map(r=>'<div class="card guide-output"><div class="section-head"><div><strong>'+esc(r.title)+'</strong><div class="clinic-meta">'+esc(r.recipient)+'</div></div><div class="actions"><button class="ghost" data-save-guide="'+r.id+'">Salvar edição</button><button class="ghost" data-copy-guide="'+r.id+'">Copiar</button></div></div><textarea class="message-box" rows="8" data-guide-text="'+r.id+'">'+esc(r.message)+'</textarea><label class="btn secondary">Adicionar imagem<input class="hidden guide-image" data-guide-image="'+r.id+'" type="file" accept="image/*"></label>'+(r.image_data?'<img class="guide-preview" src="'+r.image_data+'">':'')+'</div>').join('')}
+async function bindGuideCards(){$$('[data-merge-guides]').forEach(b=>b.onclick=async()=>{const id=Number(b.dataset.mergeGuides),section=b.dataset.section,rows=await mgmtFetch('daily_clinic_guides?select=*&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+section+'&order=id.asc'),ind=rows.filter(x=>x.recipient!=='group');if(!ind.length)return toast('Nenhuma mensagem individual para unir.');const merged=ind.map((x,i)=>'Tarefa '+(i+1)+' · '+x.recipient+'\n'+x.message).join('\n\n');const body={guide_date:isoDay(),clinic_id:id,section,recipient:'Equipe unificada',title:'Tarefas unificadas · equipe',message:merged,action_plan:'Redistribuir as frentes conforme a equipe disponível.',updated_at:new Date().toISOString()};const old=await mgmtFetch('daily_clinic_guides?select=id&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+section+'&recipient=eq.'+encodeURIComponent('Equipe unificada')+'&limit=1');if(old[0])await mgmtFetch('daily_clinic_guides?id=eq.'+old[0].id,{method:'PATCH',body:JSON.stringify(body)});else await mgmtFetch('daily_clinic_guides',{method:'POST',body:JSON.stringify(body)});toast('Tarefas reunidas em uma mensagem.');renderPage()});$$('[data-copy-guide]').forEach(b=>b.onclick=()=>copyText(b.closest('.guide-output').querySelector('.message-box').value));$$('[data-save-guide]').forEach(b=>b.onclick=async()=>{const box=b.closest('.guide-output').querySelector('.message-box');await mgmtFetch('daily_clinic_guides?id=eq.'+b.dataset.saveGuide,{method:'PATCH',body:JSON.stringify({message:box.value,updated_at:new Date().toISOString()})});toast('Edição salva')});$$('[data-guide-image]').forEach(inp=>inp.onchange=async()=>{const f=inp.files?.[0];if(!f)return;const d=await fileToDataUrl(f);await mgmtFetch('daily_clinic_guides?id=eq.'+inp.dataset.guideImage,{method:'PATCH',body:JSON.stringify({image_data:d,updated_at:new Date().toISOString()})});toast('Imagem anexada à mensagem.');renderPage()})}
 function reportTextGeneratorPanel(id,section){return '<div class="card report-text-card inline-generator"><div class="section-head"><div><h3>Leitura completa · Mapa de Trabalho</h3><div class="clinic-meta">Cole o relatório inteiro. O sistema audita os itens, calcula metas e só então monta as mensagens.</div></div><span id="quickAuditBadge" class="badge blue">aguardando relatório</span></div><textarea id="quickReportText" rows="10" placeholder="Cole aqui o Mapa de Trabalho completo da clínica, do item 1 ao 21…"></textarea><div id="quickAuditDetails" class="hint" style="margin:8px 0"></div><div class="actions"><button id="quickSaveReport" class="btn secondary">Salvar relatório</button><button id="quickGenerateReport" class="btn primary">Auditar + gerar '+(section==='morning'?'mensageiro e grupo':section==='return'?'retorno da tarde':'tratativa')+'</button></div><span id="quickReportState" class="hint"></span></div>'}
 async function bindReportTextGenerator(id,section){
  const box=$('#quickReportText'),st=$('#quickReportState'),badge=$('#quickAuditBadge'),details=$('#quickAuditDetails');if(!box)return;
  const refreshAudit=()=>{const text=box.value.trim();if(!text){if(badge)badge.textContent='aguardando relatório';if(details)details.textContent='';return}const a=reportAudit21(text),core=reportCore(text);if(badge)badge.textContent=a.count+'/21 itens detectados';if(details){const misses=a.missing.length?' · ausentes: '+a.missing.join(', '):'';details.textContent='Clínica: '+(core.clinicLabel||'não identificada')+' · cadeiras: '+(core.chairs??'—')+' · aceitação: '+(core.accept??'—')+'% · meta proporcional: '+(core.chairProp??'—')+' · efetivados: '+(core.chairEff??core.eff??'—')+misses;}};
  box.addEventListener('input',refreshAudit);
- try{const rows=await mgmtFetch('central_report_texts?select=id,report_text,updated_at&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&return_type=eq.2&limit=1');box.value=rows[0]?.report_text||'';box.dataset.rowId=rows[0]?.id||'';st.textContent=rows[0]?'Relatório salvo hoje':'Cole o relatório completo';refreshAudit();}catch(e){st.textContent='Não foi possível carregar o relatório';}
+ try{const rows=await mgmtFetch('central_report_texts?select=id,report_text,capture_date,updated_at&capture_date=lte.'+isoDay()+'&clinic_id=eq.'+id+'&return_type=eq.2&order=capture_date.desc,updated_at.desc&limit=1');box.value=rows[0]?.report_text||'';box.dataset.rowId=rows[0]?.capture_date===isoDay()?rows[0].id:'';st.textContent=rows[0]?'Fonte disponível: '+brDate(rows[0].capture_date)+(rows[0].capture_date===isoDay()?' · salva hoje':' · copie e salve para atualizar a captura'):'Cole o relatório completo';refreshAudit();}catch(e){st.textContent='Não foi possível carregar o relatório';}
  async function persist(){const text=box.value.trim();if(!text)throw new Error('Cole o relatório primeiro.');const body={capture_date:isoDay(),clinic_id:id,return_type:2,report_text:text,updated_at:new Date().toISOString()};if(box.dataset.rowId)await mgmtFetch('central_report_texts?id=eq.'+box.dataset.rowId,{method:'PATCH',body:JSON.stringify(body)});else{const r=await mgmtFetch('central_report_texts',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(body)});box.dataset.rowId=r[0]?.id||''}st.textContent='Texto salvo';}
  $('#quickSaveReport').onclick=async()=>{try{await persist();toast('Texto salvo nesta clínica.')}catch(e){toast(e.message)}};
  $('#quickGenerateReport').onclick=async()=>{const b=$('#quickGenerateReport');b.disabled=true;try{await persist();await saveDailyGuides(id);toast('Leitura concluída e mensagens atualizadas.');renderPage()}catch(e){toast('Falha na leitura: '+e.message)}finally{b.disabled=false}};
 }
+function roadPanel(){
+ if(isoDay().slice(0,7)!=='2026-09')return '';
+ const rows=CLINICS.map(cl=>({cl,...ROAD_SEPTEMBER[cl.code]})).sort((a,b)=>(a.goal-a.effective)-(b.goal-b.effective));
+ return '<details class="card" open><summary><strong>ROAD · Brasil · setembro/2026 · 12 clínicas</strong></summary><p class="hint">Retrato consultado em 24/09; ranking ao vivo pode mudar. Meta de 40 efetivações por cadeira no mês. O Mapa de Trabalho usa outra apuração. Priorize Jardim para fechar a meta; nas demais, recupere agenda e propostas com base na capacidade real.</p><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>Clínica</th><th>Posição/801</th><th>ROAD</th><th>Por cadeira</th><th>Faltam para meta</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.cl.city)+'</td><td>'+r.rank+'</td><td>'+r.effective+'/'+r.goal+'</td><td>'+r.perChair+'</td><td>'+Math.max(0,r.goal-r.effective)+'</td></tr>').join('')+'</tbody></table></div></details>';
+}
 
 async function renderPeriod1(c){
- const id=state.selectedClinic||1,cl=clinic(id);c.innerHTML='<div class="page-intro"><div><span class="eyebrow">MANHÃ</span><h3>Primeiro mensageiro + grupo</h3><p>Leitura completa do Mapa de Trabalho, cálculo de metas e divisão padrão em 3 colaboradoras.</p></div><select id="p1Clinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+reportTextGeneratorPanel(id,'morning')+'<div class="actions"><button id="generateDaily" class="btn primary">Gerar/atualizar guia desta clínica</button><button id="generateAllMorning" class="btn secondary">Gerar manhã das 12 clínicas</button></div><div id="morningGuides"></div>';
- $('#p1Clinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderPeriod1(c)};$('#generateDaily').onclick=async()=>{await saveDailyGuides(id);renderPeriod1(c)};$('#generateAllMorning').onclick=async()=>{const b=$('#generateAllMorning');b.disabled=true;b.textContent='Gerando 12 clínicas…';let ok=0,missing=[];try{for(const clx of CLINICS){const raw=await reportTextForClinic(clx.id);if(!raw){missing.push(clx.city);continue}try{await saveDailyGuides(clx.id);ok++}catch(e){missing.push(clx.city)}}toast(ok+' clínica(s) atualizada(s)'+(missing.length?' · '+missing.length+' pendência(s)':''));await renderPeriod1(c)}finally{b.disabled=false;b.textContent='Gerar manhã das 12 clínicas'}};await bindReportTextGenerator(id,'morning');
+ const id=state.selectedClinic||1,cl=clinic(id);c.innerHTML='<div class="page-intro"><div><span class="eyebrow">MANHÃ</span><h3>Primeiro mensageiro + grupo</h3><p>Mapa de Trabalho com 21 itens, metas distintas de cadeiras e faturamento e equipe cadastrada.</p></div><select id="p1Clinic">'+CLINICS.map(x=>'<option value="'+x.id+'" '+(x.id===id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></div>'+roadPanel()+reportTextGeneratorPanel(id,'morning')+'<div class="actions"><button id="generateDaily" class="btn primary">Gerar/atualizar guia desta clínica</button><button id="generateAllMorning" class="btn secondary">Gerar manhã das 12 clínicas</button></div><div id="morningGuides"></div>';
+ $('#p1Clinic').onchange=e=>{state.selectedClinic=Number(e.target.value);renderPeriod1(c)};$('#generateDaily').onclick=async()=>{try{await saveDailyGuides(id);renderPeriod1(c)}catch(e){toast(e.message)}};$('#generateAllMorning').onclick=async()=>{const b=$('#generateAllMorning');b.disabled=true;b.textContent='Gerando 12 clínicas…';let ok=0,missing=[];try{for(const clx of CLINICS){try{await saveDailyGuides(clx.id);ok++}catch(e){missing.push(clx.city+': '+e.message)}}toast(ok+' clínica(s) atualizada(s)'+(missing.length?' · '+missing.length+' pendência(s)':''));if(missing.length)$('#morningGuides').insertAdjacentHTML('afterbegin','<div class="hint">Pendências: '+esc(missing.join(' | '))+'</div>');else await renderPeriod1(c)}finally{b.disabled=false;b.textContent='Gerar manhã das 12 clínicas'}};await bindReportTextGenerator(id,'morning');
  const a=await guideCards(id,'morning_messenger'),b=await guideCards(id,'morning_group');$('#morningGuides').innerHTML='<div class="actions"><button class="btn secondary" data-merge-guides="'+id+'" data-section="morning_messenger">Unir tarefas das 3 colaboradoras</button></div><div class="guide-strip"><div><strong>Mensageiro individual</strong><span>Meta própria, vínculo e plano do dia.</span></div><div><strong>Grupo</strong><span>Leitura estratégica + solução + acompanhamento.</span></div></div><h3>Mensageiros</h3>'+a+'<h3>Grupo</h3>'+b;await bindGuideCards();
 }
 function savePeriod1(id){const cl=clinic(id),m=metric(id),pri=priorities(m),rows=$$('.p1-row');const staff=rows.map((row,i)=>({name:$('.p1-name',row).value.trim(),resp:$('.p1-resp',row).value,target:$('.p1-target',row).value,message:$('.message-box',row).textContent}));data.staff[id]=staff.map(({name,resp,target})=>({name,resp,target}));const day=isoDay(),existing=data.period1History.findIndex(x=>x.day===day&&x.clinic_id===id);const rec={id:existing>=0?data.period1History[existing].id:`p1-${Date.now()}-${id}`,day,month:monthKey(day),createdAt:new Date().toISOString(),clinic_id:id,clinic_name:cl.name,report_start:m.report_start||'',report_end:m.report_end||'',metrics:{...m},priorities:[...pri],staff,franchise_message:franchiseP1(cl,m,pri)};if(existing>=0)data.period1History[existing]=rec;else data.period1History.unshift(rec);save();toast(existing>=0?'Histórico de hoje atualizado':'Período 1 salvo no histórico')}
