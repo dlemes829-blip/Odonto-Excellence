@@ -52,63 +52,206 @@ function morningGroupText(cl,m,pri){
  return `Bom dia, pessoal! Na ${cl.city}, hoje vamos atacar ${pri.slice(0,3).join(', ').toLowerCase()}. Aceitação em ${a} e ticket em ${t}. O direcionamento para a recepção é trabalhar avaliações, reativação, pacientes sem agenda e indicações; com os profissionais, reforçar abordagem, indicação e composição dos planos. O que ficar travado, me sinalizem com o nome do paciente e o que já foi feito para conseguirmos solucionar rápido.`;
 }
 async function reportTextForClinic(id){try{const r=await mgmtFetch('central_report_texts?select=report_text&capture_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&return_type=eq.2&limit=1');return r[0]?.report_text||''}catch{return ''}}
-function reportCore(raw){
- const t=String(raw||''),num=(re)=>{const m=t.match(re);return m?Number(String(m[1]).replace(/\./g,'').replace(',','.')):null},int=(re)=>{const m=t.match(re);return m?Number(m[1]):null};
- return {chairs:int(/Cadeiras:\s*(\d+)/i),accept:int(/índice mínimo:\s*80%\s*(\d+)%/i),evals:int(/Total de avaliações:\s*(\d+)\s*-\s*Efetivadas:/i),eff:int(/Total de avaliações:\s*\d+\s*-\s*Efetivadas:\s*(\d+)/i),chairProp:int(/Meta pacientes cadeiras - proporcional:\s*(\d+)/i),chairEff:int(/Meta pacientes cadeiras - efetivados:\s*(\d+)/i),ticket:num(/Ticket médio:\s*([\d.]+,\d{2})/i),orthoEff:int(/Meta de efetivações:\s*25\s*-\s*Proporcional:\s*18\s*-\s*Efetivadas:\s*(\d+)/i),orthoPaid:int(/Meta de pastas pagas:\s*18\s*-\s*Proporcional:\s*13\s*-\s*Pagas:\s*(\d+)/i),faltosos:int(/Porcentagem de faltosos:\s*(\d+)/i),semAgenda:int(/Proporção sem agendamento - Clínico geral[\s\S]{0,40}?(\d+)\s*%/i),rebooking:int(/índice mínimo:\s*90%\s*(\d+)\s*%/i),collectionAgent:int(/índice mínimo:\s*65%\s*(\d+)%/i),agenda:int(/Aproveitamento de Agendamento[\s\S]{0,160}?índice mínimo:\s*80%\s*(\d+)%/i),app:num(/EFETIVAÇÕES\/INSTALAÇÕES[\s\S]{0,100}?(\d+[,]\d+)%/i)};
+
+function reportSections(raw){
+ const text=String(raw||'').replace(/\r/g,''),starts=[],re=/^\s*(\d{1,2})(?:\.0)?\.\s+/gm;let m;
+ while((m=re.exec(text)))starts.push({n:Number(m[1]),i:m.index});
+ const out={};for(let i=0;i<starts.length;i++){const a=starts[i],b=starts[i+1];if(out[a.n]==null)out[a.n]=text.slice(a.i,b?b.i:text.length)}
+ return out;
 }
-function dailyGuideMessages(cl,raw,people=[]){
- const x=reportCore(raw),ticketRef=Number(data.settings.ticketReference||3488.25);
- const gap=Math.max(0,(x.chairProp||0)-(x.chairEff||0));
- const dailyEff=Math.max(1,Math.ceil(gap/6));
- const rec=people.filter(p=>p.role_type==='receptionist');
- const names=Array.from({length:3},(_,i)=>rec[i]?.name||('Colaboradora '+(i+1)+' · editar nome'));
- const evalGoal=Math.max(3,Math.ceil(dailyEff/0.30)),evalSplit=centralSplitTarget(evalGoal,3),effSplit=centralSplitTarget(dailyEff,3);
- const t=String(raw||'').replace(/\s+/g,' ');
- const pct=(patterns)=>centralNum(t,patterns);
- const capture=pct([/capta[cç][aã]o[^0-9]{0,30}(\d+(?:[.,]\d+)?)\s*%/i,/coleta[^0-9]{0,30}(\d+(?:[.,]\d+)?)\s*%/i]);
- const conversion=pct([/convers[aã]o[^0-9]{0,30}(\d+(?:[.,]\d+)?)\s*%/i]);
- const yesterdayEff=centralNum(t,[/ontem[^.]{0,90}?efetiva[cç][oõ]es?[^0-9]{0,20}(\d+)/i,/dia anterior[^.]{0,90}?efetiva[cç][oõ]es?[^0-9]{0,20}(\d+)/i]);
- const yesterdayOrtho=centralNum(t,[/ontem[^.]{0,120}?pastas?[^0-9]{0,20}(\d+)/i,/dia anterior[^.]{0,120}?pastas?[^0-9]{0,20}(\d+)/i]);
- const todayAgenda=centralNum(t,[/agenda[^0-9]{0,25}(\d+)\s*(?:avalia[cç][oõ]es?|pacientes?)/i,/iniciamos[^0-9]{0,30}(\d+)\s*avalia/i]);
- const collectionPoss=centralNum(t,[/(?:possibilidades|oportunidades)[^0-9]{0,15}(\d+)/i]);
- const collectionDone=centralNum(t,[/(?:contatos|coletas?)[^0-9]{0,15}(\d+)\s*(?:de|\/)[^0-9]{0,8}(\d+)/i]);
- const captureTarget=10;
- const contactsGoal=capture!=null&&capture<captureTarget?Math.max(1,Math.ceil((captureTarget-capture)*1.6)):0;
- const conversionTask=Math.max(5,Math.min(15,Math.ceil(evalGoal*0.9)));
+function reportAudit21(raw){
+ const sections=reportSections(raw),expected=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],found=expected.filter(n=>sections[n]);
+ return {sections,found,missing:expected.filter(n=>!sections[n]),count:found.length,total:21};
+}
+function rNum(text,regs){
+ for(const re of regs){const m=String(text||'').match(re);if(!m)continue;let v=String(m[1]).trim().replace(/\s/g,'').replace(/R\$/ig,'').replace(/BRL/ig,'');
+   if(v.includes(',')&&v.includes('.'))v=v.replace(/\./g,'').replace(',','.');
+   else if(v.includes(','))v=v.replace(',','.');
+   const n=Number(v.replace(/[^0-9.-]/g,''));if(Number.isFinite(n))return n}
+ return null;
+}
+function rPct(text,regs){return rNum(text,regs)}
+function rInt(text,regs){const n=rNum(text,regs);return n==null?null:Math.round(n)}
+function reportMapCollaborators(raw){
+ const sec=reportSections(raw)[20]||'',lines=sec.split('\n').map(x=>x.trim()).filter(Boolean),rows=[];
+ for(const line of lines){
+   if(!line.includes('\t'))continue;
+   const cols=line.split('\t').map(x=>x.trim()),name=cols[0];
+   if(!/^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇ .'-]{2,}$/i.test(name))continue;
+   if(/COLABORADOR|EFETIVAÇÃO|MARKETING|PERÍODO|DADOS QUE/i.test(name))continue;
+   const upper=name.toUpperCase();if(rows.some(x=>x.name===upper))continue;
+   rows.push({name:upper,cells:cols.slice(1)});
+ }
+ return rows.slice(0,8);
+}
+function monthBusinessDaysRemaining(reportEnd){
+ const base=reportEnd?new Date(reportEnd+'T12:00:00'):new Date(),y=base.getFullYear(),m=base.getMonth(),today=new Date();
+ let d=new Date(Math.max(today.getTime(),new Date(y,m,base.getDate()+1,12).getTime())),count=0;
+ if(d.getFullYear()!==y||d.getMonth()!==m)d=new Date(y,m,base.getDate()+1,12);
+ const last=new Date(y,m+1,0,12);
+ for(;d<=last;d.setDate(d.getDate()+1)){const w=d.getDay();if(w!==0&&w!==6)count++}
+ return Math.max(1,count);
+}
+function reportPeriodEnd(raw){
+ const m=String(raw||'').match(/Cl[ií]nico Geral\s*-\s*Per[ií]odo:\s*(\d{2}\/\d{2}\/\d{4})\s*(?:a|-)\s*(\d{2}\/\d{2}\/\d{4})/i);
+ if(!m)return '';
+ const p=m[2].split('/');return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:'';
+}
+function reportCore(raw){
+ const audit=reportAudit21(raw),s=audit.sections,i1=s[1]||'',i2=s[2]||'',i3=s[3]||'',i4=s[4]||'',i5=s[5]||'',i6=s[6]||'',i7=s[7]||'',i8=s[8]||'',i9=s[9]||'',i10=s[10]||'',i11=s[11]||'',i12=s[12]||'',i13=s[13]||'',i14=s[14]||'',i16=s[16]||'',i18=s[18]||'',i19=s[19]||'',i21=s[21]||'';
+ const clinicMatch=String(raw||'').match(/Franquia:\s*(\d+)\s*-\s*Odonto Excellence\s*-\s*([^\n]+)/i);
+ const generalBlock=(i2.match(/Cl[ií]nico Geral:[\s\S]*?(?=Efetividade p[oó]s|Ortodontia:)/i)||[''])[0];
+ const orthoBlock=(i2.match(/Ortodontia:[\s\S]*?(?=Implantodontia:|Orofacial:|Hist[oó]rico)/i)||[''])[0];
+ const core={
+   audit,clinicCode:clinicMatch?.[1]||'',clinicLabel:clinicMatch?.[2]?.trim()||'',chairs:rInt(raw,[/Cadeiras:\s*(\d+)/i]),
+   periodEnd:reportPeriodEnd(raw),
+   accept:rPct(i1,[/Cl[ií]nico Geral[\s\S]{0,140}?índice mínimo:\s*80%\s*([\d.,]+)%/i,/Aceita[cç][aã]o\s+([\d.,]+)\s*%/i]),
+   evals:rInt(i1,[/Total de avalia[cç][oõ]es:\s*(\d+)\s*-\s*Efetivadas:/i]),
+   eff:rInt(i1,[/Total de avalia[cç][oõ]es:\s*\d+\s*-\s*Efetivadas:\s*(\d+)/i]),
+   chairMonthly:rInt(i1,[/Meta pacientes cadeiras\s*-\s*mensal:\s*(\d+)/i]),
+   chairProp:rInt(i1,[/Meta pacientes cadeiras\s*-\s*proporcional:\s*(\d+)/i]),
+   chairEff:rInt(i1,[/Meta pacientes cadeiras\s*-\s*efetivados:\s*(\d+)/i]),
+   cadastros:rInt(i1,[/Total de cadastros:\s*(\d+)/i]),
+   indications:rInt(i1,[/Total de indica[cç][oõ]es:\s*(\d+)/i]),
+   viral:rInt(i1,[/Indica[cç][oõ]es MKT Viral:\s*(\d+)/i]),
+   indicationConversion:rInt(i1,[/Indica[cç][oõ]es por convers[aã]o:\s*(\d+)/i]),
+   amigoPct:rPct(i1,[/campanha amigo do peito[\s\S]{0,120}?índice mínimo:\s*50%\s*([\d.,]+)%/i]),
+   amigoPoss:rInt(i1,[/Possibilidades de indica[cç][oõ]es reais:\s*(\d+)/i]),
+   amigoInd:rInt(i1,[/Quantidade convers[oõ]es:\s*\d+\s+Quantidade indica[cç][oõ]es:\s*(\d+)/i]),
+   cgGoalMoney:rNum(generalBlock,[/Vendas:\s*([\d.]+,\d{2})/i]),
+   cgPropMoney:rNum(generalBlock,[/Proporcional:\s*([\d.]+,\d{2})/i]),
+   cgEffectiveMoney:rNum(generalBlock,[/Efetivadas:\s*([\d.]+,\d{2})/i]),
+   ticket:rNum(generalBlock,[/Ticket m[eé]dio:\s*([\d.]+,\d{2})/i]),
+   orthoFinancialPct:rPct(orthoBlock,[/Ortodontia:\s*([\d.,]+)%/i]),
+   orthoEvals:rInt(orthoBlock,[/Total de avalia[cç][oõ]es:\s*(\d+)\s*-\s*Efetivadas:/i]),
+   orthoEvalEff:rInt(orthoBlock,[/Total de avalia[cç][oõ]es:\s*\d+\s*-\s*Efetivadas:\s*(\d+)/i]),
+   orthoAccept:rPct(orthoBlock,[/Aceita[cç][aã]o\s+([\d.,]+)\s*%/i]),
+   orthoGoal:rInt(orthoBlock,[/Meta de efetiva[cç][oõ]es:\s*(\d+)/i]),
+   orthoProp:rInt(orthoBlock,[/Meta de efetiva[cç][oõ]es:\s*\d+\s*-\s*Proporcional:\s*(\d+)/i]),
+   orthoEff:rInt(orthoBlock,[/Meta de efetiva[cç][oõ]es:[\s\S]{0,70}?Efetivadas:\s*(\d+)/i]),
+   orthoPaidGoal:rInt(orthoBlock,[/Meta de pastas pagas:\s*(\d+)/i]),
+   orthoPaidProp:rInt(orthoBlock,[/Meta de pastas pagas:\s*\d+\s*-\s*Proporcional:\s*(\d+)/i]),
+   orthoPaid:rInt(orthoBlock,[/Meta de pastas pagas:[\s\S]{0,70}?Pagas:\s*(\d+)/i]),
+   startedPct:rPct(i2,[/Valor efetivado:[\s\S]{0,160}?([\d.,]+)%\s*Tratamentos efetivados:/i]),
+   treatmentsEff:rInt(i2,[/Tratamentos efetivados:\s*(\d+)/i]),
+   treatmentsStarted:rInt(i2,[/Tratamentos iniciados:\s*(\d+)/i]),
+   requestedIndications:rInt(i2,[/Indica[cç][oõ]es solicitadas:\s*(\d+)/i]),
+   professionalIndications:rInt(i2,[/Indica[cç][oõ]es realizadas pelo profissional:\s*(\d+)/i]),
+   receptionIndications:rInt(i2,[/Indica[cç][oõ]es enviadas pela recep[cç][aã]o:\s*(\d+)/i]),
+   absenteesPct:rPct(i3,[/Porcentagem de faltosos:\s*([\d.,]+)\s*%/i]),
+   scheduledYesterday:rInt(i3,[/Pacientes agendados:\s*(\d+)/i]),
+   missedYesterday:rInt(i3,[/Pacientes faltosos:\s*(\d+)/i]),
+   noAgendaCG:rPct(i4,[/Propor[cç][aã]o sem agendamento\s*-\s*Cl[ií]nico geral[\s\S]{0,30}?([\d.,]+)\s*%/i]),
+   noAgendaOrtho:rPct(i4,[/Propor[cç][aã]o sem agendamento\s*-\s*Ortodontia[\s\S]{0,30}?([\d.,]+)\s*%/i]),
+   rebooking:rPct(i5,[/Cl[ií]nico Geral[\s\S]{0,120}?índice mínimo:\s*90%\s*([\d.,]+)%/i,/Reagendamento geral\s+([\d.,]+)\s*%/i]),
+   rebookingOrtho:rPct(i5,[/Reagendamento orto\s+([\d.,]+)\s*%/i]),
+   collectionExecution:rPct(i6,[/índice mínimo:\s*80%\s*([\d.,]+)%/i,/Cobran[cç]a\s+([\d.,]+)\s*%/i]),
+   charges:rInt(i6,[/Cobran[cç]as:\s*(\d+)/i]),charged:rInt(i6,[/Cobrado\(s\):\s*(\d+)/i]),
+   cancelRequest:rPct(i7,[/Alta a pedido:\s*([\d.,]+)%/i]),cancelAuto:rPct(i7,[/Autom[aá]tico:\s*([\d.,]+)%/i]),cancelNotStarted:rPct(i7,[/Total n[aã]o iniciado:\s*([\d.,]+)%/i]),
+   collectionAgent:rPct(i8,[/índice mínimo:\s*65%\s*([\d.,]+)%/i,/Aproveitamento\s+([\d.,]+)\s*%/i]),
+   satisfaction:rPct(i9,[/índice mínimo:\s*90%\s*([\d.,]+)\s*%/i,/Pesquisa\s+([\d.,]+)\s*%/i]),
+   revenuePrev:rNum(i10,[/M[eê]s anterior:[\s\S]{0,60}?([\d.]+,\d{2})/i]),revenueCurrent:rNum(i10,[/M[eê]s atual:[\s\S]{0,60}?([\d.]+,\d{2})/i]),
+   agendaCG:rPct(i11,[/Cl[ií]nico geral[\s\S]{0,120}?índice mínimo:\s*80%\s*([\d.,]+)%/i]),agendaOrtho:rPct(i11,[/Ortodontia[\s\S]{0,120}?índice mínimo:\s*80%\s*([\d.,]+)%/i]),
+   app:rPct(i12,[/EFETIVA[CÇ][OÕ]ES\/INSTALA[CÇ][OÕ]ES[\s\S]{0,120}?(\d+[,\.]\d+)%/i]),
+   negativados:rInt(i13,[/Negativados:\s*(\d+)/i]),desnegativados:rInt(i13,[/Desnegativados:\s*(\d+)/i]),
+   occlusionTotal:rInt(i14,[/Total\s*%[\s\S]{0,250}?\n\s*(\d+)\s*\n\s*100%/i]),
+   appIndications:rInt(i19,[/Indica[cç][oõ]es:\s*(\d+)/i]),appPending:rInt(i19,[/Contato pendente:\s*(\d+)/i]),appNoSuccess:rInt(i19,[/Contato sem sucesso:\s*(\d+)/i]),appEvalPending:rInt(i19,[/Avalia[cç][aã]o pendente\s*:?\s*(\d+)/i]),appEffective:rInt(i19,[/Efetivadas:\s*(\d+)/i]),
+   contractsSent:rInt(i21,[/Contratos enviados:\s*(\d+)/i]),contractsPending:rInt(i21,[/Contratos pendentes de envio:\s*(\d+)/i]),
+   collaborators:reportMapCollaborators(raw)
+ };
+ if(core.cadastros&&core.indications!=null)core.capturePct=core.indications/core.cadastros*100;
+ if(core.revenuePrev!=null&&core.revenueCurrent!=null&&core.revenuePrev!==0)core.revenueDeltaPct=(core.revenueCurrent-core.revenuePrev)/core.revenuePrev*100;
+ return core;
+}
+function reportComparison(current,previous){
+ if(!previous)return null;
+ const fields=['accept','eff','chairEff','ticket','orthoEff','orthoPaid','absenteesPct','rebooking','collectionAgent','satisfaction','revenueCurrent','agendaCG','app'];
+ const delta={};for(const k of fields)if(current[k]!=null&&previous[k]!=null)delta[k]=current[k]-previous[k];
+ return delta;
+}
+function reportHistorySummary(current,previous,previousMonth){
+ const p=reportComparison(current,previous),m=reportComparison(current,previousMonth),parts=[];
+ if(p?.eff!=null)parts.push('efetivações '+(p.eff>=0?'+':'')+p.eff+' vs. leitura anterior');
+ if(p?.accept!=null)parts.push('aceitação '+(p.accept>=0?'+':'')+Math.round(p.accept)+' p.p.');
+ if(p?.ticket!=null)parts.push('ticket '+(p.ticket>=0?'+':'')+centralMoney(p.ticket));
+ if(m?.revenueCurrent!=null)parts.push('receita '+(m.revenueCurrent>=0?'+':'')+centralMoney(m.revenueCurrent)+' vs. referência anterior');
+ return parts.slice(0,3).join(' · ');
+}
+function dailyGuideMessages(cl,raw,people=[],history={}){
+ const x=reportCore(raw),prev=history.previous?reportCore(history.previous):null,prevMonth=history.previousMonth?reportCore(history.previousMonth):null;
+ const ticketRef=Number(data.settings.ticketReference||3488.25),healthyAcceptance=80,healthyConversion=30,healthyApp=95,healthyRebooking=90,healthyCollection=65,healthySatisfaction=90;
+ const gap=x.chairProp!=null&&x.chairEff!=null?Math.max(0,x.chairProp-x.chairEff):0,days=monthBusinessDaysRemaining(x.periodEnd);
+ const dailyEff=gap>0?Math.max(1,Math.ceil(gap/days)):Math.max(1,Math.ceil((x.chairs||1)*1.5));
+ const moneyBase=x.ticket&&x.ticket>0?x.ticket:ticketRef,dailyMoney=dailyEff*moneyBase;
+ const evalGoal=Math.max(3,Math.ceil(dailyEff/0.30));
+ const configured=people.filter(p=>p.role_type==='receptionist'&&p.name).map(p=>p.name),fromMap=x.collaborators.map(p=>p.name);
+ const names=Array.from({length:3},(_,i)=>configured[i]||fromMap[i]||('Colaboradora '+(i+1)+' · editar nome'));
+ const evalSplit=centralSplitTarget(evalGoal,3),effSplit=centralSplitTarget(dailyEff,3);
+ const capture=x.capturePct,baseForCapture=x.cadastros||0,currentContacts=x.indications||0,contactGoal=baseForCapture?Math.max(0,Math.ceil(baseForCapture*.10-currentContacts)):0;
+ const conversionPool=x.appPending!=null?x.appPending:(x.amigoPoss!=null?x.amigoPoss:null);
+ const conversionTask=Math.max(5,Math.min(15,Math.ceil(evalGoal*.9)));
+ const comparison=reportHistorySummary(x,prev,prevMonth);
+ const coverage=x.audit.count+'/'+x.audit.total;
+ const rolePlans=[
+   {label:'captação + agenda',body:'trabalhar captação em todos os atendimentos, pedir indicações de forma ativa e transformar os novos contatos em avaliações; também recuperar horários vagos, cancelamentos e faltosos para proteger a agenda'},
+   {label:'conversão + reativação',body:'entrar na Ferramenta de Conversão e trabalhar a base dos últimos 45 dias, priorizando quem já demonstrou interesse; fazer follow-up até obter agendamento, recusa clara ou próxima data definida'},
+   {label:'pós-efetivação + reagendamento',body:'acompanhar quem efetivou e ainda não iniciou, garantir primeiro agendamento, revisar pacientes sem próxima agenda, manter reagendamento e aplicativo dentro da meta e devolver nominalmente tudo que ficar travado'}
+ ];
  const individual=names.map((n,i)=>{
-   let msg='Bom dia, '+n+', tudo bem? ';
-   if(yesterdayEff!=null)msg+='Fechamos ontem com '+yesterdayEff+' efetivação(ões) de clínico geral'+(yesterdayEff===0?', e precisamos entender o que travou o resultado. ':'. ');
-   if(yesterdayOrtho!=null)msg+='Na ortodontia foram '+yesterdayOrtho+' pasta(s). ';
-   if(todayAgenda!=null)msg+='Hoje iniciamos com '+todayAgenda+' avaliação(ões) na agenda. ';
-   msg+='A necessidade de hoje é buscar '+dailyEff+' efetivação(ões) de clínico geral, equivalente a aproximadamente '+centralMoney(dailyEff*ticketRef)+', e sua contribuição é '+Math.max(1,effSplit[i]||1)+' efetivação(ões) e pelo menos '+Math.max(1,evalSplit[i]||1)+' novo(s) agendamento(s) de avaliação. ';
-   if(capture!=null&&capture<10)msg+='Nossa captação está em '+Math.round(capture)+'%, abaixo da referência de 10%. Trabalhe a coleta de indicações em todos os atendimentos e busque pelo menos '+Math.max(1,Math.ceil(contactsGoal/3))+' contatos novos na sua frente. ';
-   if(conversion!=null&&conversion<30)msg+='Conversão está em '+Math.round(conversion)+'%, então hoje quero retomada ativa dos últimos 45 dias pela Ferramenta de Conversão: agende pelo menos '+Math.max(1,Math.ceil(conversionTask/3))+' avaliação(ões) por essa base. ';
-   msg+=x.accept!=null?(x.accept>=80?'Aceitação está em '+x.accept+'%, dentro do saudável de 80%; parabéns por esse ponto e vamos manter a constância. ':'Aceitação está em '+x.accept+'%, abaixo do saudável de 80%; acompanhe cada avaliação não efetivada e registre o motivo para retorno no mesmo dia. '):'';
-   if(x.rebooking!=null)msg+=x.rebooking>=90?'Reagendamento em '+x.rebooking+'%, muito bom; mantenha o padrão. ':'Reagendamento em '+x.rebooking+'%, abaixo de 90%; ninguém deve sair sem próximo passo definido. ';
-   if(x.app!=null)msg+=x.app>=95?'Aplicativo em '+Math.round(x.app)+'%, excelente; mantenha. ':'Aplicativo em '+Math.round(x.app)+'%; precisamos aproximar de 95% e concluir a instalação no fechamento do atendimento. ';
-   msg+='Quero retorno com realizado x meta e os pacientes que ficaram travados, combinado? Você sabe qual é o percentual saudável da aceitação?';
-   return {recipient:n,title:'Cobrança da manhã · '+n,message:msg};
+   let msg='Bom dia '+n+', tudo bem? ';
+   msg+='Analisei o relatório completo de '+cl.city+' e hoje não vamos trabalhar atividade solta. ';
+   if(x.eff!=null&&x.chairProp!=null)msg+='Estamos com '+x.eff+' efetivação(ões) no período, para uma meta proporcional de '+x.chairProp+' pacientes por cadeira; faltam '+gap+' para proteger a meta. ';
+   msg+='Para hoje a necessidade operacional é '+dailyEff+' efetivação(ões) de Clínico Geral, aproximadamente '+centralMoney(dailyMoney)+', e precisamos gerar pelo menos '+evalGoal+' avaliações para sustentar isso com conversão saudável de 30%. ';
+   if(x.orthoPaid!=null&&x.orthoPaidProp!=null)msg+='Na Ortodontia estamos com '+x.orthoPaid+' pasta(s) paga(s) para proporcional de '+x.orthoPaidProp+', então esse saldo também precisa entrar no plano de hoje. ';
+   if(comparison)msg+='Comparativo: '+comparison+'. ';
+   msg+='Sua frente principal será '+rolePlans[i].label+': '+rolePlans[i].body+'. ';
+   msg+='Sua meta individual hoje é contribuir com '+Math.max(1,effSplit[i]||1)+' efetivação(ões) e '+Math.max(1,evalSplit[i]||1)+' novo(s) agendamento(s) de avaliação. ';
+   if(i===0&&capture!=null){msg+='Nossa captação calculada pelo relatório está em '+capture.toFixed(1).replace('.',',')+'%. ';if(contactGoal>0)msg+='Para chegarmos a pelo menos 10% nessa base, precisamos de mais '+contactGoal+' contato(s) qualificado(s). ';}
+   if(i===1){msg+='Na conversão, trabalhe no mínimo '+Math.max(1,Math.ceil(conversionTask/3))+' agendamento(s) pela base dos últimos 45 dias'+(conversionPool!=null?'; hoje temos '+conversionPool+' contato(s)/possibilidade(s) ainda aproveitáveis na base. ':'. ');}
+   if(i===2&&x.treatmentsEff!=null&&x.treatmentsStarted!=null){const stGap=Math.max(0,x.treatmentsEff-x.treatmentsStarted);msg+='Temos '+x.treatmentsEff+' tratamento(s) efetivado(s) e '+x.treatmentsStarted+' iniciado(s); '+stGap+' ainda precisam de ação de início. ';}
+   if(x.accept!=null)msg+=(x.accept>=healthyAcceptance?'Parabéns pela aceitação em '+Math.round(x.accept)+'%, acima do saudável de 80%; mantenha o padrão. ':'A aceitação está em '+Math.round(x.accept)+'%, abaixo do saudável de 80%; cada não efetivado precisa sair com motivo e follow-up definido. ');
+   if(x.rebooking!=null)msg+=(x.rebooking>=healthyRebooking?'O reagendamento está em '+Math.round(x.rebooking)+'%, bom resultado; mantenha a constância. ':'O reagendamento está em '+Math.round(x.rebooking)+'%, abaixo de 90%; não podemos deixar paciente sair sem próximo passo. ');
+   if(x.app!=null)msg+=(x.app>=healthyApp?'O aplicativo está em '+Math.round(x.app)+'%, dentro do saudável de 95% ou mais. ':'O aplicativo está em '+Math.round(x.app)+'%, abaixo dos 95% saudáveis; aproveite o fechamento do atendimento para concluir instalação. ');
+   msg+='Quero retorno com realizado x meta e os nomes dos pacientes que não avançaram, combinado? Você sabe qual é o percentual saudável da aceitação?';
+   return {recipient:n,title:'Mensageiro da manhã · '+n,message:msg};
  });
- let group='Bom dia, equipe. Analisei o relatório de '+cl.city+'. ';
- if(yesterdayEff!=null||yesterdayOrtho!=null)group+='Ontem fechamos com '+(yesterdayEff??'—')+' efetivação(ões) de clínico geral e '+(yesterdayOrtho??'—')+' pasta(s) de ortodontia. ';
- group+=(gap>0?'No acumulado temos '+(x.chairEff??'—')+' efetivados para proporcional de '+(x.chairProp??'—')+', um gap de '+gap+'. Para hoje, a meta operacional é '+dailyEff+' efetivação(ões), aproximadamente '+centralMoney(dailyEff*ticketRef)+'. ':'A meta proporcional de cadeira está protegida; hoje o foco é sustentar produção e qualidade. ');
- if(todayAgenda!=null)group+='A agenda começa com '+todayAgenda+' avaliação(ões), então precisamos ampliar entrada para não depender apenas do que já está marcado. ';
- if(capture!=null)group+='Captação: '+Math.round(capture)+'%'+(capture<10?' — abaixo de 10%, portanto coleta precisa acontecer em todos os atendimentos. ':'. ');
- if(conversion!=null)group+='Conversão: '+Math.round(conversion)+'%'+(conversion<30?' — abaixo do saudável de 30%; vamos trabalhar os últimos 45 dias e gerar '+conversionTask+' novos agendamentos pela ferramenta. ':', dentro do saudável de 30%. ');
- group+='Aceitação: '+(x.accept??'—')+'% (saudável: 80%). ';
- if(x.ticket!=null)group+='Ticket médio: '+centralMoney(x.ticket)+' (referência: '+centralMoney(ticketRef)+'). ';
- group+='Orto: '+(x.orthoEff??'—')+'/25 efetivações e '+(x.orthoPaid??'—')+'/18 pastas pagas. Hoje não quero atividade genérica: cada colaboradora tem meta própria de agendamento e contribuição em efetivação; à tarde vamos conferir realizado x meta, faltosos, conversão e pendências nominalmente.';
- const retIndividuals=names.map((n,i)=>({recipient:n,title:'Retorno individual · '+n,message:'Boa tarde, '+n+'. Pela manhã sua meta ficou em '+Math.max(1,evalSplit[i]||1)+' agendamento(s) e '+Math.max(1,effSplit[i]||1)+' contribuição(ões) em efetivação. Me retorne agora: realizado x meta, quantos contatos coletou, quantos agendamentos vieram da conversão e quais pacientes ficaram travados. O que não avançou precisa sair daqui com próxima ação definida.'}));
- const ret='Boa tarde, equipe. Retorno do plano da manhã de '+cl.city+': meta operacional de '+dailyEff+' efetivação(ões) e '+evalGoal+' novos agendamentos. Preciso do realizado x meta por colaboradora, efetivações do clínico, pastas de Orto, contatos coletados, agendamentos pela conversão e pendências nominais. O que estiver abaixo da meta será redistribuído agora para fecharmos o dia.';
- let treatment='Tratativa estratégica · '+cl.city+'. Gap de cadeira: '+gap+'. Meta operacional do dia: '+dailyEff+' efetivação(ões), cerca de '+centralMoney(dailyEff*ticketRef)+'. Aceitação: '+(x.accept??'—')+'%. Ticket: '+(x.ticket!=null?centralMoney(x.ticket):'—')+'. Orto: '+(x.orthoEff??'—')+'/25 efetivações e '+(x.orthoPaid??'—')+'/18 pastas. Plano: ampliar avaliações, trabalhar captação/coleta, converter base dos últimos 45 dias, recuperar faltosos, garantir reagendamento e acompanhar cada não efetivado com motivo + próxima ação. À tarde: conferência individual de realizado x meta e redistribuição imediata do saldo.';
- return {individual,retIndividuals,group,ret,treatment};
+ let group='Bom dia, equipe. Fiz a leitura do Mapa de Trabalho completo de '+cl.city+' ('+coverage+' itens principais detectados). ';
+ if(x.eff!=null&&x.chairProp!=null)group+='No Clínico Geral estamos com '+x.eff+' efetivação(ões) para meta proporcional de '+x.chairProp+', gap de '+gap+'. ';
+ group+='Dividindo esse saldo pelos '+days+' dia(s) útil(eis) restantes, a meta operacional de hoje fica em '+dailyEff+' efetivação(ões), aproximadamente '+centralMoney(dailyMoney)+'. Para sustentar com conversão de 30%, precisamos colocar cerca de '+evalGoal+' avaliações no funil. ';
+ if(x.orthoEff!=null)group+='Orto: '+x.orthoEff+'/'+(x.orthoProp??x.orthoGoal??'—')+' efetivações proporcionais e '+(x.orthoPaid??'—')+'/'+(x.orthoPaidProp??x.orthoPaidGoal??'—')+' pastas pagas. ';
+ if(x.accept!=null)group+='Aceitação '+Math.round(x.accept)+'% (saudável 80%). ';
+ if(capture!=null)group+='Captação '+capture.toFixed(1).replace('.',',')+'%'+(contactGoal>0?' — faltam '+contactGoal+' contato(s) para 10% nessa base. ':'. ');
+ if(x.absenteesPct!=null)group+='Faltosos '+Math.round(x.absenteesPct)+'%. ';
+ if(x.rebooking!=null)group+='Reagendamento '+Math.round(x.rebooking)+'% (meta 90%). ';
+ if(x.collectionAgent!=null)group+='Cobrança '+Math.round(x.collectionAgent)+'% (saudável 65%). ';
+ if(x.satisfaction!=null)group+='Satisfação '+Math.round(x.satisfaction)+'% (saudável 90%). ';
+ if(x.app!=null)group+='App '+Math.round(x.app)+'% (saudável 95%). ';
+ if(x.revenueDeltaPct!=null)group+='Receita do mês está '+(x.revenueDeltaPct>=0?'+':'')+x.revenueDeltaPct.toFixed(1).replace('.',',')+'% versus o comparativo do próprio relatório. ';
+ if(comparison)group+='Tendência: '+comparison+'. ';
+ group+='Plano do dia dividido em três frentes: 1) captação + agenda, 2) conversão + reativação dos últimos 45 dias, 3) pós-efetivação + reagendamento. À tarde vamos conferir realizado x meta e redistribuir imediatamente o que ficar abaixo.';
+ const retIndividuals=names.map((n,i)=>({recipient:n,title:'Retorno individual · '+n,message:'Boa tarde '+n+'. Pela manhã sua meta ficou em '+Math.max(1,evalSplit[i]||1)+' novo(s) agendamento(s) e '+Math.max(1,effSplit[i]||1)+' contribuição(ões) em efetivação, na frente de '+rolePlans[i].label+'. Me retorne agora realizado x meta, contatos coletados, agendamentos pela conversão, efetivações e pacientes que ficaram travados. O que não avançou precisa sair deste retorno com responsável e próxima ação definida.'}));
+ const ret='Boa tarde, equipe. Retorno do plano da manhã de '+cl.city+': meta de '+dailyEff+' efetivação(ões), aproximadamente '+centralMoney(dailyMoney)+', e '+evalGoal+' novas avaliações no funil. Preciso do realizado x meta das três frentes, Clínico Geral, Ortodontia, captação, conversão, reagendamento e pendências nominais. O saldo que faltar será redistribuído agora para proteger o fechamento do dia.';
+ const treatment='Tratativa estratégica · '+cl.city+'. Leitura do relatório completo: '+coverage+' itens detectados. Gap de cadeira '+gap+'; meta operacional do dia '+dailyEff+' efetivação(ões) / '+centralMoney(dailyMoney)+'; avaliações necessárias '+evalGoal+'. Aceitação '+(x.accept??'—')+'% (saudável 80%); Orto '+(x.orthoEff??'—')+'/'+(x.orthoProp??'—')+' efetivações e '+(x.orthoPaid??'—')+'/'+(x.orthoPaidProp??'—')+' pastas; faltosos '+(x.absenteesPct??'—')+'%; sem agenda CG '+(x.noAgendaCG??'—')+'%; reagendamento '+(x.rebooking??'—')+'%; cobrança '+(x.collectionAgent??'—')+'%; satisfação '+(x.satisfaction??'—')+'%; app '+(x.app??'—')+'%. Plano: três responsáveis, metas individuais, captação/agenda, conversão 45 dias e pós-efetivação/reagendamento. Comparativo: '+(comparison||'sem histórico suficiente ainda')+'.';
+ return {individual,retIndividuals,group,ret,treatment,audit:x.audit,metrics:x};
+}
+async function reportHistoryForClinic(id){
+ try{
+   const rows=await mgmtFetch('central_report_texts?select=capture_date,report_text,updated_at&clinic_id=eq.'+id+'&return_type=eq.2&order=capture_date.desc,updated_at.desc&limit=60');
+   const today=isoDay(),currentMonth=today.slice(0,7);
+   const previous=rows.find(x=>x.capture_date<today)?.report_text||'';
+   const previousMonth=rows.find(x=>String(x.capture_date||'').slice(0,7)<currentMonth)?.report_text||'';
+   return {previous,previousMonth};
+ }catch{return {previous:'',previousMonth:''}}
 }
 async function saveDailyGuides(id){
  const cl=clinic(id),raw=await reportTextForClinic(id);if(!raw)return toast('Salve primeiro o texto completo do relatório desta clínica.');
+ const audit=reportAudit21(raw);
+ if(audit.count<15)throw new Error('O relatório parece incompleto: apenas '+audit.count+' dos 21 itens foram detectados. Cole o Mapa de Trabalho completo antes de gerar.');
  let people=[];try{people=await mgmtFetch('management_people?select=role_type,name,functions&clinic_id=eq.'+id+'&active=eq.true')}catch{}
- const g=dailyGuideMessages(cl,raw,people),rows=[...g.individual.map(x=>({section:'morning_messenger',...x})),...g.retIndividuals.map(x=>({section:'afternoon_return',...x})),{section:'morning_group',recipient:'group',title:'Grupo · manhã',message:g.group},{section:'afternoon_return',recipient:'group',title:'Retorno da tarde',message:g.ret},{section:'treatment',recipient:'group',title:'Tratativa estratégica',message:g.treatment}];
+ const history=await reportHistoryForClinic(id),g=dailyGuideMessages(cl,raw,people,history);
+ const rows=[...g.individual.map(x=>({section:'morning_messenger',...x})),...g.retIndividuals.map(x=>({section:'afternoon_return',...x})),{section:'morning_group',recipient:'group',title:'Grupo · manhã',message:g.group},{section:'afternoon_return',recipient:'group',title:'Retorno da tarde',message:g.ret},{section:'treatment',recipient:'group',title:'Tratativa estratégica',message:g.treatment}];
  for(const r of rows){const body={guide_date:isoDay(),clinic_id:id,section:r.section,recipient:r.recipient,title:r.title,message:r.message,action_plan:r.section==='treatment'?r.message:''};const old=await mgmtFetch('daily_clinic_guides?select=id&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+encodeURIComponent(r.section)+'&recipient=eq.'+encodeURIComponent(r.recipient)+'&title=eq.'+encodeURIComponent(r.title)+'&limit=1');if(old[0])await mgmtFetch('daily_clinic_guides?id=eq.'+old[0].id,{method:'PATCH',body:JSON.stringify(body)});else await mgmtFetch('daily_clinic_guides',{method:'POST',body:JSON.stringify(body)})}
- toast('Mensageiro, grupo, retorno e tratativa preparados para '+cl.city+'.');
+ toast('Mapa completo lido ('+audit.count+'/21) e mensageiros recalculados para '+cl.city+'.');
 }
 async function guideCards(id,section){
  const rows=await mgmtFetch('daily_clinic_guides?select=*&guide_date=eq.'+isoDay()+'&clinic_id=eq.'+id+'&section=eq.'+section+'&order=id.asc');return rows.map(r=>'<div class="card guide-output"><div class="section-head"><div><strong>'+esc(r.title)+'</strong><div class="clinic-meta">'+esc(r.recipient)+'</div></div><button class="ghost" data-copy-guide="'+r.id+'">Copiar</button></div><div class="message-box">'+esc(r.message)+'</div><label class="btn secondary">Adicionar imagem<input class="hidden guide-image" data-guide-image="'+r.id+'" type="file" accept="image/*"></label>'+(r.image_data?'<img class="guide-preview" src="'+r.image_data+'">':'')+'</div>').join('')}
