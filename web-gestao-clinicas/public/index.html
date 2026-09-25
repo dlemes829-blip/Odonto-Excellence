@@ -5,22 +5,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#111318" />
   <title>Central de Gestão · 12 Clínicas</title>
-  <link rel="stylesheet" href="/styles.css?v=20260924-odonto4" />
+  <link rel="stylesheet" href="/styles.css?v=20260924-ux5" />
   <link rel="stylesheet" href="/report-intelligence.css?v=20260924-odonto4" />
   <link rel="stylesheet" href="/report-intelligence-v2.css?v=20260924-odonto4" />
   <link rel="stylesheet" href="/period2-strategy.css?v=20260924-odonto4" />
 </head>
 <body>
-  <div id="login" class="login-screen">
-    <div class="login-card">
+  <div id="login" class="login-screen"><div class="login-ambient login-ambient-a"></div><div class="login-ambient login-ambient-b"></div>
+    <div class="login-shell"><section class="login-story"><div class="login-story-inner"><span class="eyebrow light">CENTRAL DE GESTÃO · OPERAÇÃO</span><h2>Seu dia de gestão,<br>mais claro e mais rápido.</h2><p>Uma central para transformar relatório em cobrança, meta, acompanhamento e ação nas 12 clínicas.</p><div class="login-flow"><div><b>01</b><span>Manhã</span><small>Mensageiro e metas</small></div><div><b>02</b><span>Tarde</span><small>Realizado x meta</small></div><div><b>03</b><span>Tratativa</span><small>Plano e execução</small></div></div></div></section><div class="login-card">
       <div class="login-brand"><div class="brand-mark">OE</div><div><span class="eyebrow">ODONTO EXCELLENCE</span><h1>Central de Gestão</h1></div></div><p class="login-lead">Rotina das 12 unidades: mensageiro e metas pela manhã, retorno à tarde e tratativas em um único ambiente.</p><div class="login-trust"><span>12 unidades</span><span>Ambiente administrativo</span><span>Dados centralizados</span></div>
       <form id="loginForm" onsubmit="return window.centralLogin ? window.centralLogin(event) : false;">
         <label>Acesso administrativo</label>
         <div class="login-input-wrap"><input id="password" type="password" inputmode="numeric" autocomplete="current-password" required placeholder="Digite sua senha de acesso" /><button type="button" id="togglePassword" class="login-eye" aria-label="Mostrar senha">Mostrar</button></div>
         <button id="loginSubmit" class="btn primary login-submit" type="submit">Acessar Central</button><span id="loginStatus" class="login-status">Acesso administrativo seguro</span>
       </form>
-      <div id="loginError" class="error"></div>
-    </div>
+      <div id="loginError" class="error"></div><div class="login-footnote">Central administrativa · acesso restrito</div>
+    </div></div>
   </div>
 
   <div id="app" class="app hidden">
@@ -30,13 +30,13 @@
       <div class="sidebar-foot"><div class="system-state"><i></i><span>Central operacional</span></div><button id="exportBtn" class="ghost">Exportar dados</button><button id="logoutBtn" class="ghost">Encerrar sessão</button></div>
     </aside>
     <main class="main">
-      <header class="topbar"><button id="menuToggle" class="icon-btn">☰</button><div><h2 id="pageTitle">Painel</h2><p id="pageHelp">Visão rápida das 12 clínicas.</p></div><div class="today" id="today"></div></header>
+      <header class="topbar"><button id="menuToggle" class="icon-btn">☰</button><div class="topbar-copy"><span class="topbar-kicker">CENTRAL OPERACIONAL</span><h2 id="pageTitle">Painel</h2><p id="pageHelp">Visão rápida das 12 clínicas.</p></div><div class="topbar-actions"><button id="quickMorning" class="top-action">☀ <span>Manhã</span></button><button id="quickTreatment" class="top-action">▣ <span>Tratativa</span></button><div class="today" id="today"></div></div></header>
       <section id="content" class="content"></section>
     </main>
   </div>
 
   <div id="toast" class="toast"></div>
-  <script type="module" src="/app.js?v=20260924-mapa21-equipe4"></script>
+  <script type="module" src="/app.js?v=20260924-ux5"></script>
 <script>
 (function(){
   function h(s){let x=2166136261;for(const c of s){x^=c.charCodeAt(0);x=Math.imul(x,16777619)}return (x>>>0).toString(16)}
