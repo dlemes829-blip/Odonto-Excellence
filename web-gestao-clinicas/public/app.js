@@ -246,55 +246,45 @@ function dailyGuideMessages(cl,raw,people=[],history={},sourceDate=isoDay()){
  const orthoGap=x.orthoPaidGoal!=null&&x.orthoPaid!=null?Math.max(0,x.orthoPaidGoal-x.orthoPaid):null;
  const orthoDay=orthoGap!=null?Math.ceil(orthoGap/days):null;
  const reception=people.filter(p=>p.role_type==='receptionist'&&p.name),collectors=people.filter(p=>p.role_type==='collection_agent'&&p.name);
- const unique=[...new Map(reception.map(p=>[p.name.trim().toUpperCase(),p])).values()];
- const hasCollector=name=>collectors.some(p=>p.name.trim().toUpperCase()===name.trim().toUpperCase());
+ const unique=[...new Map(reception.map(p=>[p.name.trim().toLocaleUpperCase('pt-BR'),p])).values()];
+ const hasCollector=name=>collectors.some(p=>p.name.trim().toLocaleUpperCase('pt-BR')===name.trim().toLocaleUpperCase('pt-BR'));
  const first=name=>{const f=name.trim().split(/\s+/)[0];return f[0].toLocaleUpperCase('pt-BR')+f.slice(1).toLocaleLowerCase('pt-BR')};
  const sameYesterday=prev?.periodEnd&&x.periodEnd&&new Date(x.periodEnd+'T12:00:00Z')-new Date(prev.periodEnd+'T12:00:00Z')===86400000;
  const delta=sameYesterday&&x.eff!=null&&prev.eff!=null&&x.eff>=prev.eff?x.eff-prev.eff:null;
  const yesterday=delta!=null?'Ontem tivemos '+delta+' '+(delta===1?'efetivação':'efetivações')+' de Clínico Geral. '+(delta===0?'O que dificultou os fechamentos? ':'Quero entender o que ajudou e o que ainda travou os demais fechamentos. '):'';
- const opening='No Mapa até '+brDate(x.periodEnd)+', tivemos '+(x.evals??'—')+' avaliações e '+(x.eff??'—')+' efetivações de Clínico Geral'+(x.accept!=null?', com aceitação de '+Math.round(x.accept)+'% (saudável: 80%)':'')+'. ';
  const goal=gap!=null?'Faltam '+gap+' efetivações para a meta mensal de cadeiras, '+chairGoal+' pacientes; em '+days+' dias úteis, precisamos de '+cgDay+' por dia. ':'';
- const praise=x.accept!=null&&x.accept>=80?'Parabéns pela aceitação; vamos manter esse cuidado em cada avaliação. ':x.rebooking!=null&&x.rebooking>=90?'Parabéns pelo reagendamento de '+Math.round(x.rebooking)+'% ontem. ':'';
- const note='Me traga o resultado dessa frente na parcial, combinado?';
- const agendaTarget=cgDay!=null?Math.min(15,Math.max(1,Math.ceil(cgDay/.8))):null;
- const available=[...unique],roles=new Map();
- const lead=available.find(p=>/agendamento|avalia[cç][aã]o|convers[aã]o/i.test(p.functions||''))||available[0];
- if(lead)roles.set(lead.name,'agenda');
- const dual=available.find(p=>!roles.has(p.name)&&hasCollector(p.name));
- if(dual)roles.set(dual.name,'orto');
- for(const p of available){if(roles.has(p.name))continue;const used=new Set(roles.values());roles.set(p.name,!used.has('cg')?'cg':!used.has('reagendamento')&&(available.length>=4||!orthoGap)?'reagendamento':'orto')}
- // Com duas pessoas, a segunda assume uma frente distinta mesmo sem perfil de cobrança.
- if(available.length===2&&!Array.from(roles.values()).includes('orto')){
-   const second=available.find(p=>p!==lead);if(second)roles.set(second.name,(orthoGap||0)>0?'orto':'reagendamento');
- }
- // A pessoa de Orto assume as pastas; uma pessoa da agenda com função explícita em Orto pode compartilhar a meta em frentes diferentes.
- const orthoLead=available.find(p=>roles.get(p.name)==='orto');
- const agendaOrtho=lead&&/agendamento.*orto|orto.*agendamento/i.test(lead.functions||'')&&orthoLead;
- const agendaOrthoGoal=agendaOrtho&&orthoDay?Math.min(3,orthoDay):0;
- const personalCG=new Map(unique.map((p,i)=>[p.name,cgDay==null?null:Math.floor(cgDay/unique.length)+(i<cgDay%unique.length?1:0)]));
- const individual=available.map(p=>{
-   const name=p.name.trim(),role=roles.get(p.name),target=personalCG.get(p.name),money=target>0?centralMoney(target*healthy):null;
-   const personal=target>0?'Sua meta individual de hoje é '+target+' '+(target===1?'efetivação':'efetivações')+' de Clínico Geral, '+(target===1?'equivalente':'equivalentes')+' a '+money+' pelo ticket saudável de '+centralMoney(healthy)+'. ':'';
+ // Uma pessoa, uma frente. A primeira cuida da efetivação; a última cuida da cobrança.
+ // Quando há agente de cobrança cadastrado também na recepção, ele ocupa a última posição.
+ const available=[...unique];
+ if(available.length>1){const collectorIndex=available.findIndex((p,i)=>i>0&&hasCollector(p.name));if(collectorIndex>=0)available.push(...available.splice(collectorIndex,1))}
+ const monthLabels=Array.from({length:3},(_,i)=>{const d=new Date(Number((sourceDate||isoDay()).slice(0,4)),Number((sourceDate||isoDay()).slice(5,7))-3+i,1);return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})});
+ const months=monthLabels.join(', ');
+ const middleCount=Math.max(0,available.length-2);
+ const agendaRoles=middleCount===1?['agenda_geral']:['agenda_cg','agenda_orto','faltosos'];
+ const roles=new Map(),individual=available.map((p,i)=>{
+   const name=p.name.trim(),role=i===0?'efetivacao':i===available.length-1?'cobranca':agendaRoles[(i-1)%agendaRoles.length];
+   roles.set(name,role);
    let detail='';
-   if(role==='agenda'){
-     const capture=x.amigoPoss!=null&&x.amigoInd!=null?'A indicação está em '+x.amigoInd+' de '+x.amigoPoss+' possibilidades. Peça contatos durante o atendimento, com autorização do paciente. ':'';
-     detail='Sua frente é preencher a agenda: trabalhe a Ferramenta de Conversão dos últimos 45 dias e busque '+(agendaTarget??'novas')+' avaliações agendadas até o fim do dia. Confira os horários livres de hoje e amanhã e me retorne contatos feitos, avaliações marcadas e comparecimentos. '+capture;
-     if(agendaOrthoGoal)detail+='Na sua frente de agendamento de Orto, acompanhe '+agendaOrthoGoal+' '+(agendaOrthoGoal===1?'pasta paga':'pastas pagas')+' hoje. ';
-   }else if(role==='cg'){
-     detail='Sua frente é a conversão de Clínico Geral: revise com o responsável as propostas das avaliações que não fecharam, registre a objeção e acompanhe cada retorno até a decisão. '+(x.ticket!=null&&x.ticket<healthy?'O ticket do mês está em '+centralMoney(x.ticket)+', abaixo dos '+centralMoney(healthy)+' saudáveis; confira o plano apresentado sem prometer um valor que o paciente não aceitou. ':'')+'Na parcial, me diga quantas propostas retomou e quantas efetivações confirmou. ';
-   }else if(role==='reagendamento'){
-     detail='Sua frente é recuperar a agenda: '+(x.missedYesterday!=null?'ontem foram '+x.missedYesterday+' faltosos; ':'')+(x.rebooking!=null?'o reagendamento ficou em '+Math.round(x.rebooking)+'%; ':'')+(x.noAgendaCG!=null?Math.round(x.noAgendaCG)+'% dos pacientes de CG estão sem próximo horário. ':'')+'Ligue para faltosos e pacientes sem primeiro ou próximo agendamento, confirme um horário real e me traga quantos retornos ficaram marcados. ';
+   if(role==='efetivacao'){
+     detail=yesterday+'No Mapa até '+brDate(x.periodEnd)+', foram '+(x.evals??'—')+' avaliações e '+(x.eff??'—')+' efetivações de Clínico Geral'+(x.accept!=null?', com aceitação de '+Math.round(x.accept)+'% (referência saudável: 80%)':'')+'. '+goal+(cgDay!=null?'Sua meta de hoje é '+cgDay+' '+(cgDay===1?'paciente efetivado':'pacientes efetivados')+' em CG, equivalentes a '+centralMoney(cgDay*healthy)+' pelo ticket saudável de '+centralMoney(healthy)+'. ':'')+'Acompanhe cada avaliação, revise propostas ainda sem fechamento e registre a objeção antes de retomar a negociação. '+(x.accept!=null&&x.accept>=80?'Parabéns pela aceitação; vamos manter esse nível. ':'')+'Na parcial, me traga avaliações comparecidas, propostas retomadas e fechamentos confirmados. O que está travando os demais?';
+   }else if(role==='agenda_geral'){
+     detail='A sua prioridade é preencher a agenda de Clínico Geral e Ortodontia e recuperar faltosos, sem assumir a meta de efetivação. '+(x.missedYesterday!=null?'O Mapa registrou '+x.missedYesterday+' faltosos no último dia medido. ':'')+(x.noAgendaCG!=null?'Em CG, '+Math.round(x.noAgendaCG)+'% estão sem próximo agendamento. ':'')+(x.noAgendaOrtho!=null?'Em Orto, '+Math.round(x.noAgendaOrtho)+'% estão sem próximo agendamento. ':'')+'Trabalhe a ferramenta de conversão dos últimos 45 dias, confirme horários reais para hoje e amanhã e reagende cada falta. Na parcial, separe agendamentos CG, agendamentos Orto, faltosos recuperados e comparecimentos.';
+   }else if(role==='agenda_cg'){
+     detail='Sua frente é agendar avaliações de Clínico Geral'+(middleCount===2?' e recuperar os faltosos de CG':'')+'. '+(x.noAgendaCG!=null?'O Mapa mostra '+Math.round(x.noAgendaCG)+'% sem próximo horário em CG. ':'')+'Trabalhe as oportunidades de conversão dos últimos 45 dias e confira vagas disponíveis de hoje e amanhã antes de oferecer horários. '+(middleCount===2&&x.missedYesterday!=null?'Foram '+x.missedYesterday+' faltosos no último dia medido; retome as faltas de CG e confirme o reagendamento. ':'')+(x.amigoPoss!=null&&x.amigoInd!=null?'A campanha registra '+x.amigoInd+' indicações em '+x.amigoPoss+' possibilidades; peça indicações com autorização do paciente. ':'')+'Me retorne contatos feitos, avaliações CG agendadas, faltosos recuperados e comparecimentos; quais horários ainda ficaram vagos?';
+   }else if(role==='agenda_orto'){
+     detail='Sua frente é agendar avaliações de Ortodontia'+(middleCount===2?' e recuperar as faltas de Orto':'')+'. '+(x.noAgendaOrtho!=null?'O Mapa aponta '+Math.round(x.noAgendaOrtho)+'% dos pacientes de Orto sem próximo horário. ':'')+(orthoGap!=null?'Faltam '+orthoGap+' pastas pagas na meta do mês; para sustentar o ritmo precisamos acompanhar as avaliações e os retornos de Orto. ':'')+'Retome interessados sem avaliação marcada, confirme a documentação necessária e registre cada horário combinado. Na parcial, me diga quantas avaliações Orto marcou, quantas compareceram e quais faltosos de Orto reagendou.';
+   }else if(role==='faltosos'){
+     detail='Sua frente é recuperar faltosos e reagendamentos, sem repetir a captação de novos pacientes. '+(x.missedYesterday!=null?'O Mapa registra '+x.missedYesterday+' faltosos no último dia medido. ':'')+(x.rebooking!=null?'O reagendamento de CG está em '+Math.round(x.rebooking)+'%. ':'')+'Ligue para as faltas e cancelamentos, identifique o motivo, ofereça um horário real e confirme o comparecimento. Na parcial, separe contatos, reagendamentos de CG, de Orto e comparecimentos recuperados.';
    }else{
-     const own=orthoDay!=null?Math.max(0,orthoDay-agendaOrthoGoal):null;
-     detail='Sua frente é Ortodontia: '+(orthoGap!=null?'faltam '+orthoGap+' '+(orthoGap===1?'pasta paga':'pastas pagas')+' no mês; ':'')+(own>0?'acompanhe '+own+' '+(own===1?'pasta paga':'pastas pagas')+' hoje. ':'')+'Revise avaliações pendentes, documentação e propostas sem pagamento. Separe contato, acordo e pagamento confirmado e me diga o que está impedindo cada pasta. ';
-     if(hasCollector(name)&&x.collectionExecution!=null)detail+='A execução da cobrança está em '+Math.round(x.collectionExecution)+'%; '+(x.collectionExecution<80?'precisamos recuperar esse indicador':'mantenha o registro correto')+' sem contar tentativa como pagamento. ';
+     detail='Sua frente é a cobrança das pastas pagas nos últimos três meses ('+months+') que ainda têm parcelas em aberto. O Mapa até '+brDate(x.periodEnd)+' mostra '+(x.charges??'—')+' cobranças e '+(x.charged??'—')+' registros de cobrados'+(x.collectionAgent!=null?', com aproveitamento de '+Math.round(x.collectionAgent)+'% do agente':'')+'. Consulte a carteira financeira para identificar quais parcelas estão realmente vencidas ou a vencer; o Mapa não traz o valor individual dessas pendências. Priorize as vencidas, negocie os casos viáveis e acompanhe até o recebimento confirmado. Me retorne número de pastas verificadas, contatos, acordos e pagamentos recebidos, sem contar tentativa como pagamento. Qual pendência precisa do apoio do franqueado?';
    }
-   return {recipient:name,title:'Mensageiro · '+name,message:'Bom dia, '+first(name)+', tudo bem? '+yesterday+opening+goal+personal+detail+praise+note};
+   return {recipient:name,title:'Mensageiro · '+name,message:'Bom dia, '+first(name)+', tudo bem? '+detail};
  });
- for(const p of collectors){const name=p.name.trim();if(individual.some(m=>m.recipient.toUpperCase()===name.toUpperCase()))continue;
-   individual.push({recipient:name,title:'Mensageiro · cobrança · '+name,message:'Bom dia, '+first(name)+', tudo bem? No Mapa até '+brDate(x.periodEnd)+', tivemos '+(x.charges??'—')+' cobranças e '+(x.charged??'—')+' registros de cobrados'+(x.collectionAgent!=null?', com aproveitamento de '+Math.round(x.collectionAgent)+'% do agente (referência: 65%)':'')+'. Sua frente hoje é negociar os casos viáveis e acompanhar até o pagamento. Separe tentativas, acordos e pagamentos confirmados e me traga os três números na parcial. Qual é a principal objeção?'});
+ // Agentes exclusivos recebem a frente de cobrança sem uma segunda mensagem para quem já está na recepção.
+ for(const p of collectors){const name=p.name.trim();if(individual.some(m=>m.recipient.toLocaleUpperCase('pt-BR')===name.toLocaleUpperCase('pt-BR')))continue;
+   individual.push({recipient:name,title:'Mensageiro · cobrança · '+name,message:'Bom dia, '+first(name)+', tudo bem? Sua frente é conferir as pastas pagas de '+months+' com parcelas em aberto. Consulte a carteira financeira, priorize vencimentos, negocie e acompanhe até o pagamento confirmado. O Mapa até '+brDate(x.periodEnd)+' registra '+(x.charges??'—')+' cobranças e '+(x.charged??'—')+' cobrados; ele não informa o saldo individual dessa carteira. Na parcial, separe pastas verificadas, contatos, acordos e pagamentos recebidos. Onde precisa de apoio?'});
  }
- const group='Bom dia, franqueados de '+cl.city+', tudo bem? Pelo Mapa até '+brDate(x.periodEnd)+', '+(x.chairEff??'—')+'/'+(chairGoal??'—')+' pacientes por cadeira foram efetivados no mês'+(gap!=null?'; faltam '+gap+' e precisamos de '+cgDay+' por dia útil restante':'')+'. '+(orthoGap!=null?'Em Orto, faltam '+orthoGap+' pastas pagas. ':'')+'Dividi a rotina de hoje entre agenda/conversão, propostas de CG, recuperação de faltosos e Orto/cobrança conforme a equipe disponível. '+(x.accept!=null&&x.accept>=80?'Parabéns pela aceitação de '+Math.round(x.accept)+'%; ':'')+'me preocupam os pontos ainda pendentes. Preciso do apoio de vocês para destravar propostas e pagamentos. Na parcial, me tragam os números por frente e o que precisa de decisão, combinado?';
+ const group='Bom dia, franqueados de '+cl.city+', tudo bem? Pelo Mapa até '+brDate(x.periodEnd)+', '+(x.chairEff??'—')+'/'+(chairGoal??'—')+' pacientes por cadeira foram efetivados no mês'+(gap!=null?'; faltam '+gap+' e precisamos de '+cgDay+' por dia útil restante':'')+'. '+(orthoGap!=null?'Em Orto, faltam '+orthoGap+' pastas pagas. ':'')+'Distribuí frentes exclusivas: '+individual.map(m=>m.recipient.split(/\s+/)[0]+' — '+(roles.get(m.recipient)||'cobranca')).join('; ')+'. '+(x.accept!=null&&x.accept>=80?'Parabéns pela aceitação de '+Math.round(x.accept)+'%; ':'')+'me preocupam os pontos pendentes. Preciso do apoio de vocês para destravar propostas, agenda e recebimentos. Na parcial, me tragam os números por frente e o que precisa de decisão, combinado?';
  const retIndividuals=individual.map(a=>({recipient:a.recipient,title:'Retorno · '+a.recipient,message:'Boa tarde, '+first(a.recipient)+'. Sobre a sua frente combinada hoje, o que realizou, o que ficou pendente e por quê? Me traga os números e o próximo horário de ação para fecharmos o dia.'}));
  const ret='Boa tarde, equipe de '+cl.city+'. Me tragam a parcial por frente: avaliações marcadas e comparecidas, propostas de CG retomadas e efetivadas, reagendamentos, pastas pagas e pagamentos confirmados. O que ainda podemos resolver hoje?';
  const treatment='Diagnóstico · '+cl.city+' (Mapa até '+brDate(x.periodEnd)+', captura '+brDate(sourceDate)+'). Auditoria '+x.audit.count+'/21 itens; item 15 ausente na página. '+goal+'Orto: '+(x.orthoPaid??'—')+'/'+(x.orthoPaidGoal??'—')+' pastas pagas. '+(x.accept!=null?'Aceitação CG '+Math.round(x.accept)+'%. ':'')+'Frentes: '+available.map(p=>p.name+' — '+roles.get(p.name)).join('; ')+'. Cadeira é contagem de pacientes, enquanto a meta financeira de CG é apurada separadamente. Confira capacidade e agenda real de hoje antes do envio.';
