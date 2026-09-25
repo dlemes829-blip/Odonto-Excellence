@@ -245,7 +245,8 @@ function dailyGuideMessages(cl,raw,people=[],history={},sourceDate=isoDay()){
  const cgDay=gap!=null?Math.ceil(gap/days):null;
  const orthoGap=x.orthoPaidGoal!=null&&x.orthoPaid!=null?Math.max(0,x.orthoPaidGoal-x.orthoPaid):null;
  const orthoDay=orthoGap!=null?Math.ceil(orthoGap/days):null;
- const reception=people.filter(p=>p.role_type==='receptionist'&&p.name),collectors=people.filter(p=>p.role_type==='collection_agent'&&p.name);
+ const reception=people.filter(p=>p.role_type==='receptionist'&&p.name).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+ const collectors=people.filter(p=>p.role_type==='collection_agent'&&p.name).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
  const unique=[...new Map(reception.map(p=>[p.name.trim().toLocaleUpperCase('pt-BR'),p])).values()];
  const hasCollector=name=>collectors.some(p=>p.name.trim().toLocaleUpperCase('pt-BR')===name.trim().toLocaleUpperCase('pt-BR'));
  const first=name=>{const f=name.trim().split(/\s+/)[0];return f[0].toLocaleUpperCase('pt-BR')+f.slice(1).toLocaleLowerCase('pt-BR')};
@@ -259,10 +260,11 @@ function dailyGuideMessages(cl,raw,people=[],history={},sourceDate=isoDay()){
  if(available.length>1){const collectorIndex=available.findIndex((p,i)=>i>0&&hasCollector(p.name));if(collectorIndex>=0)available.push(...available.splice(collectorIndex,1))}
  const monthLabels=Array.from({length:3},(_,i)=>{const d=new Date(Number((sourceDate||isoDay()).slice(0,4)),Number((sourceDate||isoDay()).slice(5,7))-3+i,1);return d.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})});
  const months=monthLabels.join(', ');
- const middleCount=Math.max(0,available.length-2);
+ const exclusiveCollectors=collectors.filter(p=>!available.some(r=>r.name.trim().toLocaleUpperCase('pt-BR')===p.name.trim().toLocaleUpperCase('pt-BR')));
+ const middleCount=Math.max(0,available.length-(exclusiveCollectors.length?1:2));
  const agendaRoles=middleCount===1?['agenda_geral']:['agenda_cg','agenda_orto','faltosos'];
  const roles=new Map(),individual=available.map((p,i)=>{
-   const name=p.name.trim(),role=i===0?'efetivacao':i===available.length-1?'cobranca':agendaRoles[(i-1)%agendaRoles.length];
+   const name=p.name.trim(),role=i===0?'efetivacao':i===available.length-1&&!exclusiveCollectors.length?'cobranca':agendaRoles[(i-1)%agendaRoles.length];
    roles.set(name,role);
    let detail='';
    if(role==='efetivacao'){
