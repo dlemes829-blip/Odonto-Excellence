@@ -85,10 +85,12 @@ function reportAudit21(raw){
  const sections=reportSections(raw),expected=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21],found=expected.filter(n=>sections[n]);
  return {sections,found,missing:expected.filter(n=>!sections[n]),count:found.length,total:21};
 }
+function reportPageDate(raw){const m=String(raw||'').match(/Time Zone:[^\n]*?\s-\s(\d{2})\/(\d{2})\/(\d{4})\s+\d{2}:\d{2}/i);return m?m[3]+'-'+m[2]+'-'+m[1]:''}
 function assertMapForClinic(raw,id){
  const a=reportAudit21(raw),x=reportCore(raw),cl=clinic(id);
  if(a.count<20||a.missing.some(n=>n!==15))throw new Error('Mapa incompleto: '+a.count+'/21 itens; faltam '+a.missing.join(', ')+'.');
  if(x.clinicCode!==cl.code)throw new Error('O relatório é da franquia '+(x.clinicCode||'não identificada')+', mas a clínica selecionada é '+cl.code+'.');
+ if(reportPageDate(raw)!==isoDay())throw new Error('O cabeçalho do Mapa não é de hoje. Copie novamente a página atual do Sisodonto antes de salvar.');
  if(!x.periodEnd||x.periodEnd.slice(0,7)!==isoDay().slice(0,7)||x.periodEnd>isoDay())throw new Error('Confira o período do Mapa: ele deve corresponder ao mês corrente e não pode terminar no futuro.');
  return x;
 }
@@ -344,6 +346,7 @@ async function saveDailyGuides(id){
  const parsed=reportCore(raw);
  if(parsed.clinicCode!==cl.code)throw new Error('Código da franquia no relatório ('+(parsed.clinicCode||'ausente')+') difere de '+cl.code+'. Revise a clínica selecionada.');
  if(latest.capture_date!==isoDay())throw new Error('O Mapa foi capturado em '+brDate(latest.capture_date)+'. Copie a página atual no Sisodonto e salve uma nova captura antes de gerar mensagens de hoje.');
+ if(reportPageDate(raw)!==isoDay())throw new Error('O texto salvo traz um cabeçalho de outra data. Copie o Mapa atual do Sisodonto.');
  if(!parsed.periodEnd||parsed.periodEnd.slice(0,7)!==isoDay().slice(0,7)||parsed.periodEnd>isoDay())throw new Error('O relatório não corresponde ao período corrente. Atualize a fonte antes de gerar.');
  let people=[];try{people=await mgmtFetch('management_people?select=role_type,name,functions&clinic_id=eq.'+id+'&active=eq.true')}catch{}
  const history=await reportHistoryForClinic(id),g=dailyGuideMessages(cl,raw,people,history,latest.capture_date);
