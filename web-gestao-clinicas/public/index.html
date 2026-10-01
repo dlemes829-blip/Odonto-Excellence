@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/report-intelligence.css?v=20260924-odonto4" />
   <link rel="stylesheet" href="/report-intelligence-v2.css?v=20260924-odonto4" />
   <link rel="stylesheet" href="/period2-strategy.css?v=20260924-odonto4" />
+<link rel="stylesheet" href="/planning.css?v=20261001-1">
 </head>
 <body>
   <div id="login" class="login-screen"><div class="login-ambient login-ambient-a"></div><div class="login-ambient login-ambient-b"></div>
@@ -36,7 +37,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script type="module" src="/app.js?v=20260930-road-real-1642-5"></script>
+  <script type="module" src="/app.js?v=20261001-planning-1"></script>
 <script>
 (function(){
   function h(s){let x=2166136261;for(const c of s){x^=c.charCodeAt(0);x=Math.imul(x,16777619)}return (x>>>0).toString(16)}
@@ -48,7 +49,7 @@
     try{sessionStorage.setItem('g12_central_pass',p)}catch(_){}
     document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');
     btn.disabled=false;btn.textContent='Acessar Central';st.textContent='Acesso liberado';
-    try{if(window.renderNav)window.renderNav();if(window.go)window.go(localStorage.getItem('g12_last_page')||'morning')}catch(_){}
+    try{if(window.renderNav)window.renderNav();if(window.go)window.go(localStorage.getItem('g12_last_page')||'direction')}catch(_){}
     return false;
   };
   document.getElementById('togglePassword').onclick=function(){const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Mostrar':'Ocultar'};
